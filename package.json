@@ -1,0 +1,16 @@
+{
+  "name": "agent-work-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Clean-room local coding-agent control plane inspired by observable remote-agent workflows.",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start:api": "node services/control-api/src/index.js",
+    "start:daemon": "node runtime/daemon/src/index.js",
+    "test": "node --test services/control-api/test/*.test.js runtime/daemon/test/*.test.js",
+    "acceptance": "node scripts/acceptance.mjs",
+    "check": "npm test && npm run acceptance"
+  }
+}

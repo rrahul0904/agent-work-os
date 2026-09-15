@@ -1,0 +1,14 @@
+services:
+  control-plane:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      AGENT_WORK_OS_HOST: 0.0.0.0
+      AGENT_WORK_OS_PORT: 8787
+      AGENT_WORK_OS_TOKEN: ${AGENT_WORK_OS_TOKEN:-change-me}
+      AGENT_WORK_OS_STATE_PATH: /data/state.json
+    volumes:
+      - agent-work-os-data:/data
+volumes:
+  agent-work-os-data:
