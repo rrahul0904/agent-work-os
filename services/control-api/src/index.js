@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
 import { JsonStore } from "./store.js";
+import { ProjectDesk } from "./project-desk.js";
+import { handleProjectDeskRequest } from "./project-desk-routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, "../../../apps/web/public");
@@ -17,6 +19,7 @@ const statePath = path.resolve(process.env.AGENT_WORK_OS_STATE_PATH ?? ".data/st
 export async function createControlPlane() {
   const store = new JsonStore(statePath);
   await store.load();
+  const desk = new ProjectDesk(store);
   const daemonSockets = new Map();
   const clientSockets = new Set();
 
@@ -36,7 +39,8 @@ export async function createControlPlane() {
       if (req.method === "OPTIONS") return end(res, 204);
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, protocolVersion: PROTOCOL_VERSION });
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions() });
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions(), workItems: desk.listWorkItems(), decisions: desk.listDecisions(), activity: desk.listActivity() });
+      if (await handleProjectDeskRequest(req, res, url, { desk, json, readJson })) return;
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (req.method === "GET" && sessionMatch) {
         const session = store.getSession(decodeURIComponent(sessionMatch[1]));
