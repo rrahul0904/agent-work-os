@@ -52,7 +52,7 @@ That loop fits Agent Work OS directly because Agent Work OS already owns coding-
 
 This analysis was re-grounded against the public launch discussion and repository issue feedback rather than relying only on the landing page/source code.
 
-### 5.1 Public launch discussion
+### 3.1 Public launch discussion
 
 Primary launch post:
 - https://www.linkedin.com/posts/arpitbhayani_i-hate-when-vs-code-eats-up-1gb-and-takes-activity-7504890643341627392-x_wy
@@ -73,7 +73,7 @@ Creator/product response:
 - subsequent updates added workspace-wide full-text search, auto reload, checksum-protected updates, file+line opening and repository-root detection;
 - the current product goes further with Git/GitHub PR review and agent-assisted edits, confirming that the actual direction is **review-first with bounded mutation**, not a permanently read-only file viewer.
 
-### 5.2 GitHub issue feedback
+### 3.2 GitHub issue feedback
 
 Representative issue evidence:
 - https://github.com/px0-ai/px0/issues/41 — users described worktree/Git diff as essential when reviewing AI-generated changes; the issue was resolved through a contributed PR.
@@ -84,7 +84,7 @@ Representative issue evidence:
 - https://github.com/px0-ai/px0/issues/147 — deterministic ordering of agent-changed files was requested because unstable result ordering hurts review/reproducibility.
 - https://github.com/px0-ai/px0/issues/150 — users requested a first-class uninstall/cleanup path.
 
-### 5.3 Feedback-derived product conclusions
+### 3.3 Feedback-derived product conclusions
 
 The donor should **not** be interpreted as "clone a tiny read-only IDE."
 
@@ -98,7 +98,7 @@ The stronger product definition is:
 7. deterministic ordering and revision-bound state are important for trustworthy agent review;
 8. feature additions must be rejected or redesigned when they compromise the lightweight/performance moat.
 
-### 5.4 Native Agent Work OS changes caused by this feedback
+### 3.4 Native Agent Work OS changes caused by this feedback
 
 The native plan is adjusted accordingly:
 - keep **review workspace** as the primary product surface;
@@ -112,7 +112,7 @@ The native plan is adjusted accordingly:
 
 ## 4. Observed capability map
 
-### 5.1 Workspace launch
+### 4.1 Workspace launch
 
 Observed:
 - open current directory, a specific directory, file, or file+line;
@@ -125,7 +125,7 @@ Observed:
 Transferable principle:
 - **fast shell, lazy depth**: make the review surface usable before deep repository enrichment completes.
 
-### 5.2 Repository navigation
+### 4.2 Repository navigation
 
 Observed:
 - dense file tree;
@@ -141,7 +141,7 @@ Native Agent Work OS requirement:
 - keep repository intelligence as a local daemon capability;
 - emit stable source anchors so every selection, agent task, comment and audit record points to `path + revision + line range`.
 
-### 5.3 Git awareness and diffing
+### 4.3 Git awareness and diffing
 
 Observed:
 - machine-readable Git status;
@@ -160,7 +160,7 @@ Native direction:
 - reads can stream continuously;
 - writes must be explicit commands with actor/session identity, policy check, approval semantics and an audit receipt.
 
-### 5.4 GitHub PR review
+### 4.4 GitHub PR review
 
 Observed:
 - opening a full GitHub PR URL prepares an isolated review workspace;
@@ -178,7 +178,7 @@ Native direction:
 - GitHub is the first provider adapter;
 - review draft state should be durable enough for Agent Work OS pause/resume but must remain revision-bound so stale comments cannot silently migrate to a changed diff.
 
-### 5.5 Agent/harness editing
+### 4.5 Agent/harness editing
 
 Observed:
 - px0 itself is not a character-by-character editor;
@@ -200,7 +200,7 @@ Agent Work OS should model:
 
 The local daemon executes the agent. The control plane records intent, identity, approval/policy state, bounded context and results.
 
-### 5.6 Rendering and performance
+### 4.6 Rendering and performance
 
 Observed:
 - native Go server;
@@ -218,7 +218,7 @@ Transferable principle:
 
 Agent Work OS must benchmark its own implementation. Upstream performance numbers are useful targets, not evidence for our product.
 
-### 5.7 Remote workspace mode
+### 4.7 Remote workspace mode
 
 Observed:
 - bind to a non-loopback interface;
@@ -230,7 +230,7 @@ Native direction:
 - Agent Work OS should preserve its authenticated daemon/control-plane boundary instead of copying unauthenticated local assumptions;
 - remote mode must require explicit auth, workspace scoping and transport policy.
 
-### 5.8 Configuration and distribution
+### 4.8 Configuration and distribution
 
 Observed:
 - single native binary distribution;
