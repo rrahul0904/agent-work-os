@@ -4,7 +4,7 @@ Status: research / architecture first slice
 Tracker target: RE-238  
 Canonical destination: `rrahul0904/agent-work-os`  
 Branch: `reverse/px0-review-console`  
-Issue: #undefined  
+Issue: #5  
 Date: 2026-09-24
 
 ## 1. Scope and provenance
@@ -48,9 +48,71 @@ Core product loop:
 
 That loop fits Agent Work OS directly because Agent Work OS already owns coding-agent sessions, a trusted local daemon and a browser control plane.
 
-## 3. Observed capability map
+## 3. Launch-post and community feedback evidence
 
-### 3.1 Workspace launch
+This analysis was re-grounded against the public launch discussion and repository issue feedback rather than relying only on the landing page/source code.
+
+### 5.1 Public launch discussion
+
+Primary launch post:
+- https://www.linkedin.com/posts/arpitbhayani_i-hate-when-vs-code-eats-up-1gb-and-takes-activity-7504890643341627392-x_wy
+
+The public page exposes only a subset of the launch thread without LinkedIn sign-in. The inaccessible remainder is **not** treated as reviewed evidence.
+
+High-signal feedback visible publicly:
+- several engineers asked why px0 is preferable to Vim/Neovim/Zed;
+- multiple comments challenged the premise that a read-only tool can replace an IDE;
+- one commenter specifically asked for Git diff;
+- one user flagged sudo/root installation as a blocker in protected environments;
+- users emphasized that the differentiator is speed/lightweightness and warned against feature creep that recreates a heavy IDE;
+- a public fork added Git diff, keyboard-first navigation and explicit reload-on-demand, explicitly preserving lightweightness as the product moat.
+
+Creator/product response:
+- the creator stated that the feedback directly drove Git awareness and Markdown rendering;
+- follow-on releases added changed-file indicators, split/unified Git diff, changed-file filtering and Markdown preview;
+- subsequent updates added workspace-wide full-text search, auto reload, checksum-protected updates, file+line opening and repository-root detection;
+- the current product goes further with Git/GitHub PR review and agent-assisted edits, confirming that the actual direction is **review-first with bounded mutation**, not a permanently read-only file viewer.
+
+### 5.2 GitHub issue feedback
+
+Representative issue evidence:
+- https://github.com/px0-ai/px0/issues/41 — users described worktree/Git diff as essential when reviewing AI-generated changes; the issue was resolved through a contributed PR.
+- https://github.com/px0-ai/px0/issues/43 — multiple users asked for a small direct edit mode for remote quick fixes, while another explicitly argued that direct editing undermines the read-only thesis. This is an unresolved product tension.
+- https://github.com/px0-ai/px0/issues/27 — remote-session users asked for discoverable network URLs; the creator replied that remote usage is precisely what px0 is optimizing for and updated product messaging accordingly.
+- https://github.com/px0-ai/px0/issues/49 — a real global-search regression was reported and fixed quickly by the creator, showing that search reliability is core workflow, not optional polish.
+- https://github.com/px0-ai/px0/issues/103 — users requested keyboard-only directory navigation.
+- https://github.com/px0-ai/px0/issues/147 — deterministic ordering of agent-changed files was requested because unstable result ordering hurts review/reproducibility.
+- https://github.com/px0-ai/px0/issues/150 — users requested a first-class uninstall/cleanup path.
+
+### 5.3 Feedback-derived product conclusions
+
+The donor should **not** be interpreted as "clone a tiny read-only IDE."
+
+The stronger product definition is:
+1. review/verification is the primary workflow;
+2. Git diff is a first-class primitive, especially for agent-generated worktrees;
+3. mutation should be bounded and explicit — agent edit or exact patch — rather than a full traditional editor surface;
+4. remote usage is a core persona, not an edge case;
+5. keyboard navigation is part of the speed proposition;
+6. install/update/uninstall must work in restricted environments without assuming root;
+7. deterministic ordering and revision-bound state are important for trustworthy agent review;
+8. feature additions must be rejected or redesigned when they compromise the lightweight/performance moat.
+
+### 5.4 Native Agent Work OS changes caused by this feedback
+
+The native plan is adjusted accordingly:
+- keep **review workspace** as the primary product surface;
+- move keyboard-first file/tree/diff navigation into Phase A acceptance criteria;
+- require changed-file ordering and result serialization to be deterministic;
+- add remote endpoint discoverability and authenticated remote mode to the explicit roadmap;
+- require user-local install/update/uninstall with no root dependency;
+- retain selection-to-agent edits in Phase A;
+- add an optional **revision-bound quick patch** later for tiny manual fixes instead of exposing a generic browser file-write API;
+- preserve performance budgets as architectural acceptance gates so feature growth does not silently recreate a heavy IDE.
+
+## 4. Observed capability map
+
+### 5.1 Workspace launch
 
 Observed:
 - open current directory, a specific directory, file, or file+line;
@@ -63,7 +125,7 @@ Observed:
 Transferable principle:
 - **fast shell, lazy depth**: make the review surface usable before deep repository enrichment completes.
 
-### 3.2 Repository navigation
+### 5.2 Repository navigation
 
 Observed:
 - dense file tree;
@@ -79,7 +141,7 @@ Native Agent Work OS requirement:
 - keep repository intelligence as a local daemon capability;
 - emit stable source anchors so every selection, agent task, comment and audit record points to `path + revision + line range`.
 
-### 3.3 Git awareness and diffing
+### 5.3 Git awareness and diffing
 
 Observed:
 - machine-readable Git status;
@@ -98,7 +160,7 @@ Native direction:
 - reads can stream continuously;
 - writes must be explicit commands with actor/session identity, policy check, approval semantics and an audit receipt.
 
-### 3.4 GitHub PR review
+### 5.4 GitHub PR review
 
 Observed:
 - opening a full GitHub PR URL prepares an isolated review workspace;
@@ -116,7 +178,7 @@ Native direction:
 - GitHub is the first provider adapter;
 - review draft state should be durable enough for Agent Work OS pause/resume but must remain revision-bound so stale comments cannot silently migrate to a changed diff.
 
-### 3.5 Agent/harness editing
+### 5.5 Agent/harness editing
 
 Observed:
 - px0 itself is not a character-by-character editor;
@@ -138,7 +200,7 @@ Agent Work OS should model:
 
 The local daemon executes the agent. The control plane records intent, identity, approval/policy state, bounded context and results.
 
-### 3.6 Rendering and performance
+### 5.6 Rendering and performance
 
 Observed:
 - native Go server;
@@ -156,7 +218,7 @@ Transferable principle:
 
 Agent Work OS must benchmark its own implementation. Upstream performance numbers are useful targets, not evidence for our product.
 
-### 3.7 Remote workspace mode
+### 5.7 Remote workspace mode
 
 Observed:
 - bind to a non-loopback interface;
@@ -168,7 +230,7 @@ Native direction:
 - Agent Work OS should preserve its authenticated daemon/control-plane boundary instead of copying unauthenticated local assumptions;
 - remote mode must require explicit auth, workspace scoping and transport policy.
 
-### 3.8 Configuration and distribution
+### 5.8 Configuration and distribution
 
 Observed:
 - single native binary distribution;
@@ -182,9 +244,9 @@ Native direction:
 - review UI may remain web-delivered;
 - local daemon owns privileged filesystem/Git/harness access.
 
-## 4. Security boundary
+## 5. Security boundary
 
-### 4.1 Workspace path sandbox
+### 5.1 Workspace path sandbox
 
 Required native rules:
 - normalize every requested repository path;
@@ -193,7 +255,7 @@ Required native rules:
 - external definition targets require an exact allowlist admission;
 - external paths cannot become searchable/enumerable roots.
 
-### 4.2 Browser-to-daemon mutation boundary
+### 5.2 Browser-to-daemon mutation boundary
 
 The browser must not receive a generic "write this file" primitive.
 
@@ -214,7 +276,7 @@ Each mutation should include:
 - command-specific payload;
 - result/receipt.
 
-### 4.3 Cross-origin and host protections
+### 5.3 Cross-origin and host protections
 
 Because the local daemon can trigger privileged tools:
 - enforce authenticated WebSocket/HTTP calls using existing Agent Work OS tokens;
@@ -224,7 +286,7 @@ Because the local daemon can trigger privileged tools:
 - redact tokens from logs;
 - keep GitHub/agent credentials local.
 
-### 4.4 Revision safety
+### 5.4 Revision safety
 
 Every review/edit action must be revision aware.
 
@@ -233,7 +295,7 @@ If the working tree/base changes after a finding was created:
 - mark the finding stale when exact lines no longer match;
 - require explicit rebase/re-anchor rather than silently applying to a new diff.
 
-## 5. Proposed native architecture
+## 6. Proposed native architecture
 
 ```text
 Browser Review UI
@@ -272,7 +334,7 @@ runtime/daemon
 
 No second privileged localhost server should be introduced if the existing daemon can host these capabilities.
 
-## 6. Proposed domain contracts
+## 7. Proposed domain contracts
 
 ### WorkspaceRef
 - workspaceId
@@ -346,7 +408,7 @@ No second privileged localhost server should be introduced if the existing daemo
 - error?
 - provenance[]
 
-## 7. API/command surface
+## 8. API/command surface
 
 Phase A read commands:
 - `workspace.tree`
@@ -373,7 +435,7 @@ Phase C PR commands:
 - `review.submit`
 - `review.refreshRemote`
 
-## 8. Browser UX
+## 9. Browser UX
 
 Primary layout:
 - left activity rail;
@@ -398,11 +460,11 @@ Key interactions:
 
 The design goal is high-density review, not feature parity with a traditional editor.
 
-## 9. Phase A implementation slice
+## 10. Phase A implementation slice
 
 Build the smallest truthful vertical slice inside Agent Work OS.
 
-### 9.1 Daemon capability
+### 10.1 Daemon capability
 
 Advertise:
 ```json
@@ -420,7 +482,7 @@ Advertise:
 }
 ```
 
-### 9.2 Read-only workspace
+### 10.2 Read-only workspace
 
 Implement:
 - workspace-root registration;
@@ -432,7 +494,7 @@ Implement:
 - basic language hint;
 - immutable response revision.
 
-### 9.3 Git snapshot
+### 10.3 Git snapshot
 
 Implement:
 - branch + HEAD;
@@ -442,18 +504,20 @@ Implement:
 - diff size limits;
 - no Git writes in the first slice.
 
-### 9.4 Review UI
+### 10.4 Review UI
 
 Implement:
 - review workspace selector;
 - file tree;
 - code window virtualization;
 - changed-files filter;
+- keyboard-only tree/palette navigation;
+- deterministic changed-file ordering;
 - unified diff first;
 - selection anchors;
 - send-selection-to-agent action.
 
-### 9.5 Agent handoff
+### 10.5 Agent handoff
 
 Reuse existing Agent Work OS adapters.
 
@@ -469,9 +533,10 @@ After dispatch:
 - reload affected browser tabs;
 - retain finding/task history.
 
-## 10. Follow-on phases
+## 11. Follow-on phases
 
 ### Phase B — Git mutation with approvals
+- optional revision-bound quick patch for tiny manual fixes (exact anchor + expected revision; no generic whole-file browser write);
 - stage/unstage;
 - generated commit-message draft;
 - commit;
@@ -511,7 +576,7 @@ After dispatch:
 - reconnect/resume;
 - audit and telemetry policy.
 
-## 11. Test matrix
+## 12. Test matrix
 
 Unit:
 - path traversal rejection;
@@ -556,7 +621,7 @@ Browser verification:
 - stale-state warning;
 - reconnect behavior.
 
-## 12. Certification boundaries
+## 13. Certification boundaries
 
 Do not claim:
 - px0 performance parity;
@@ -564,6 +629,7 @@ Do not claim:
 - GitHub PR review parity;
 - LSP parity;
 - remote production hardening;
+- rootless install/update/uninstall parity;
 - live multi-harness coverage;
 - benchmark superiority.
 
@@ -577,7 +643,7 @@ For Phase A, acceptable certification is:
 - no Git mutation;
 - no hosted-production claim.
 
-## 13. Why this belongs in Agent Work OS
+## 14. Why this belongs in Agent Work OS
 
 Agent Work OS already provides:
 - local trusted daemon;
