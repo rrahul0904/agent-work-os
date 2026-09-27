@@ -148,7 +148,12 @@ export class DecisionMemory {
           }
         } catch (err) {
           if (err.code !== 'ENOENT' && !(err instanceof SyntaxError)) throw err;
-          if (Date.now() - (await stat(this.lockPath)).mtimeMs > 30_000) { await rm(this.lockPath, { recursive: true, force: true }); continue; }
+          // The other writer may have released its lock between EEXIST and stat.
+          // This is expected contention, not journal corruption.
+          let lockStat;
+          try { lockStat = await stat(this.lockPath); }
+          catch (statError) { if (statError.code === 'ENOENT') continue; throw statError; }
+          if (Date.now() - lockStat.mtimeMs > 30_000) { await rm(this.lockPath, { recursive: true, force: true }); continue; }
         }
         await pause(20);
       }
