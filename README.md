@@ -83,3 +83,10 @@ docs/                         architecture and provenance
 10. Production auth, organizations/RBAC, audit and deployment hardening.
 
 See `docs/ARCHITECTURE.md` and `docs/PRODUCT_REVERSE_ENGINEERING.md`.
+
+## RE-297: opt-in local decision memory (Phase A only)
+
+A separate, independent local-memory slice is available via `npm run memory -- help`.
+It keeps versioned decision/provenance records in an append-safe worktree-local journal, permits explicit inspect/edit/retract/export/doctor, and creates bounded handoff snapshots. A new session with an explicit `handoffId` emits a persisted, hash-cited `memory.proof` event before an agent turn. Decision bodies stay on the daemon's local disk and are **not** auto-injected into agent prompts or sent to the control plane. See [Phase A documentation](docs/RE297_PHASE_A.md) and the [research dossier](docs/reverse-engineering/continuity-decision-memory-re297.md).
+
+This is not the commercial product implementation, team sync, automated capture, MCP/editor integration, secure erasure, or production readiness.

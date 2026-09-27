@@ -119,7 +119,7 @@ export class DecisionMemory {
     });
     return memory;
   }
-  static async open(root) {
+  static async open(root, { allowCorrupt = false } = {}) {
     const canonical = await realpath(root);
     const dir = path.join(canonical, '.agent-work-os', 'memory');
     if ((await realpath(dir)) !== dir) throw new Error('memory directory cannot be a symlink');
@@ -128,7 +128,7 @@ export class DecisionMemory {
     if (meta.schemaVersion !== 1 || !meta.projectId || meta.worktree !== canonical || !meta.repository) throw new Error('unsupported memory schema or worktree scope mismatch');
     const memory = new DecisionMemory(canonical, meta);
     for (const file of [memory.journal, memory.viewPath]) await rejectSymlink(file);
-    await memory.load();
+    if (!allowCorrupt) await memory.load();
     return memory;
   }
   async withLock(work) {

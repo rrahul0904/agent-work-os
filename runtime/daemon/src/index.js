@@ -3,6 +3,7 @@ import os from "node:os";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { CodexAdapter, EchoAdapter } from "./adapters.js";
 import { loadMachineId } from "./identity.js";
+import { DecisionMemory } from "../../../packages/decision-memory/src/index.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const token = process.env.AGENT_WORK_OS_TOKEN ?? "dev-token";
@@ -32,7 +33,18 @@ function connect() {
       const ack = (ok, error) => ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ok, error }));
       const emit = (agentEvent) => { if (agentEvent.kind === "thread") nativeSessions.set(command.sessionId, agentEvent.nativeSessionId); ws.send(encodeMessage({ type: "daemon.session.event", machineId, sessionId: command.sessionId, event: agentEvent })); };
       if (command.action === "session.start") {
-        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`); ack(true);
+        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
+        // Opt-in evidence-only recall, durably recorded before the agent begins.
+        // Decision bodies remain local; only immutable references/hashes reach the control plane.
+        if (p.handoffId) {
+          const memory = await DecisionMemory.open(p.cwd);
+          const proof = await memory.recall(p.handoffId, command.sessionId, machineId);
+          emit({ kind: "memory.proof", handoffId: proof.handoffId, snapshotHash: proof.snapshotHash,
+            projectId: proof.projectId, fromSessionId: proof.fromSessionId, toSessionId: proof.toSessionId,
+            decisionRefs: proof.verifiedDecisions.map(({ id, revision, contentHash, sourceHash }) => ({ id, revision, contentHash, sourceHash })),
+            at: proof.recalledAt });
+        }
+        ack(true);
         void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);

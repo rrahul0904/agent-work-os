@@ -19,6 +19,7 @@ export async function createControlPlane() {
   await store.load();
   const daemonSockets = new Map();
   const clientSockets = new Set();
+  const pendingCommands = new Map();
 
   const broadcast = (event) => {
     const encoded = encodeMessage(event);
@@ -28,6 +29,7 @@ export async function createControlPlane() {
     const peer = daemonSockets.get(machineId);
     if (!peer || peer.closed) throw new Error(`Machine ${machineId} is not connected`);
     peer.send(encodeMessage(command));
+    pendingCommands.set(command.commandId, { machineId, sessionId: command.sessionId, action: command.action });
   };
 
   const server = http.createServer(async (req, res) => {
@@ -45,18 +47,19 @@ export async function createControlPlane() {
       if (req.method === "POST" && url.pathname === "/api/sessions") {
         const body = await readJson(req);
         if (!body.machineId || !body.cwd || !body.agent || !body.prompt?.trim()) return json(res, 400, { error: "machineId, cwd, agent and prompt are required" });
+        if (body.handoffId !== undefined && (typeof body.handoffId !== "string" || !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.handoffId))) return json(res, 400, { error: "invalid_handoff_id" });
         const machine = store.getMachine(body.machineId);
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
         if (!machine.capabilities.some((c) => c.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
         const now = new Date().toISOString();
         const session = {
-          id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent,
+          id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent, handoffId: body.handoffId,
           model: body.model || undefined, status: "queued", createdAt: now, updatedAt: now,
           messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: []
         };
         await store.createSession(session); broadcast({ type: "session.updated", session });
         try {
-          sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } });
+          sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim(), handoffId: body.handoffId } });
         } catch (error) {
           const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed });
         }
@@ -105,6 +108,17 @@ export async function createControlPlane() {
           machineId = msg.machine.id;
           const machine = { ...msg.machine, status: "online", lastSeenAt: new Date().toISOString() };
           daemonSockets.set(machineId, peer); await store.upsertMachine(machine); broadcast({ type: "machine.updated", machine }); return;
+        }
+        if (msg.type === "daemon.command.ack") {
+          const pending = pendingCommands.get(msg.commandId);
+          if (!pending || pending.machineId !== machineId) return;
+          pendingCommands.delete(msg.commandId);
+          if (!msg.ok) {
+            let session = await store.addEvent(pending.sessionId, { kind: "error", message: String(msg.error ?? "daemon rejected command"), at: new Date().toISOString() });
+            if (pending.action === "session.start") session = await store.addEvent(pending.sessionId, { kind: "status", status: "failed", at: new Date().toISOString() });
+            broadcast({ type: "session.updated", session });
+          }
+          return;
         }
         if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
         if (msg.type === "daemon.session.event") { const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return; }

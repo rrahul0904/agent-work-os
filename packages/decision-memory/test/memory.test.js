@@ -129,3 +129,17 @@ test('validation enforces relative paths, review state, strict replay schema and
   await writeFile(memory.journal, raw.replace('"schemaVersion":1', '"schemaVersion":999'));
   await assert.rejects(DecisionMemory.open(root), /broken journal chain/);
 });
+
+test('doctor CLI can access a corrupt journal without normal open, and repair requires explicit flag', async () => {
+  const { root, memory } = await fixture(); await memory.log(seed());
+  await writeFile(memory.journal, (await readFile(memory.journal, 'utf8')) + 'partial');
+  const { run } = await import('../src/cli.js');
+  const original = process.exitCode; process.exitCode = undefined;
+  const output = []; const write = process.stdout.write;
+  process.stdout.write = function(x) { output.push(String(x)); return true; };
+  try { await run(['doctor', '--root', root]); assert.equal(process.exitCode, 2); process.exitCode = undefined;
+    await run(['doctor', '--root', root, '--repair']); assert.equal(process.exitCode, undefined); }
+  finally { process.stdout.write = write; process.exitCode = original; }
+  assert.match(output.join(''), /truncated incomplete trailing journal line/);
+  assert.equal((await DecisionMemory.open(root)).list().then(a => a.length) instanceof Promise, true);
+});

@@ -25,7 +25,7 @@ export async function run(argv) {
       'retract: <id> --expect <revision> --reason text; handoff: --session --goal [--thread --machine --last-actions --changed-files --tasks --risks --next --checks]; recall: <handoff-id> --session <new-session-id> [--machine]\n'); return;
   }
   const root = f.root ?? process.cwd();
-  const memory = command === 'init' ? await DecisionMemory.init(root, f.repository) : await DecisionMemory.open(root);
+  const memory = command === 'init' ? await DecisionMemory.init(root, f.repository) : await DecisionMemory.open(root, { allowCorrupt: command === 'doctor' });
   if (command === 'init') return display({ scope: memory.scope });
   if (command === 'log') return display(await memory.log({ claim:f.claim, choice:f.choice, rationale:f.rationale, source:f.source, sourceHash:f['source-hash'], actor:f.actor, affectedPaths:csv(f.paths), tags:csv(f.tags), verification:f.verification, sensitivity:f.sensitivity, supersedesId:f.supersedes }));
   if (command === 'list' || command === 'search') return display(await memory.list({ history: Boolean(f.history), query: command === 'search' ? (args[0] ?? f.query ?? '') : '' }));
