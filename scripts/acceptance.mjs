@@ -18,7 +18,7 @@ const children = [];
 function start(args){const child=spawn(process.execPath,args,{cwd:root,env,stdio:['ignore','pipe','pipe']});children.push(child);child.stdout.on('data',d=>process.stdout.write(d));child.stderr.on('data',d=>process.stderr.write(d));return child;}
 start(['services/control-api/src/index.js']);
 await waitFor(async()=> (await fetch(`http://127.0.0.1:${port}/health`)).ok, 8000, 'api health');
-start(['runtime/daemon/src/index.js']);
+let daemon = start(['runtime/daemon/src/index.js']);
 const machine = await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();return s.machines.find(m=>m.name==='acceptance-machine'&&m.status==='online');},8000,'daemon registration');
 const create = await fetch(`http://127.0.0.1:${port}/api/sessions`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:machine.id,cwd:workspace,agent:'echo',prompt:'acceptance'})});
 assert.equal(create.status,201);const session=await create.json();
@@ -28,6 +28,11 @@ const follow = await fetch(`http://127.0.0.1:${port}/api/sessions/${session.id}/
 completed = await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/sessions/${session.id}`)).json();return s.messages.some(m=>m.text==='Echo: second')?s:null;},8000,'follow-up echo turn');
 assert.equal(completed.nativeSessionId,`echo-${session.id}`);
 const snapshot = await memory.handoff({ fromSessionId: session.id, nativeThreadId: completed.nativeSessionId, machineId: machine.id, goal:'new-session proof', lastActions:['first session complete'], changedFiles:['src/test.js'], checks:['echo pass'] });
+// Verify real local daemon restart, not just a fresh DecisionMemory object.
+daemon.kill('SIGTERM');
+await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();return s.machines.find(m=>m.id===machine.id&&m.status==='offline');},8000,'daemon shutdown');
+daemon = start(['runtime/daemon/src/index.js']);
+await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();return s.machines.find(m=>m.id===machine.id&&m.status==='online');},8000,'daemon restart');
 const newSessionResponse = await fetch(`http://127.0.0.1:${port}/api/sessions`, { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ machineId:machine.id, cwd:workspace, agent:'echo', prompt:'fresh session', handoffId:snapshot.id }) });
 assert.equal(newSessionResponse.status, 201);
 const fresh = await newSessionResponse.json();
@@ -42,7 +47,13 @@ assert.equal(proofEvent.decisionRefs[0].sourceHash, decision.provenance.sourceHa
 assert.ok(recalled.events.findIndex(e=>e.kind==='memory.proof') < recalled.events.findIndex(e=>e.kind==='status' && e.status==='running'));
 assert.ok(recalled.messages.some(m=>m.text==='Echo: fresh session'));
 assert.equal((await memory.load()).recalls[`${snapshot.id}:${fresh.id}`].snapshotHash, snapshot.contentHash);
-console.log('[acceptance] PASS: API -> daemon -> echo -> persisted follow-up -> new-session proof-of-recall');
+const invalidResponse = await fetch(`http://127.0.0.1:${port}/api/sessions`, { method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({machineId:machine.id,cwd:workspace,agent:'echo',prompt:'must not launch',handoffId:'00000000-0000-4000-8000-000000000001'}) });
+assert.equal(invalidResponse.status,201);
+const invalidSession = await invalidResponse.json();
+const rejected = await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/sessions/${invalidSession.id}`)).json();return s.status==='failed' ? s : null;},8000,'invalid handoff rejection');
+assert.ok(rejected.events.some(e=>e.kind==='error'&&e.message.includes('unknown handoff')));
+assert.ok(!rejected.messages.some(m=>m.text==='Echo: must not launch'));
+console.log('[acceptance] PASS: daemon restart -> fresh echo session -> persisted pre-agent proof; invalid handoff fails closed');
 for(const child of children.reverse()) child.kill('SIGTERM');
 await new Promise(r=>setTimeout(r,120));
 
