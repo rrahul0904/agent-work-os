@@ -1,19 +1,59 @@
 import crypto from "node:crypto";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 const PATH_KEYS = /^(?:path|cwd|file|targetPath|sourcePath|destinationPath)$/i;
-const SECRET_KEYS = /(?:^|_)(?:secret|token|password|passwd|api[_-]?key|authorization|credential)(?:$|_)/i;
+const SECRET_KEYS = /(?:^|_)(?:secret|token|password|passwd|api_key|authorization|credential|credentials)(?:$|_)/i;
 const SECRET_VALUES = /(?:\bBearer\s+[A-Za-z0-9._~+/=-]{8,}|\b(?:sk|ghp|github_pat)_[A-Za-z0-9_-]{8,})/i;
 
 function requiredString(value, name) {
   if (typeof value !== "string" || !value.trim()) throw new TypeError(`${name} must be a non-empty string`);
   return value.trim();
 }
+function assertJsonValue(value, name, seen = new WeakSet()) {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || Object.is(value, -0)) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    return;
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    seen.add(value);
+    if (Object.getOwnPropertySymbols(value).length) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    for (let index = 0; index < value.length; index += 1) {
+      if (!(index in value)) throw new TypeError(`${name} must contain only JSON-persistable values`);
+      assertJsonValue(value[index], `${name}[${index}]`, seen);
+    }
+    for (const key of Object.keys(value)) {
+      if (!/^(?:0|[1-9]\d*)$/.test(key) || Number(key) >= value.length) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    }
+    seen.delete(value);
+    return;
+  }
+  if (value && typeof value === "object") {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    if (seen.has(value)) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    seen.add(value);
+    if (Object.getOwnPropertySymbols(value).length) throw new TypeError(`${name} must contain only JSON-persistable values`);
+    for (const key of Object.getOwnPropertyNames(value)) {
+      if (!Object.prototype.propertyIsEnumerable.call(value, key)) throw new TypeError(`${name} must contain only JSON-persistable values`);
+      assertJsonValue(value[key], `${name}.${key}`, seen);
+    }
+    seen.delete(value);
+    return;
+  }
+  throw new TypeError(`${name} must contain only JSON-persistable values`);
+}
 function plainObject(value, name) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(`${name} must be an object`);
+  assertJsonValue(value, name);
   return structuredClone(value);
+}
+function jsonText(value, name) {
+  assertJsonValue(value, name);
+  return JSON.stringify(value);
 }
 function freeze(value) {
   if (value && typeof value === "object") { for (const child of Object.values(value)) freeze(child); Object.freeze(value); }
@@ -56,10 +96,40 @@ function stableJson(value) {
 }
 function hashValue(value) { return crypto.createHash("sha256").update(stableJson(value)).digest("hex"); }
 
+function normalizedFieldName(key) {
+  return String(key).replace(/([a-z0-9])([A-Z])/g, "$1_$2").replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "").toLowerCase();
+}
+function isSecretField(key) { return SECRET_KEYS.test(normalizedFieldName(key)); }
+function isOutside(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+function realPathAllowingMissingLeaf(target) {
+  let existing = target;
+  const missing = [];
+  while (!existsSync(existing)) {
+    const parent = path.dirname(existing);
+    if (parent === existing) break;
+    missing.unshift(path.basename(existing));
+    existing = parent;
+  }
+  return path.join(realpathSync(existing), ...missing);
+}
+function validateWorkspacePath(workspaceRoot, value) {
+  try {
+    const resolved = path.resolve(workspaceRoot, value);
+    if (isOutside(workspaceRoot, resolved)) return "path_outside_workspace";
+    const realResolved = realPathAllowingMissingLeaf(resolved);
+    return isOutside(workspaceRoot, realResolved) ? "path_outside_workspace" : null;
+  } catch {
+    return "path_unresolvable";
+  }
+}
+
 export class CapabilityPolicy {
   constructor({ allowedCapabilities = [], workspaceRoot }) {
     this.allowed = new Set(allowedCapabilities);
-    this.workspaceRoot = path.resolve(workspaceRoot);
+    this.workspaceRoot = realpathSync(path.resolve(workspaceRoot));
   }
   authorize(action) {
     if (!this.allowed.has(action.capability)) return { authorized: false, decision: "capability_not_allowed" };
@@ -74,18 +144,14 @@ function inspectValue(value, workspaceRoot, key = "") {
   }
   if (value && typeof value === "object") {
     for (const [childKey, child] of Object.entries(value)) {
-      if (SECRET_KEYS.test(childKey)) return "secret_field_denied";
+      if (isSecretField(childKey)) return "secret_field_denied";
       const problem = inspectValue(child, workspaceRoot, childKey); if (problem) return problem;
     }
     return null;
   }
   if (typeof value !== "string") return null;
   if (SECRET_VALUES.test(value)) return "secret_value_denied";
-  if (PATH_KEYS.test(key)) {
-    const resolved = path.resolve(workspaceRoot, value);
-    const relative = path.relative(workspaceRoot, resolved);
-    if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) return "path_outside_workspace";
-  }
+  if (PATH_KEYS.test(key)) return validateWorkspacePath(workspaceRoot, value);
   return null;
 }
 
@@ -125,16 +191,21 @@ export class SimulatorStore {
     this.insertEvent = this.db.prepare("INSERT INTO simulator_events(run_id,sequence,observation_json,action_json,outcome_json,receipt_json,state_json) VALUES(?,?,?,?,?,?,?)");
   }
   journalMode() { return this.db.prepare("PRAGMA journal_mode").get().journal_mode; }
-  createRun({ id, goal, state }) { this.insertRun.run(id, JSON.stringify(goal), JSON.stringify(state), JSON.stringify(state), "active"); }
+  createRun({ id, goal, state }) { this.insertRun.run(id, jsonText(goal, "run.goal"), jsonText(state, "run.initialState"), jsonText(state, "run.currentState"), "active"); }
   loadRun(id) {
     const row = this.db.prepare("SELECT * FROM simulator_runs WHERE id=?").get(id); if (!row) return null;
     return { id: row.id, goal: Goal(JSON.parse(row.goal_json)), initialState: State(JSON.parse(row.initial_state_json)), state: State(JSON.parse(row.current_state_json)), status: row.status, nextSequence: Number(this.db.prepare("SELECT COALESCE(MAX(sequence),0)+1 AS n FROM simulator_events WHERE run_id=?").get(id).n) };
   }
   append({ runId, sequence, observation, action, outcome, receipt, state, status = "active" }) {
+    const observationJson = observation ? jsonText(observation, "event.observation") : null;
+    const actionJson = jsonText(action, "event.action");
+    const outcomeJson = jsonText(outcome, "event.outcome");
+    const receiptJson = jsonText(receipt, "event.receipt");
+    const stateJson = jsonText(state, "event.state");
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      this.insertEvent.run(runId, sequence, observation ? JSON.stringify(observation) : null, JSON.stringify(action), JSON.stringify(outcome), JSON.stringify(receipt), JSON.stringify(state));
-      this.updateRun.run(JSON.stringify(state), status, runId); this.db.exec("COMMIT");
+      this.insertEvent.run(runId, sequence, observationJson, actionJson, outcomeJson, receiptJson, stateJson);
+      this.updateRun.run(stateJson, status, runId); this.db.exec("COMMIT");
     } catch (error) { this.db.exec("ROLLBACK"); throw error; }
   }
   events(runId) {
@@ -167,9 +238,9 @@ export class BoundedSimulator {
     const before = this.run.state; const decision = this.policy.authorize(action); let state = before; let outcome;
     if (!decision.authorized) outcome = Outcome({ ok: false, code: "denied", data: { reason: decision.decision } });
     else ({ state, outcome } = this.environment.apply(before, action));
-    const sequence = this.run.nextSequence++;
+    const sequence = this.run.nextSequence;
     const receipt = Receipt({ runId: this.run.id, sequence, goalId: this.run.goal.id, actionId: action.id, capability: action.capability, authorized: decision.authorized, decision: decision.decision, outcomeCode: outcome.code, stateBeforeHash: hashValue(before), stateAfterHash: hashValue(state), recordedAt: this.clock() });
-    this.store.append({ runId: this.run.id, sequence, observation, action, outcome, receipt, state }); this.run.state = state;
+    this.store.append({ runId: this.run.id, sequence, observation, action, outcome, receipt, state }); this.run.state = state; this.run.nextSequence = sequence + 1;
     return { state, outcome, receipt };
   }
   replay(runId) {
@@ -178,7 +249,7 @@ export class BoundedSimulator {
     for (const event of this.store.events(runId)) {
       const decision = this.policy.authorize(event.action); let outcome; let next = state;
       if (!decision.authorized) outcome = Outcome({ ok: false, code: "denied", data: { reason: decision.decision } }); else ({ state: next, outcome } = this.environment.apply(state, event.action));
-      checks.push({ sequence: event.sequence, matches: decision.authorized === event.receipt.authorized && decision.decision === event.receipt.decision && outcome.code === event.outcome.code && hashValue(state) === event.receipt.stateBeforeHash && hashValue(next) === event.receipt.stateAfterHash && hashValue(next) === hashValue(event.state) }); state = next;
+      checks.push({ sequence: event.sequence, matches: decision.authorized === event.receipt.authorized && decision.decision === event.receipt.decision && stableJson(outcome) === stableJson(event.outcome) && hashValue(state) === event.receipt.stateBeforeHash && hashValue(next) === event.receipt.stateAfterHash && hashValue(next) === hashValue(event.state) }); state = next;
     }
     return { runId, matches: checks.every((item) => item.matches), checks, state };
   }
