@@ -7,7 +7,7 @@ const MODE_DEFAULTS = Object.freeze({
   standard: Object.freeze(['repo.read', 'repo.search', 'shell.readonly', 'python', 'lsp']),
 });
 
-const MUTATING_CAPABILITIES = new Set(['repo.write', 'shell.mutate', 'github.write', 'browser.mutate']);
+const MUTATING_CAPABILITIES = new Set(['repo.write', 'shell.mutate', 'github.write', 'browser.mutate', 'python']);
 
 function assertNonEmptyString(value, field) {
   if (typeof value !== 'string' || value.trim() === '') throw new TypeError(`${field} must be a non-empty string`);
