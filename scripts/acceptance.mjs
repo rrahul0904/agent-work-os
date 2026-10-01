@@ -11,7 +11,7 @@ const temp = await mkdtemp(path.join(os.tmpdir(), 'agent-work-os-acceptance-'));
 const workspace = path.join(temp, 'workspace');
 await mkdir(workspace);
 const memory = await DecisionMemory.init(workspace, 'acceptance/repository');
-const decision = await memory.log({ claim:'replay proof', choice:'keep verified evidence', rationale:'synthetic acceptance fixture', source:'test://acceptance', sourceHash:'fixture-sha256-001', actor:'acceptance', verification:'verified', affectedPaths:['src/test.js'] });
+const decision = await memory.log({ claim:'replay proof', choice:'keep verified evidence', rationale:'synthetic acceptance fixture', source:'test://acceptance', sourceHash:'fixture-sha256-001', actor:'acceptance', verification:'verified', sensitivity:'shareable', affectedPaths:['src/test.js'] });
 const port = 18787 + Math.floor(Math.random()*500);
 const env = { ...process.env, AGENT_WORK_OS_HOST:'127.0.0.1', AGENT_WORK_OS_PORT:String(port), AGENT_WORK_OS_TOKEN:'acceptance-token', AGENT_WORK_OS_STATE_PATH:path.join(temp,'state.json'), AGENT_WORK_OS_SERVER_URL:`ws://127.0.0.1:${port}/ws`, AGENT_WORK_OS_HOME:path.join(temp,'daemon-home'), AGENT_WORK_OS_MACHINE_NAME:'acceptance-machine', AGENT_WORK_OS_ENABLE_ECHO:'true' };
 const children = [];
