@@ -3,7 +3,7 @@ import os from "node:os";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { CodexAdapter, EchoAdapter } from "./adapters.js";
 import { ClaudeAdapter, GeminiAdapter, GrokAdapter } from "./provider-adapters.js";
-import { BRAIN_MODE_VERIFIED_CONTEXT, buildSharedBrainPrompt } from "./brain.js";
+import { BRAIN_MODE_VERIFIED_CONTEXT, buildSharedBrainPrompt, selectShareableVerifiedDecisions } from "./brain.js";
 import { loadMachineId } from "./identity.js";
 import { DecisionMemory } from "../../../packages/decision-memory/src/index.js";
 
@@ -40,7 +40,7 @@ function connect() {
       if (command.action === "session.start") {
         const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
         // Opt-in evidence-only recall, durably recorded before the agent begins.
-        // Decision bodies remain local; only immutable references/hashes reach the control plane.
+        // Decision bodies never reach the hosted control plane; provider context is explicit and shareable-only.
         let prompt = p.prompt;
         if (p.handoffId) {
           const memory = await DecisionMemory.open(p.cwd);
@@ -53,10 +53,14 @@ function connect() {
             const view = await memory.load();
             const snapshot = view.handoffs[p.handoffId];
             if (!snapshot) throw new Error("handoff snapshot disappeared after verified recall");
-            prompt = buildSharedBrainPrompt({ proof, snapshot, userPrompt: p.prompt });
+            const shareableDecisions = selectShareableVerifiedDecisions(proof, view);
+            const providerProof = { ...proof, verifiedDecisions: shareableDecisions };
+            prompt = buildSharedBrainPrompt({ proof: providerProof, snapshot, userPrompt: p.prompt });
             emit({ kind: "memory.context", mode: BRAIN_MODE_VERIFIED_CONTEXT, handoffId: proof.handoffId,
-              decisionCount: Math.min(proof.verifiedDecisions.length, 6), snapshotHash: proof.snapshotHash,
-              message: "Bounded verified Brain context prepared locally; bodies were not emitted to the control plane.",
+              decisionCount: Math.min(shareableDecisions.length, 6),
+              skippedPrivateCount: proof.verifiedDecisions.length - shareableDecisions.length,
+              snapshotHash: proof.snapshotHash,
+              message: "Bounded shareable verified Brain context prepared locally; bodies were not emitted to the control plane.",
               at: new Date().toISOString() });
           }
         }
