@@ -2,6 +2,8 @@
 import os from "node:os";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { CodexAdapter, EchoAdapter } from "./adapters.js";
+import { ClaudeAdapter, GeminiAdapter, GrokAdapter } from "./provider-adapters.js";
+import { BRAIN_MODE_VERIFIED_CONTEXT, buildSharedBrainPrompt } from "./brain.js";
 import { loadMachineId } from "./identity.js";
 import { DecisionMemory } from "../../../packages/decision-memory/src/index.js";
 
@@ -14,6 +16,9 @@ const adapters = new Map();
 const nativeSessions = new Map();
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter(); if (codex.capability()) adapters.set("codex", codex);
+for (const adapter of [new ClaudeAdapter(), new GeminiAdapter(), new GrokAdapter()]) {
+  if (adapter.capability()) adapters.set(adapter.name, adapter);
+}
 
 let ws; let heartbeat; let reconnectAttempt = 0; let shuttingDown = false;
 function connect() {
@@ -36,6 +41,7 @@ function connect() {
         const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
         // Opt-in evidence-only recall, durably recorded before the agent begins.
         // Decision bodies remain local; only immutable references/hashes reach the control plane.
+        let prompt = p.prompt;
         if (p.handoffId) {
           const memory = await DecisionMemory.open(p.cwd);
           const proof = await memory.recall(p.handoffId, command.sessionId, machineId);
@@ -43,9 +49,19 @@ function connect() {
             projectId: proof.projectId, fromSessionId: proof.fromSessionId, toSessionId: proof.toSessionId,
             decisionRefs: proof.verifiedDecisions.map(({ id, revision, contentHash, sourceHash }) => ({ id, revision, contentHash, sourceHash })),
             at: proof.recalledAt });
+          if (p.brainMode === BRAIN_MODE_VERIFIED_CONTEXT) {
+            const view = await memory.load();
+            const snapshot = view.handoffs[p.handoffId];
+            if (!snapshot) throw new Error("handoff snapshot disappeared after verified recall");
+            prompt = buildSharedBrainPrompt({ proof, snapshot, userPrompt: p.prompt });
+            emit({ kind: "memory.context", mode: BRAIN_MODE_VERIFIED_CONTEXT, handoffId: proof.handoffId,
+              decisionCount: Math.min(proof.verifiedDecisions.length, 6), snapshotHash: proof.snapshotHash,
+              message: "Bounded verified Brain context prepared locally; bodies were not emitted to the control plane.",
+              at: new Date().toISOString() });
+          }
         }
         ack(true);
-        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
       if (command.action === "session.message") {
