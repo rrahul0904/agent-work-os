@@ -11,6 +11,9 @@ const MUTATING_CAPABILITIES = new Set([
   'shell.mutate',
   'github.write',
   'browser.mutate',
+  'mcp.mutate',
+  'remote.mutate',
+  'lsp.mutate',
   'python',
 ]);
 
