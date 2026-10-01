@@ -34,14 +34,16 @@ test('economy mode stays bounded to deterministic low-cost capabilities', () => 
 });
 
 test('mutating capabilities require explicit mutation approval', () => {
-  const withoutApproval = createExecutionPolicy({ mode: 'standard', configuredCapabilities: ['repo.read', 'repo.write'] });
+  const withoutApproval = createExecutionPolicy({ mode: 'standard', configuredCapabilities: ['repo.read', 'repo.write', 'python'] });
   const withApproval = createExecutionPolicy({
     mode: 'standard',
-    configuredCapabilities: ['repo.read', 'repo.write'],
+    configuredCapabilities: ['repo.read', 'repo.write', 'python'],
     approvals: { mutations: true },
   });
   assert.equal(isCapabilityAllowed(withoutApproval, 'repo.write'), false);
+  assert.equal(isCapabilityAllowed(withoutApproval, 'python'), false);
   assert.equal(isCapabilityAllowed(withApproval, 'repo.write'), true);
+  assert.equal(isCapabilityAllowed(withApproval, 'python'), true);
 });
 
 test('prefix receipt is stable across volatile turns and changes when static tool contract changes', () => {
