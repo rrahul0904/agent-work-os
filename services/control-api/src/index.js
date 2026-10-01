@@ -19,6 +19,7 @@ export async function createControlPlane() {
   await store.load();
   const daemonSockets = new Map();
   const clientSockets = new Set();
+  const pendingCommands = new Map();
 
   const broadcast = (event) => {
     const encoded = encodeMessage(event);
@@ -29,6 +30,22 @@ export async function createControlPlane() {
     if (!peer || peer.closed) throw new Error(`Machine ${machineId} is not connected`);
     peer.send(encodeMessage(command));
   };
+  const requestCommand = (machineId, action, payload, timeoutMs = 5000) => new Promise((resolve, reject) => {
+    const commandId = crypto.randomUUID();
+    const timer = setTimeout(() => {
+      pendingCommands.delete(commandId);
+      reject(new Error(`Timed out waiting for ${action}`));
+    }, timeoutMs);
+    timer.unref?.();
+    pendingCommands.set(commandId, { machineId, resolve, reject, timer });
+    try {
+      sendCommand(machineId, { type: "server.command", commandId, action, payload });
+    } catch (error) {
+      clearTimeout(timer);
+      pendingCommands.delete(commandId);
+      reject(error);
+    }
+  });
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -37,6 +54,25 @@ export async function createControlPlane() {
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, protocolVersion: PROTOCOL_VERSION });
       if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions() });
+      const harnessMatch = url.pathname.match(/^\/api\/machines\/([^/]+)\/harness\/(status|repo\/read|repo\/search)$/);
+      if (req.method === "POST" && harnessMatch) {
+        if (!authorizedRequest(req, token)) return json(res, 401, { error: "unauthorized" });
+        const machineId = decodeURIComponent(harnessMatch[1]);
+        const machine = store.getMachine(machineId);
+        if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
+        const body = await readJson(req);
+        if (!body.cwd || typeof body.cwd !== "string") return json(res, 400, { error: "cwd is required" });
+        const route = harnessMatch[2];
+        if (route === "repo/read" && (!body.path || typeof body.path !== "string")) return json(res, 400, { error: "path is required" });
+        if (route === "repo/search" && (!body.query || typeof body.query !== "string" || !body.query.trim())) return json(res, 400, { error: "query is required" });
+        const action = route === "status" ? "harness.status" : route === "repo/read" ? "harness.repo.read" : "harness.repo.search";
+        try {
+          const result = await requestCommand(machineId, action, body);
+          return json(res, 200, { ok: true, action, result });
+        } catch (error) {
+          return json(res, 400, { error: "harness_command_failed", message: error.message });
+        }
+      }
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (req.method === "GET" && sessionMatch) {
         const session = store.getSession(decodeURIComponent(sessionMatch[1]));
@@ -107,11 +143,32 @@ export async function createControlPlane() {
           daemonSockets.set(machineId, peer); await store.upsertMachine(machine); broadcast({ type: "machine.updated", machine }); return;
         }
         if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
+        if (msg.type === "daemon.command.result") {
+          const pending = pendingCommands.get(msg.commandId);
+          if (!pending) return;
+          if (pending.machineId !== msg.machineId) {
+            clearTimeout(pending.timer);
+            pendingCommands.delete(msg.commandId);
+            pending.reject(new Error("Harness command result came from the wrong machine"));
+            return;
+          }
+          clearTimeout(pending.timer);
+          pendingCommands.delete(msg.commandId);
+          if (msg.ok) pending.resolve(msg.result);
+          else pending.reject(new Error(msg.error || "Harness command failed"));
+          return;
+        }
         if (msg.type === "daemon.session.event") { const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return; }
       } catch (error) { console.warn("[api] invalid daemon message", error.message); }
     });
     peer.on("close", async () => {
       if (!machineId) return; if (daemonSockets.get(machineId) === peer) daemonSockets.delete(machineId);
+      for (const [commandId, pending] of pendingCommands) {
+        if (pending.machineId !== machineId) continue;
+        clearTimeout(pending.timer);
+        pendingCommands.delete(commandId);
+        pending.reject(new Error(`Machine ${machineId} disconnected before command completion`));
+      }
       const machine = await store.markMachineOffline(machineId); if (machine) broadcast({ type: "machine.updated", machine });
     });
     peer.on("error", (error) => console.warn("[api] websocket peer error", error.message));
@@ -121,6 +178,11 @@ export async function createControlPlane() {
     server, store,
     listen: () => new Promise((resolve) => server.listen(port, host, resolve)),
     close: () => new Promise((resolve) => {
+      for (const pending of pendingCommands.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Control plane is shutting down"));
+      }
+      pendingCommands.clear();
       for (const peer of daemonSockets.values()) peer.close(1001, "server_shutdown");
       for (const peer of clientSockets) peer.close(1001, "server_shutdown");
       server.close(resolve);
@@ -138,7 +200,13 @@ async function serveStatic(urlPath, res) {
   } catch { if (rel !== "index.html") return serveStatic("/index.html", res); json(res, 404, { error: "not_found" }); }
 }
 function mime(ext) { return ({ ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" }[ext] ?? "application/octet-stream"); }
-function addCors(res) { res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type"); res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS"); }
+function addCors(res) { res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type, authorization, x-agent-work-os-token"); res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS"); }
+function authorizedRequest(req, expectedToken) {
+  const authorization = String(req.headers.authorization ?? "");
+  const bearer = authorization.startsWith("Bearer ") ? authorization.slice(7) : null;
+  const direct = req.headers["x-agent-work-os-token"];
+  return bearer === expectedToken || direct === expectedToken;
+}
 function json(res, status, body) { res.statusCode = status; res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(body)); }
 function end(res, status) { res.statusCode = status; res.end(); }
 async function readJson(req) { let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error("request too large"); } return raw ? JSON.parse(raw) : {}; }
