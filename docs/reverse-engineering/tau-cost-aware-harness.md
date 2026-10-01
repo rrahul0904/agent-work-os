@@ -120,3 +120,42 @@ Exit evidence: local focused tests plus exact-head repository CI. No live provid
 - no unrestricted shell/network execution;
 - no automatic push, merge, deploy, or production-readiness claim;
 - no autonomous repository mutation from policy configuration alone.
+
+
+## Owned implementation status — 2026-10-01
+
+The RE-359 draft now contains independently authored slices for every planned phase, with different truth levels:
+
+- **A — harness policy core:** provider lanes, bounded modes, exact mutation approval, prefix/usage receipts, provider-switch preflight, independent verification.
+- **B1 — repository intelligence:** bounded root-safe reads/search, generated-directory pruning, secret-like filename refusal, symlink refusal, source anchors and hard scan budgets.
+- **C — execution safety:** deterministic dry-run plans, external checkpoint manifests, exact-plan authorization, restore preview, missing-target refusal, tamper detection and idempotent restore behavior.
+- **D — persistent compute core:** persistent Python process with exact-code authorization, single-use approvals, source/output/time/cell budgets and restart-after-timeout. This backend is deliberately classified **weak-host-process**: filesystem, network and memory isolation are not enforced.
+- **E — durable coordination core:** durable builder/verifier task state, scoped edit leases with TTL/renewal, overlap refusal, bounded rework, restart reconciliation and separate verification receipts.
+- **F — integration contract core:** lifecycle and permission contracts for LSP/browser/MCP/remote/GitHub adapters, network disabled by default, explicit network allowlisting, browser-origin allowlists, exact-payload mutation approvals and redacted receipts. These are contracts/fake-adapter tests, not live provider certifications.
+- **G — benchmark evidence core:** comparable-workload/context digests, independent verification outcome, token/cache/turn/tool/duration metrics, provenance-bearing pricing schedules and descriptive deltas without a winner score. No real provider benchmark has been claimed.
+
+### First wired end-to-end path
+
+The first runtime-composed RE-359 capability is intentionally read-only:
+
+```text
+Authenticated local API
+  -> existing control-plane WebSocket machine channel
+  -> local daemon
+  -> configured harness-root allowlist
+  -> bounded repository status / search / windowed read
+  -> structured command result
+```
+
+The harness API requires the configured Agent Work OS token, and the daemon separately refuses any requested root outside `AGENT_WORK_OS_HARNESS_ROOTS`. Repository intelligence still enforces path traversal, symlink, generated-directory, secret-like filename and budget rules inside that authorized root.
+
+No RE-359 HTTP endpoint exposes repository mutation, checkpoint restore, Python execution, browser mutation, GitHub writes or deployment. Those capabilities remain library/runtime contracts requiring separate product wiring and authorization gates.
+
+### Remaining work before any production-readiness discussion
+
+- integrate harness policy/usage receipts into real provider adapter turns rather than only contract tests;
+- add separately authorized live LSP/browser/MCP/GitHub adapters only where required;
+- replace the weak Python backend with an enforcing sandbox backend before claiming filesystem/network/memory isolation;
+- run controlled same-workload provider benchmarks before making cost/cache/quality comparisons;
+- complete UI/operator flows, broader cross-platform/device tests, security/privacy review, release packaging and deployment evidence;
+- review and merge only after the draft PR is independently reviewed.
