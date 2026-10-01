@@ -172,3 +172,23 @@ test('Python child receives only the minimal environment allowlist', async (t) =
   assert.equal(receipt.stdout, '[]\n');
   await worker.close();
 });
+
+
+test('Python source is rejected before execution when it exceeds the code budget', async (t) => {
+  const pythonExecutable = findPythonExecutable();
+  if (!pythonExecutable) return t.skip('Python executable unavailable');
+  const root = await workspace();
+  const worker = new PersistentPythonWorker({
+    workspaceRoot: root,
+    pythonExecutable,
+    allowWeakHostProcess: true,
+    maxCodeBytes: 8,
+  });
+  const code = 'print("too long")';
+  const approved = approvedCell('workspace-1', code);
+  await assert.rejects(
+    () => worker.runCell({ code, ...approved }),
+    /maxCodeBytes/,
+  );
+  await worker.close();
+});
