@@ -21,7 +21,7 @@ This is an Agent Work OS capability donor, not a new standalone product. RE-297 
 - each provider is launched through its documented non-interactive structured-output mode and can resume a provider-native session;
 - no new provider adapter enables bypass, YOLO or always-approve permissions by default;
 - an explicit verified-context Brain mode turns a verified RE-297 handoff into bounded local reference context;
-- Brain content is labeled untrusted, the current user request is explicitly authoritative, and only up to six verified decisions are included;
+- Brain content is labeled untrusted, the current user request is explicitly authoritative, and only up to six explicitly shareable verified decisions are included; private decisions remain local;
 - the existing proof-only behavior remains available and does not inject decision bodies into an agent prompt;
 - only proof/hash metadata is emitted to the hosted control plane;
 - deterministic tests cover provider arguments and Brain isolation/bounds.
