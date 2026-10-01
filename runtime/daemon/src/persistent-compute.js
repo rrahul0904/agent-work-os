@@ -176,7 +176,7 @@ export class PersistentPythonWorker {
   async #ensureStarted() {
     if (this.child && this.child.exitCode === null && !this.child.killed) return;
     await this.#ensureWorkspace();
-    this.child = spawn(
+    const child = spawn(
       this.pythonExecutable,
       ['-I', '-u', '-c', WORKER_SOURCE],
       {
@@ -186,16 +186,18 @@ export class PersistentPythonWorker {
         shell: false,
       },
     );
+    const stdout = readline.createInterface({ input: child.stdout });
+    this.child = child;
+    this.stdout = stdout;
     this.cellsExecuted = 0;
-    this.stdout = readline.createInterface({ input: this.child.stdout });
 
-    this.stdout.on('line', (line) => {
+    stdout.on('line', (line) => {
       if (!line.trim()) return;
       let message;
       try {
         message = JSON.parse(line);
       } catch {
-        if (this.pending) this.#finishPending({
+        if (this.pending?.child === child) this.#finishPending({
           status: 'protocol_error',
           stdout: '',
           stderr: 'worker emitted non-JSON output',
@@ -206,7 +208,7 @@ export class PersistentPythonWorker {
       }
       if (message.type === 'ready') return;
       if (message.type === 'protocol_error') {
-        if (this.pending) this.#finishPending({
+        if (this.pending?.child === child) this.#finishPending({
           status: 'protocol_error',
           stdout: '',
           stderr: String(message.message ?? 'worker protocol error'),
@@ -215,7 +217,7 @@ export class PersistentPythonWorker {
         });
         return;
       }
-      if (message.type !== 'result' || !this.pending || message.id !== this.pending.id) return;
+      if (message.type !== 'result' || !this.pending || this.pending.child !== child || message.id !== this.pending.id) return;
       this.#finishPending({
         status: message.ok ? 'completed' : 'error',
         stdout: String(message.stdout ?? ''),
@@ -225,22 +227,29 @@ export class PersistentPythonWorker {
       });
     });
 
-    this.child.stderr.on('data', (chunk) => {
-      if (!this.pending) return;
+    child.stderr.on('data', (chunk) => {
+      if (this.pending?.child !== child) return;
       const text = String(chunk);
       this.pending.processStderr = `${this.pending.processStderr ?? ''}${text}`.slice(0, this.maxOutputBytes);
     });
 
-    this.child.once('exit', (code, signal) => {
-      const hadPending = this.pending;
-      this.child = null;
-      this.stdout?.close();
-      this.stdout = null;
-      if (hadPending) {
+    child.once('exit', (code, signal) => {
+      const ownsCurrentProcess = this.child === child;
+      const pendingForChild = this.pending?.child === child ? this.pending : null;
+      if (ownsCurrentProcess) {
+        this.child = null;
+        if (this.stdout === stdout) {
+          stdout.close();
+          this.stdout = null;
+        }
+      } else {
+        stdout.close();
+      }
+      if (pendingForChild) {
         this.#finishPending({
           status: 'worker_exit',
           stdout: '',
-          stderr: hadPending.processStderr || `Python worker exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`,
+          stderr: pendingForChild.processStderr || `Python worker exited (code=${code ?? 'null'}, signal=${signal ?? 'null'})`,
           truncated: false,
           errorType: 'WorkerExit',
           workerRestarted: true,
@@ -331,6 +340,7 @@ export class PersistentPythonWorker {
 
       this.pending = {
         id: requestId,
+        child: this.child,
         codeSha256: digest,
         planId: plan.planId,
         authorizationId: authorization.authorizationId,
