@@ -48,18 +48,21 @@ export async function createControlPlane() {
         const body = await readJson(req);
         if (!body.machineId || !body.cwd || !body.agent || !body.prompt?.trim()) return json(res, 400, { error: "machineId, cwd, agent and prompt are required" });
         if (body.handoffId !== undefined && (typeof body.handoffId !== "string" || !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(body.handoffId))) return json(res, 400, { error: "invalid_handoff_id" });
+        const brainMode = body.brainMode ?? "proof-only";
+        if (!["proof-only", "verified-context"].includes(brainMode)) return json(res, 400, { error: "invalid_brain_mode" });
+        if (brainMode === "verified-context" && !body.handoffId) return json(res, 400, { error: "verified_context_requires_handoff" });
         const machine = store.getMachine(body.machineId);
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
         if (!machine.capabilities.some((c) => c.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
         const now = new Date().toISOString();
         const session = {
-          id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent, handoffId: body.handoffId,
+          id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent, handoffId: body.handoffId, brainMode,
           model: body.model || undefined, status: "queued", createdAt: now, updatedAt: now,
           messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: []
         };
         await store.createSession(session); broadcast({ type: "session.updated", session });
         try {
-          sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim(), handoffId: body.handoffId } });
+          sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim(), handoffId: body.handoffId, brainMode } });
         } catch (error) {
           const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed });
         }
