@@ -8,11 +8,11 @@ import process from 'node:process';
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const temp = await mkdtemp(path.join(os.tmpdir(), 'agent-work-os-acceptance-'));
 const port = 18787 + Math.floor(Math.random()*500);
-const env = { ...process.env, AGENT_WORK_OS_HOST:'127.0.0.1', AGENT_WORK_OS_PORT:String(port), AGENT_WORK_OS_TOKEN:'acceptance-token', AGENT_WORK_OS_STATE_PATH:path.join(temp,'state.json'), AGENT_WORK_OS_SERVER_URL:`ws://127.0.0.1:${port}/ws`, AGENT_WORK_OS_HOME:path.join(temp,'daemon-home'), AGENT_WORK_OS_MACHINE_NAME:'acceptance-machine', AGENT_WORK_OS_ENABLE_ECHO:'true' };
 const repo = path.join(temp, 'repo');
 await mkdir(path.join(repo, 'src'), { recursive: true });
 await writeFile(path.join(repo, 'src', 'a.js'), 'first\nneedle alpha\nthird\n');
 await writeFile(path.join(repo, '.env'), 'SECRET=needle\n');
+const env = { ...process.env, AGENT_WORK_OS_HOST:'127.0.0.1', AGENT_WORK_OS_PORT:String(port), AGENT_WORK_OS_TOKEN:'acceptance-token', AGENT_WORK_OS_STATE_PATH:path.join(temp,'state.json'), AGENT_WORK_OS_SERVER_URL:`ws://127.0.0.1:${port}/ws`, AGENT_WORK_OS_HOME:path.join(temp,'daemon-home'), AGENT_WORK_OS_MACHINE_NAME:'acceptance-machine', AGENT_WORK_OS_ENABLE_ECHO:'true', AGENT_WORK_OS_HARNESS_ROOTS:JSON.stringify([repo]) };
 const children = [];
 function start(args){const child=spawn(process.execPath,args,{cwd:root,env,stdio:['ignore','pipe','pipe']});children.push(child);child.stdout.on('data',d=>process.stdout.write(d));child.stderr.on('data',d=>process.stderr.write(d));return child;}
 start(['services/control-api/src/index.js']);
@@ -68,6 +68,15 @@ assert.equal(secretReadResponse.status,400);
 const secretReadResult = await secretReadResponse.json();
 assert.equal(secretReadResult.error,'harness_command_failed');
 assert.match(secretReadResult.message,/secret-like/);
+
+const outsideRootResponse = await fetch(`http://127.0.0.1:${port}/api/machines/${encodeURIComponent(machine.id)}/harness/status`, {
+  method:'POST',
+  headers:harnessHeaders,
+  body:JSON.stringify({cwd:temp})
+});
+assert.equal(outsideRootResponse.status,400);
+const outsideRootResult = await outsideRootResponse.json();
+assert.match(outsideRootResult.message,/outside configured harness roots/);
 
 const create = await fetch(`http://127.0.0.1:${port}/api/sessions`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:machine.id,cwd:root,agent:'echo',prompt:'acceptance'})});
 assert.equal(create.status,201);const session=await create.json();
