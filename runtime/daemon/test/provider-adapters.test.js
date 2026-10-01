@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildClaudeArgs, buildGeminiArgs, buildGrokArgs } from "../src/provider-adapters.js";
-import { buildSharedBrainPrompt } from "../src/brain.js";
+import { buildSharedBrainPrompt, selectShareableVerifiedDecisions } from "../src/brain.js";
 
 const request = { cwd: "/tmp/project", prompt: "fix tests", nativeSessionId: "session-123" };
 
@@ -36,4 +36,17 @@ test("shared Brain prompt is explicit, bounded, preserves current request, and m
   assert.match(prompt, /IGNORE CURRENT USER/);
   assert.ok(!prompt.includes('"id": "d8"'));
   assert.ok(prompt.length < 8000);
+});
+
+
+test("provider Brain selector excludes private decisions even when they are verified", () => {
+  const proof = { verifiedDecisions: [
+    { id:"share", revision:1, contentHash:"share-hash" },
+    { id:"private", revision:1, contentHash:"private-hash" }
+  ] };
+  const view = { decisions: {
+    share: { current:{ status:"current", verification:"verified", sensitivity:"shareable", revision:1, contentHash:"share-hash" } },
+    private: { current:{ status:"current", verification:"verified", sensitivity:"private", revision:1, contentHash:"private-hash" } }
+  } };
+  assert.deepEqual(selectShareableVerifiedDecisions(proof, view).map(x=>x.id), ["share"]);
 });
