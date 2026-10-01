@@ -186,3 +186,32 @@ test('checkpoint storage must remain outside the repository', async () => {
     /outside the repository root/,
   );
 });
+
+
+test('restore becomes idempotent after the exact authorized plan is applied', async () => {
+  const { root, checkpointRoot, policy } = await setup();
+  const checkpoint = await createCheckpoint({ policy, checkpointRoot, relativePaths: ['alpha.txt'] });
+  await writeFile(path.join(root, 'alpha.txt'), 'alpha-v2\n');
+  const preview = await planCheckpointRestore({
+    policy,
+    checkpointRoot,
+    checkpointId: checkpoint.checkpointId,
+    workspaceId: 'workspace-1',
+  });
+  const authorization = authorizeActionPlan({
+    plan: preview.plan,
+    approvedBy: 'operator-1',
+    approvedCapabilities: ['checkpoint.restore'],
+    confirmPlanId: preview.plan.planId,
+  });
+  await applyCheckpointRestore({ policy, checkpointRoot, restorePreview: preview, authorization });
+  const secondPreview = await planCheckpointRestore({
+    policy,
+    checkpointRoot,
+    checkpointId: checkpoint.checkpointId,
+    workspaceId: 'workspace-1',
+  });
+  assert.equal(secondPreview.ready, true);
+  assert.equal(secondPreview.plan, null);
+  assert.deepEqual(secondPreview.blockers, []);
+});
