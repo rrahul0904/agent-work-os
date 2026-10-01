@@ -77,6 +77,9 @@ export class DurableSubagentCoordinator {
           const interruptedFrom = task.status;
           task.status = 'interrupted';
           task.interruptedFrom = interruptedFrom;
+          for (const [leaseId, lease] of Object.entries(this.state.leases)) {
+            if (lease.taskId === task.taskId) delete this.state.leases[leaseId];
+          }
           changed = true;
         }
       }
