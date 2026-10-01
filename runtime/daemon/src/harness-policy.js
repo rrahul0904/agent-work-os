@@ -58,11 +58,15 @@ export function createExecutionPolicy({ mode = 'economy', configuredCapabilities
   if (!Object.hasOwn(MODE_DEFAULTS, mode)) throw new TypeError(`unsupported execution mode: ${mode}`);
   const configured = new Set(sortedUnique(configuredCapabilities));
   const defaults = MODE_DEFAULTS[mode];
-  const allowed = defaults.filter((capability) => configured.has(capability));
+  const mutationsApproved = approvals.mutations === true;
+  const allowed = defaults.filter(
+    (capability) => configured.has(capability)
+      && (!MUTATING_CAPABILITIES.has(capability) || mutationsApproved),
+  );
 
   for (const capability of configured) {
     if (mode === 'standard' && !MUTATING_CAPABILITIES.has(capability)) allowed.push(capability);
-    if (MUTATING_CAPABILITIES.has(capability) && approvals.mutations === true) allowed.push(capability);
+    if (MUTATING_CAPABILITIES.has(capability) && mutationsApproved) allowed.push(capability);
   }
 
   const capabilities = [...new Set(allowed)].sort();
