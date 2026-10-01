@@ -11,6 +11,7 @@ const MUTATING_CAPABILITIES = new Set([
   'shell.mutate',
   'github.write',
   'browser.mutate',
+  'python',
 ]);
 
 function nonEmptyString(value, field) {
