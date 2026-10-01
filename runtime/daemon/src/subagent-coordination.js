@@ -74,8 +74,9 @@ export class DurableSubagentCoordinator {
       let changed = this.#expireLeases();
       for (const task of Object.values(this.state.tasks)) {
         if (task.status === 'building' || task.status === 'verifying') {
+          const interruptedFrom = task.status;
           task.status = 'interrupted';
-          task.interruptedFrom = task.status === 'building' ? 'building' : 'verifying';
+          task.interruptedFrom = interruptedFrom;
           changed = true;
         }
       }
