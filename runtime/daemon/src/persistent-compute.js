@@ -128,6 +128,7 @@ export class PersistentPythonWorker {
     networkPolicy = 'inherited',
     perCellTimeoutMs = 2_000,
     maxOutputBytes = 32_768,
+    maxCodeBytes = 65_536,
     maxCellsBeforeRestart = 50,
   } = {}) {
     this.workspaceRoot = path.resolve(nonEmptyString(workspaceRoot, 'workspaceRoot'));
@@ -136,6 +137,7 @@ export class PersistentPythonWorker {
     this.networkPolicy = nonEmptyString(networkPolicy, 'networkPolicy');
     this.perCellTimeoutMs = positiveInteger(perCellTimeoutMs, 'perCellTimeoutMs', 2_000);
     this.maxOutputBytes = positiveInteger(maxOutputBytes, 'maxOutputBytes', 32_768);
+    this.maxCodeBytes = positiveInteger(maxCodeBytes, 'maxCodeBytes', 65_536);
     this.maxCellsBeforeRestart = positiveInteger(maxCellsBeforeRestart, 'maxCellsBeforeRestart', 50);
     this.child = null;
     this.stdout = null;
@@ -162,8 +164,11 @@ export class PersistentPythonWorker {
       processIsolation: 'separate-process',
       filesystemIsolation: 'not-enforced',
       networkIsolation: 'not-enforced',
+      memoryIsolation: 'not-enforced',
       networkPolicy: 'inherited',
       environment: 'allowlisted-minimal-env',
+      maxCodeBytes: this.maxCodeBytes,
+      maxOutputBytes: this.maxOutputBytes,
       shell: false,
     });
   }
@@ -297,6 +302,9 @@ export class PersistentPythonWorker {
   async runCell({ code, plan, authorization }) {
     if (this.pending) throw new Error('a Python cell is already running');
     const source = nonEmptyString(code, 'code');
+    if (Buffer.byteLength(source, 'utf8') > this.maxCodeBytes) {
+      throw new Error('Python cell exceeds maxCodeBytes');
+    }
     assertPlanAuthorized(plan, authorization);
     if (this.consumedAuthorizations.has(authorization.authorizationId)) {
       throw new Error('authorization receipt has already been consumed');
