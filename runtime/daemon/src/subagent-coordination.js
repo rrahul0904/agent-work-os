@@ -177,15 +177,33 @@ export class DurableSubagentCoordinator {
     }
 
     const leaseId = nonEmptyString(this.idFactory(), 'leaseId');
+    if (this.state.leases[leaseId]) throw new Error('lease id collision');
+    const acquiredAtMs = this.now();
     const lease = {
       leaseId,
       taskId: task.taskId,
       workerId,
       paths: requested,
-      acquiredAtMs: this.now(),
-      expiresAtMs: this.now() + positiveInteger(ttlMs, 'ttlMs', 30_000),
+      acquiredAtMs,
+      expiresAtMs: acquiredAtMs + positiveInteger(ttlMs, 'ttlMs', 30_000),
     };
     this.state.leases[leaseId] = lease;
+    await this.#persist();
+    return Object.freeze(deepClone(lease));
+  }
+
+  async renewEditLease({ leaseId, workerId, ttlMs = 30_000 }) {
+    this.#assertLoaded();
+    this.#expireLeases();
+    const id = nonEmptyString(leaseId, 'leaseId');
+    const lease = this.state.leases[id];
+    if (!lease) throw new Error('edit lease is missing or expired');
+    if (lease.workerId !== workerId) throw new Error('only the lease owner may renew an edit lease');
+    const task = this.#requireTask(lease.taskId);
+    if (task.status !== 'building' || task.builderId !== workerId) {
+      throw new Error('edit lease can only be renewed by the active assigned builder');
+    }
+    lease.expiresAtMs = this.now() + positiveInteger(ttlMs, 'ttlMs', 30_000);
     await this.#persist();
     return Object.freeze(deepClone(lease));
   }
