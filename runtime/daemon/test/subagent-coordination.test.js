@@ -263,3 +263,38 @@ test('durable state is readable without reconciliation for inspection', async ()
   assert.equal(snapshot.workers['builder-1'].role, 'builder');
   assert.equal(snapshot.tasks.t1.status, 'queued');
 });
+
+
+test('edit lease renewal is owner-bound and extends the lease while building', async () => {
+  let now = 1_000;
+  let leaseCounter = 0;
+  const coordinator = await seededCoordinator({
+    now: () => now,
+    idFactory: () => `lease-${++leaseCounter}`,
+  });
+  await coordinator.createTask({
+    taskId: 't1',
+    workspaceId: 'w1',
+    scopePaths: ['src'],
+    builderId: 'builder-1',
+    verifierId: 'verifier-1',
+  });
+  await coordinator.claimTask({ taskId: 't1', workerId: 'builder-1' });
+  const lease = await coordinator.acquireEditLease({
+    taskId: 't1',
+    workerId: 'builder-1',
+    paths: ['src/a.js'],
+    ttlMs: 10,
+  });
+  await assert.rejects(
+    () => coordinator.renewEditLease({ leaseId: lease.leaseId, workerId: 'builder-2', ttlMs: 20 }),
+    /lease owner/,
+  );
+  now = 1_005;
+  const renewed = await coordinator.renewEditLease({
+    leaseId: lease.leaseId,
+    workerId: 'builder-1',
+    ttlMs: 20,
+  });
+  assert.equal(renewed.expiresAtMs, 1_025);
+});
