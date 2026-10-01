@@ -5,14 +5,18 @@ import path from "node:path";
 export class JsonStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.state = { machines: {}, sessions: {} };
+    this.state = { machines: {}, sessions: {}, organizations: {} };
     this.writeChain = Promise.resolve();
   }
 
   async load() {
     try {
       const parsed = JSON.parse(await readFile(this.filePath, "utf8"));
-      this.state = { machines: parsed.machines ?? {}, sessions: parsed.sessions ?? {} };
+      this.state = {
+        machines: parsed.machines ?? {},
+        sessions: parsed.sessions ?? {},
+        organizations: parsed.organizations ?? {}
+      };
       for (const machine of Object.values(this.state.machines)) machine.status = "offline";
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
@@ -21,10 +25,19 @@ export class JsonStore {
 
   listMachines() { return Object.values(this.state.machines).sort((a, b) => a.name.localeCompare(b.name)); }
   listSessions() { return Object.values(this.state.sessions).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); }
+  listOrganizations() {
+    return Object.values(this.state.organizations).sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id) || a.id.localeCompare(b.id));
+  }
   getMachine(id) { return this.state.machines[id]; }
   getSession(id) { return this.state.sessions[id]; }
+  getOrganization(id) { return this.state.organizations[id]; }
 
   async upsertMachine(machine) { this.state.machines[machine.id] = machine; await this.#persist(); return machine; }
+  async upsertOrganization(organization) {
+    this.state.organizations[organization.id] = organization;
+    await this.#persist();
+    return organization;
+  }
   async touchMachine(id) {
     const machine = this.getMachine(id); if (!machine) return;
     machine.status = "online"; machine.lastSeenAt = new Date().toISOString(); await this.#persist(); return machine;
