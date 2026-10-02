@@ -5,11 +5,15 @@ import path from "node:path";
 const MAX_MESSAGES = 500;
 const MAX_TRANSCRIPT_MESSAGES = 24;
 const MAX_TRANSCRIPT_CHARS = 12_000;
+const TOOL_APPROVAL_DEFAULT_TTL_SECONDS = 600;
+const TOOL_APPROVAL_MIN_TTL_SECONDS = 60;
+const TOOL_APPROVAL_MAX_TTL_SECONDS = 3600;
+const TOOL_APPROVAL_PREVIEW_CHARS = 4_000;
 
 export class RoomStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.state = { rooms: {}, routines: {}, runs: {}, idempotency: {} };
+    this.state = { rooms: {}, routines: {}, runs: {}, idempotency: {}, toolApprovals: {} };
     this.writeChain = Promise.resolve();
   }
 
@@ -20,13 +24,22 @@ export class RoomStore {
         rooms: parsed.rooms ?? {},
         routines: parsed.routines ?? {},
         runs: parsed.runs ?? {},
-        idempotency: parsed.idempotency ?? {}
+        idempotency: parsed.idempotency ?? {},
+        toolApprovals: parsed.toolApprovals ?? {}
       };
       let recovered = false;
       for (const run of Object.values(this.state.runs)) {
         if (["queued", "running"].includes(run.status)) {
           run.status = "interrupted";
           run.updatedAt = new Date().toISOString();
+          recovered = true;
+        }
+      }
+      const now = Date.now();
+      for (const approval of Object.values(this.state.toolApprovals)) {
+        if (["pending", "approved"].includes(approval.status) && Date.parse(approval.expiresAt) <= now) {
+          approval.status = "expired";
+          approval.updatedAt = new Date().toISOString();
           recovered = true;
         }
       }
@@ -53,12 +66,21 @@ export class RoomStore {
       .filter((run) => run.roomId === id)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
       .slice(0, 50);
-    return structuredClone({ ...room, routines, runs });
+    const toolApprovals = Object.values(this.state.toolApprovals)
+      .filter((approval) => approval.roomId === id)
+      .map(publicToolApproval)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, 100);
+    return structuredClone({ ...room, routines, runs, toolApprovals });
   }
 
   getRoom(id) { return this.state.rooms[id]; }
   getRoutine(id) { return this.state.routines[id]; }
   getRun(id) { return this.state.runs[id]; }
+  getToolApproval(id) {
+    const approval = this.state.toolApprovals[id];
+    return approval ? publicToolApproval(approval) : undefined;
+  }
 
   async createRoom(name) {
     const clean = String(name ?? "").trim().slice(0, 120);
@@ -221,6 +243,105 @@ export class RoomStore {
     return structuredClone(run);
   }
 
+  async createToolApproval(roomId, input) {
+    const room = this.#room(roomId);
+    const agent = room.agents.find((candidate) => candidate.id === input.agentId);
+    if (!agent) throw new Error("room_agent_not_found");
+    const server = String(input.server ?? "").trim().slice(0, 120);
+    const tool = String(input.tool ?? "").trim().slice(0, 160);
+    if (!server || !tool) throw new Error("tool_server_and_name_required");
+    const risk = String(input.risk ?? "write").toLowerCase();
+    if (!["read", "write", "destructive"].includes(risk)) throw new Error("tool_risk_invalid");
+    const reason = String(input.reason ?? "").trim().slice(0, 2_000);
+    const args = normalizeJsonObject(input.arguments);
+    const argumentsDigest = hash(canonicalJson(args));
+    const ttl = clampTtl(input.expiresInSeconds);
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + ttl * 1000).toISOString();
+    const requestBody = { roomId, agentId: agent.id, server, tool, risk, reason, argumentsDigest, expiresAt };
+    const approval = {
+      id: crypto.randomUUID(),
+      ...requestBody,
+      requestDigest: hash(canonicalJson(requestBody)),
+      argumentsPreview: redactArguments(args),
+      status: "pending",
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    };
+    this.state.toolApprovals[approval.id] = approval;
+    room.updatedAt = now.toISOString();
+    await this.#persist();
+    return publicToolApproval(approval);
+  }
+
+  async decideToolApproval(id, { decision, actor, note, expectedArgumentsDigest } = {}) {
+    const approval = this.state.toolApprovals[id];
+    if (!approval) throw new Error("tool_approval_not_found");
+    await this.#expireToolApprovalIfNeeded(approval);
+    if (approval.status !== "pending") throw new Error("tool_approval_not_pending");
+    if (!expectedArgumentsDigest || expectedArgumentsDigest !== approval.argumentsDigest) throw new Error("tool_approval_digest_mismatch");
+    const normalizedDecision = String(decision ?? "").toLowerCase();
+    if (!["approved", "denied"].includes(normalizedDecision)) throw new Error("tool_approval_decision_invalid");
+    const decidedBy = String(actor ?? "").trim().slice(0, 120);
+    if (!decidedBy) throw new Error("tool_approval_actor_required");
+    const decidedAt = new Date().toISOString();
+    const decisionNote = String(note ?? "").trim().slice(0, 2_000);
+    const receiptBody = {
+      requestDigest: approval.requestDigest,
+      argumentsDigest: approval.argumentsDigest,
+      decision: normalizedDecision,
+      decidedBy,
+      decidedAt,
+      note: decisionNote
+    };
+    Object.assign(approval, {
+      status: normalizedDecision,
+      decidedBy,
+      decidedAt,
+      decisionNote,
+      decisionReceiptDigest: hash(canonicalJson(receiptBody)),
+      updatedAt: decidedAt
+    });
+    await this.#persist();
+    return publicToolApproval(approval);
+  }
+
+  async claimToolApproval(id, { arguments: claimArguments } = {}) {
+    const approval = this.state.toolApprovals[id];
+    if (!approval) throw new Error("tool_approval_not_found");
+    await this.#expireToolApprovalIfNeeded(approval);
+    if (approval.status === "denied") throw new Error("tool_approval_denied");
+    if (approval.status === "expired") throw new Error("tool_approval_expired");
+    if (approval.status === "consumed") throw new Error("tool_approval_already_consumed");
+    if (approval.status !== "approved") throw new Error("tool_approval_not_approved");
+    const args = normalizeJsonObject(claimArguments);
+    const digest = hash(canonicalJson(args));
+    if (digest !== approval.argumentsDigest) throw new Error("tool_approval_digest_mismatch");
+    const claimedAt = new Date().toISOString();
+    const claimBody = {
+      requestDigest: approval.requestDigest,
+      decisionReceiptDigest: approval.decisionReceiptDigest,
+      argumentsDigest: approval.argumentsDigest,
+      claimedAt
+    };
+    Object.assign(approval, {
+      status: "consumed",
+      claimedAt,
+      claimReceiptDigest: hash(canonicalJson(claimBody)),
+      updatedAt: claimedAt
+    });
+    await this.#persist();
+    return publicToolApproval(approval);
+  }
+
+  async #expireToolApprovalIfNeeded(approval) {
+    if (["pending", "approved"].includes(approval.status) && Date.parse(approval.expiresAt) <= Date.now()) {
+      approval.status = "expired";
+      approval.updatedAt = new Date().toISOString();
+      await this.#persist();
+    }
+  }
+
   #room(id) {
     const room = this.state.rooms[id];
     if (!room) throw new Error("room_not_found");
@@ -248,6 +369,10 @@ function publicRoutine(routine) {
   return structuredClone(safe);
 }
 
+function publicToolApproval(approval) {
+  return structuredClone(approval);
+}
+
 function boundedTranscript(messages) {
   const selected = messages.slice(-MAX_TRANSCRIPT_MESSAGES).map((message) => {
     const who = message.role === "agent" ? `@${message.authorName}` : message.authorName || message.role;
@@ -256,6 +381,49 @@ function boundedTranscript(messages) {
   let joined = selected.join("\n");
   if (joined.length > MAX_TRANSCRIPT_CHARS) joined = joined.slice(joined.length - MAX_TRANSCRIPT_CHARS);
   return joined;
+}
+
+function normalizeJsonObject(value) {
+  if (value === undefined || value === null) return {};
+  if (typeof value !== "object" || Array.isArray(value)) throw new Error("tool_arguments_must_be_object");
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch {
+    throw new Error("tool_arguments_invalid");
+  }
+}
+
+function canonicalJson(value) {
+  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(",")}}`;
+}
+
+function redactArguments(value) {
+  const redacted = redact(value);
+  const serialized = JSON.stringify(redacted);
+  if (serialized.length <= TOOL_APPROVAL_PREVIEW_CHARS) return redacted;
+  return { truncated: true, preview: `${serialized.slice(0, TOOL_APPROVAL_PREVIEW_CHARS)}…` };
+}
+
+function redact(value) {
+  if (Array.isArray(value)) return value.map(redact);
+  if (!value || typeof value !== "object") return value;
+  const output = {};
+  for (const [key, item] of Object.entries(value)) {
+    output[key] = isSensitiveKey(key) ? "[REDACTED]" : redact(item);
+  }
+  return output;
+}
+
+function isSensitiveKey(key) {
+  return /(?:password|passwd|secret|token|authorization|auth|api[-_]?key|cookie|credential|private[-_]?key)/i.test(String(key));
+}
+
+function clampTtl(value) {
+  const parsed = Number(value ?? TOOL_APPROVAL_DEFAULT_TTL_SECONDS);
+  if (!Number.isFinite(parsed)) return TOOL_APPROVAL_DEFAULT_TTL_SECONDS;
+  return Math.min(TOOL_APPROVAL_MAX_TTL_SECONDS, Math.max(TOOL_APPROVAL_MIN_TTL_SECONDS, Math.floor(parsed)));
 }
 
 function hash(value) {
