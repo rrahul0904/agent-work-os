@@ -110,7 +110,38 @@ assert.equal(replay.run.id, completedRun.id);
 const replayRoom = await (await fetch(`http://127.0.0.1:${port}/api/rooms/${room.id}`)).json();
 assert.equal(replayRoom.runs.filter(run=>run.idempotencyKey==='ticket-77').length, 1);
 
-console.log('[acceptance] PASS: direct sessions + verified Brain + shared rooms + webhook idempotency');
+// Governed tool approval: authenticated, exact-intent-bound, redacted, fail-closed, and single-use.
+const approvalPayload = {agentId:reviewer.id,server:'github',tool:'create_pull_request',risk:'write',reason:'Open a draft PR from reviewed changes.',arguments:{repo:'owner/repo',title:'Acceptance PR',apiToken:'must-not-persist'}};
+const approvalUnauthorized = await fetch(`http://127.0.0.1:${port}/api/rooms/${room.id}/tool-approvals`, {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(approvalPayload)});
+assert.equal(approvalUnauthorized.status,401);
+const controlHeaders = {'content-type':'application/json','authorization':'Bearer acceptance-token'};
+const approvalResponse = await fetch(`http://127.0.0.1:${port}/api/rooms/${room.id}/tool-approvals`, {method:'POST',headers:controlHeaders,body:JSON.stringify(approvalPayload)});
+assert.equal(approvalResponse.status,201);
+const approval = await approvalResponse.json();
+assert.equal(approval.status,'pending');
+assert.equal(approval.argumentsPreview.apiToken,'[REDACTED]');
+const mismatchDecision = await fetch(`http://127.0.0.1:${port}/api/tool-approvals/${approval.id}/decision`, {method:'POST',headers:controlHeaders,body:JSON.stringify({decision:'approved',actor:'Acceptance reviewer',expectedArgumentsDigest:'wrong-digest'})});
+assert.equal(mismatchDecision.status,409);
+const decisionResponse = await fetch(`http://127.0.0.1:${port}/api/tool-approvals/${approval.id}/decision`, {method:'POST',headers:controlHeaders,body:JSON.stringify({decision:'approved',actor:'Acceptance reviewer',expectedArgumentsDigest:approval.argumentsDigest,note:'Exact arguments reviewed.'})});
+assert.equal(decisionResponse.status,200);
+const approved = await decisionResponse.json();
+assert.equal(approved.status,'approved');
+assert.ok(approved.decisionReceiptDigest);
+const mutatedClaim = await fetch(`http://127.0.0.1:${port}/api/tool-approvals/${approval.id}/claim`, {method:'POST',headers:controlHeaders,body:JSON.stringify({arguments:{repo:'owner/repo',title:'Changed after approval',apiToken:'must-not-persist'}})});
+assert.equal(mutatedClaim.status,409);
+const claimResponse = await fetch(`http://127.0.0.1:${port}/api/tool-approvals/${approval.id}/claim`, {method:'POST',headers:controlHeaders,body:JSON.stringify({arguments:{title:'Acceptance PR',apiToken:'must-not-persist',repo:'owner/repo'}})});
+assert.equal(claimResponse.status,200);
+const claimed = await claimResponse.json();
+assert.equal(claimed.status,'consumed');
+assert.ok(claimed.claimReceiptDigest);
+const replayClaim = await fetch(`http://127.0.0.1:${port}/api/tool-approvals/${approval.id}/claim`, {method:'POST',headers:controlHeaders,body:JSON.stringify({arguments:approvalPayload.arguments})});
+assert.equal(replayClaim.status,409);
+const approvalRoom = await (await fetch(`http://127.0.0.1:${port}/api/rooms/${room.id}`)).json();
+const persistedApproval = approvalRoom.toolApprovals.find(item=>item.id===approval.id);
+assert.equal(persistedApproval.status,'consumed');
+assert.equal(persistedApproval.argumentsPreview.apiToken,'[REDACTED]');
+
+console.log('[acceptance] PASS: direct sessions + verified Brain + shared rooms + webhook idempotency + exact-intent tool approvals');
 for(const child of children.reverse()) child.kill('SIGTERM');
 await new Promise(r=>setTimeout(r,120));
 
