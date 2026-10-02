@@ -105,6 +105,48 @@ export async function createControlPlane() {
           return json(res, status, { error: error.message });
         }
       }
+      const roomApprovalMatch = url.pathname.match(/^\/api\/rooms\/([^/]+)\/tool-approvals$/);
+      if (req.method === "POST" && roomApprovalMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const roomId = decodeURIComponent(roomApprovalMatch[1]);
+        const body = await readJson(req);
+        try {
+          const approval = await rooms.createToolApproval(roomId, body);
+          broadcastRoom(roomId);
+          return json(res, 201, approval);
+        } catch (error) {
+          const status = ["room_not_found", "room_agent_not_found"].includes(error.message) ? 404 : 400;
+          return json(res, status, { error: error.message });
+        }
+      }
+      const approvalDecisionMatch = url.pathname.match(/^\/api\/tool-approvals\/([^/]+)\/decision$/);
+      if (req.method === "POST" && approvalDecisionMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const approvalId = decodeURIComponent(approvalDecisionMatch[1]);
+        const body = await readJson(req);
+        try {
+          const approval = await rooms.decideToolApproval(approvalId, body);
+          broadcastRoom(approval.roomId);
+          return json(res, 200, approval);
+        } catch (error) {
+          const status = error.message === "tool_approval_not_found" ? 404 : error.message === "tool_approval_decision_invalid" || error.message === "tool_approval_actor_required" ? 400 : 409;
+          return json(res, status, { error: error.message });
+        }
+      }
+      const approvalClaimMatch = url.pathname.match(/^\/api\/tool-approvals\/([^/]+)\/claim$/);
+      if (req.method === "POST" && approvalClaimMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const approvalId = decodeURIComponent(approvalClaimMatch[1]);
+        const body = await readJson(req);
+        try {
+          const approval = await rooms.claimToolApproval(approvalId, body);
+          broadcastRoom(approval.roomId);
+          return json(res, 200, approval);
+        } catch (error) {
+          const status = error.message === "tool_approval_not_found" ? 404 : error.message === "tool_arguments_must_be_object" || error.message === "tool_arguments_invalid" ? 400 : 409;
+          return json(res, status, { error: error.message });
+        }
+      }
       const roomMessageMatch = url.pathname.match(/^\/api\/rooms\/([^/]+)\/messages$/);
       if (req.method === "POST" && roomMessageMatch) {
         const roomId = decodeURIComponent(roomMessageMatch[1]);
@@ -343,6 +385,13 @@ function addCors(res) { res.setHeader("access-control-allow-origin", "*"); res.s
 function json(res, status, body) { res.statusCode = status; res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(body)); }
 function end(res, status) { res.statusCode = status; res.end(); }
 function bearerToken(value) { const match = /^Bearer\s+(.+)$/i.exec(String(value ?? "")); return match?.[1]; }
+function controlTokenMatches(value, expected) {
+  const supplied = bearerToken(value);
+  if (!supplied) return false;
+  const left = Buffer.from(supplied);
+  const right = Buffer.from(String(expected));
+  return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
 async function readJson(req) { let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error("request too large"); } return raw ? JSON.parse(raw) : {}; }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
