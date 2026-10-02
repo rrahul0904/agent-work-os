@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Agent Studio · Agent Work OS</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">AGENT WORK OS · RE-374</p>
+      <h1>Agent Studio</h1>
+      <p class="lede">Build reviewed agent definitions, publish immutable versions, preflight the real local runtime, and launch with receipts.</p>
+    </div>
+    <div class="status-wrap">
+      <span id="runtimeDot" class="dot"></span>
+      <span id="runtimeStatus">Checking control plane…</span>
+      <button id="refreshButton" class="secondary">Refresh</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel builder-panel">
+      <div class="section-title">
+        <div><p class="eyebrow">Definition</p><h2>Create a draft</h2></div>
+        <span class="badge">Human launch only</span>
+      </div>
+      <form id="agentForm" class="form-grid">
+        <label>Name<input name="name" required maxlength="120" placeholder="Research Builder" /></label>
+        <label>Slug<input name="slug" maxlength="80" placeholder="research-builder" /></label>
+        <label class="full">Instructions<textarea name="instructions" required rows="7" placeholder="Describe the reviewed operating instructions for this agent."></textarea></label>
+        <label>Machine<select name="machineId" id="machineSelect" required></select></label>
+        <label>Runtime adapter<select name="agent" id="adapterSelect" required></select></label>
+        <label>Working directory<input name="cwd" required placeholder="/workspace/project" /></label>
+        <label>Model override<input name="model" placeholder="optional" /></label>
+        <label>Brain mode<select name="brainMode"><option value="proof-only">Proof only</option><option value="verified-context">Verified context</option></select></label>
+        <label>Prompt ceiling<input name="maxPromptChars" type="number" min="2000" max="80000" value="48000" /></label>
+        <fieldset class="full"><legend>Capabilities</legend><div id="capabilityChoices" class="choices"></div></fieldset>
+        <fieldset class="full"><legend>Reusable skills</legend><div id="skillChoices" class="choices muted-choice"></div></fieldset>
+        <fieldset class="full"><legend>Reference context</legend><div id="contextChoices" class="choices muted-choice"></div></fieldset>
+        <button class="primary full" type="submit">Create governed draft</button>
+      </form>
+    </section>
+
+    <section class="panel catalog-panel">
+      <div class="section-title"><div><p class="eyebrow">Reusable library</p><h2>Skills & context</h2></div></div>
+      <form id="skillForm" class="mini-form">
+        <input name="name" required placeholder="Skill name" />
+        <textarea name="body" required rows="3" placeholder="Reviewed operating instruction…"></textarea>
+        <button class="secondary" type="submit">Add skill</button>
+      </form>
+      <form id="contextForm" class="mini-form">
+        <input name="name" required placeholder="Context name" />
+        <textarea name="body" required rows="3" placeholder="Reference data — never treated as higher-priority instructions…"></textarea>
+        <button class="secondary" type="submit">Add context</button>
+      </form>
+      <div class="guardrail">
+        <strong>Guardrail</strong>
+        <p>Studio refuses plaintext secret-shaped fields. MCP references are recorded but preflight-blocked until a governed execution adapter exists.</p>
+      </div>
+    </section>
+
+    <section class="panel agents-panel">
+      <div class="section-title"><div><p class="eyebrow">Published control plane</p><h2>Agents</h2></div><span id="agentCount" class="badge">0 agents</span></div>
+      <div id="agentList" class="stack empty-state">No agent definitions yet.</div>
+    </section>
+
+    <section class="panel run-panel">
+      <div class="section-title"><div><p class="eyebrow">Human-triggered run</p><h2>Preflight & launch</h2></div></div>
+      <p id="selectedAgentLabel" class="selection">Select an agent card below.</p>
+      <label>Current request<textarea id="runPrompt" rows="7" placeholder="Describe the current task. This remains distinct from the immutable published instructions."></textarea></label>
+      <label>Verified handoff ID<input id="handoffId" placeholder="Only required for verified-context agents" /></label>
+      <div class="button-row">
+        <button id="preflightButton" class="secondary" disabled>Run preflight</button>
+        <button id="runButton" class="primary" disabled>Launch published version</button>
+      </div>
+      <pre id="runResult" class="result">No preflight yet.</pre>
+    </section>
+
+    <section class="panel receipts-panel">
+      <div class="section-title"><div><p class="eyebrow">Evidence</p><h2>Run receipts</h2></div><span class="badge">Durable</span></div>
+      <div id="receiptList" class="stack empty-state">No run attempts yet.</div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
