@@ -342,7 +342,7 @@ function mime(ext) { return ({ ".html": "text/html; charset=utf-8", ".js": "text
 function addCors(res) { res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type,authorization,idempotency-key"); res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS"); }
 function json(res, status, body) { res.statusCode = status; res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(body)); }
 function end(res, status) { res.statusCode = status; res.end(); }
-function bearerToken(value) { const match = /^Bearer\\s+(.+)$/i.exec(String(value ?? "")); return match?.[1]; }
+function bearerToken(value) { const match = /^Bearer\s+(.+)$/i.exec(String(value ?? "")); return match?.[1]; }
 async function readJson(req) { let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error("request too large"); } return raw ? JSON.parse(raw) : {}; }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
