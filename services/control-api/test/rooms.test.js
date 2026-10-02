@@ -78,3 +78,57 @@ test('restart converts in-flight routine runs to interrupted and persists recove
   const secondReload = new RoomStore(file); await secondReload.load();
   assert.equal(secondReload.getRun(started.run.id).status, 'interrupted');
 });
+
+test('tool approval binds exact arguments, redacts secret previews, and never persists raw secrets', async () => {
+  const { store, file, room, researcher } = await fixture();
+  const first = await store.createToolApproval(room.id, {
+    agentId:researcher.id,
+    server:'github', tool:'create_pull_request', risk:'write', reason:'Open a draft PR after review.',
+    arguments:{base:'main',title:'Feature',apiToken:'super-secret-value',nested:{password:'dont-store-me'}}
+  });
+  const reordered = await store.createToolApproval(room.id, {
+    agentId:researcher.id,
+    server:'github', tool:'create_pull_request', risk:'write', reason:'Same args, different order.',
+    arguments:{nested:{password:'dont-store-me'},apiToken:'super-secret-value',title:'Feature',base:'main'}
+  });
+  assert.equal(first.argumentsDigest, reordered.argumentsDigest);
+  assert.equal(first.argumentsPreview.apiToken, '[REDACTED]');
+  assert.equal(first.argumentsPreview.nested.password, '[REDACTED]');
+  const raw = await readFile(file, 'utf8');
+  assert.equal(raw.includes('super-secret-value'), false);
+  assert.equal(raw.includes('dont-store-me'), false);
+});
+
+test('tool approval fails closed on digest mismatch and can be claimed exactly once', async () => {
+  const { store, room, researcher } = await fixture();
+  const request = await store.createToolApproval(room.id, {
+    agentId:researcher.id, server:'filesystem', tool:'write_file', risk:'write', reason:'Apply reviewed edit.',
+    arguments:{path:'src/a.js',content:'safe change'}
+  });
+  await assert.rejects(
+    store.decideToolApproval(request.id, {decision:'approved',actor:'Reviewer',expectedArgumentsDigest:'bad'}),
+    /tool_approval_digest_mismatch/
+  );
+  const approved = await store.decideToolApproval(request.id, {decision:'approved',actor:'Reviewer',note:'Reviewed exact diff.',expectedArgumentsDigest:request.argumentsDigest});
+  assert.equal(approved.status, 'approved');
+  assert.ok(approved.decisionReceiptDigest);
+  await assert.rejects(store.claimToolApproval(request.id, {arguments:{path:'src/a.js',content:'changed after approval'}}), /tool_approval_digest_mismatch/);
+  const claimed = await store.claimToolApproval(request.id, {arguments:{content:'safe change',path:'src/a.js'}});
+  assert.equal(claimed.status, 'consumed');
+  assert.ok(claimed.claimReceiptDigest);
+  await assert.rejects(store.claimToolApproval(request.id, {arguments:{path:'src/a.js',content:'safe change'}}), /tool_approval_already_consumed/);
+});
+
+test('denied and expired tool approvals cannot be claimed', async () => {
+  const { store, room, researcher } = await fixture();
+  const deniedRequest = await store.createToolApproval(room.id, {agentId:researcher.id,server:'shell',tool:'run',risk:'destructive',arguments:{cmd:'rm -rf build'}});
+  const denied = await store.decideToolApproval(deniedRequest.id, {decision:'denied',actor:'Reviewer',expectedArgumentsDigest:deniedRequest.argumentsDigest});
+  assert.equal(denied.status, 'denied');
+  await assert.rejects(store.claimToolApproval(denied.id, {arguments:{cmd:'rm -rf build'}}), /tool_approval_denied/);
+
+  const expiring = await store.createToolApproval(room.id, {agentId:researcher.id,server:'filesystem',tool:'read_file',risk:'read',arguments:{path:'README.md'}});
+  await store.decideToolApproval(expiring.id, {decision:'approved',actor:'Reviewer',expectedArgumentsDigest:expiring.argumentsDigest});
+  store.state.toolApprovals[expiring.id].expiresAt = new Date(Date.now()-1000).toISOString();
+  await assert.rejects(store.claimToolApproval(expiring.id, {arguments:{path:'README.md'}}), /tool_approval_expired/);
+  assert.equal(store.getToolApproval(expiring.id).status, 'expired');
+});
