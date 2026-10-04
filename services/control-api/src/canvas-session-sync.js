@@ -73,12 +73,12 @@ export async function syncCanvasSessionEvent(canvases, session, event) {
       continue;
     }
 
-    if (event.status === 'interrupted') {
+    if (event.status === 'interrupted' || event.status === 'stopped') {
       const current = canvases.publicCanvas(binding.canvasId).nodes.find((candidate) => candidate.id === binding.nodeId);
       if (['starting', 'running', 'needs_input'].includes(current?.status)) {
         await canvases.transitionNode(binding.canvasId, binding.nodeId, {
           to: 'stopped',
-          reason: 'session_interrupted'
+          reason: event.status === 'interrupted' ? 'session_interrupted' : 'session_stopped'
         });
         changed.add(binding.canvasId);
       }
