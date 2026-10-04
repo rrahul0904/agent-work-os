@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import os from "node:os";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
-import { CodexAdapter, EchoAdapter } from "./adapters.js";
+import { CodexAdapter, EchoAdapter, findCommand } from "./adapters.js";
 import { ClaudeAdapter, GeminiAdapter, GrokAdapter } from "./provider-adapters.js";
 import { BRAIN_MODE_VERIFIED_CONTEXT, buildSharedBrainPrompt, selectShareableVerifiedDecisions } from "./brain.js";
 import { loadMachineId } from "./identity.js";
+import { TmuxTerminalManager } from "./terminal-manager.js";
 import { DecisionMemory } from "../../../packages/decision-memory/src/index.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
@@ -19,6 +20,8 @@ const codex = new CodexAdapter(); if (codex.capability()) adapters.set("codex", 
 for (const adapter of [new ClaudeAdapter(), new GeminiAdapter(), new GrokAdapter()]) {
   if (adapter.capability()) adapters.set(adapter.name, adapter);
 }
+const tmux = findCommand("tmux");
+const terminals = tmux ? new TmuxTerminalManager({ executable: tmux.executable }) : null;
 
 let ws; let heartbeat; let reconnectAttempt = 0; let shuttingDown = false;
 function connect() {
@@ -28,15 +31,51 @@ function connect() {
   ws.addEventListener("open", () => {
     reconnectAttempt = 0;
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
-    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities } }));
+    const terminal = terminals?.capability(tmux?.version);
+    ws.send(encodeMessage({
+      type: "daemon.hello",
+      protocolVersion: PROTOCOL_VERSION,
+      machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, terminal }
+    }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
-    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")}`);
+    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")} terminal=${terminal ? "tmux" : "unavailable"}`);
   });
   ws.addEventListener("message", async (event) => {
     try {
       const command = decodeMessage(String(event.data)); if (command.type !== "server.command") return;
-      const ack = (ok, error) => ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ok, error }));
-      const emit = (agentEvent) => { if (agentEvent.kind === "thread") nativeSessions.set(command.sessionId, agentEvent.nativeSessionId); ws.send(encodeMessage({ type: "daemon.session.event", machineId, sessionId: command.sessionId, event: agentEvent })); };
+      const ack = (ok, error) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ok, error }));
+      };
+      const emit = (agentEvent) => {
+        if (agentEvent.kind === "thread") nativeSessions.set(command.sessionId, agentEvent.nativeSessionId);
+        if (ws.readyState === WebSocket.OPEN) ws.send(encodeMessage({ type: "daemon.session.event", machineId, sessionId: command.sessionId, event: agentEvent }));
+      };
+
+      if (command.action === "terminal.start") {
+        if (!terminals) throw new Error("tmux_terminal_unavailable");
+        await terminals.start(command.sessionId, command.payload, emit);
+        ack(true);
+        return;
+      }
+      if (command.action === "terminal.input") {
+        if (!terminals) throw new Error("tmux_terminal_unavailable");
+        await terminals.input(command.sessionId, command.payload, emit);
+        ack(true);
+        return;
+      }
+      if (command.action === "terminal.resize") {
+        if (!terminals) throw new Error("tmux_terminal_unavailable");
+        await terminals.resize(command.sessionId, command.payload, emit);
+        ack(true);
+        return;
+      }
+      if (command.action === "terminal.stop") {
+        if (!terminals) throw new Error("tmux_terminal_unavailable");
+        await terminals.stop(command.sessionId, emit);
+        ack(true);
+        return;
+      }
+
       if (command.action === "session.start") {
         const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
         // Opt-in evidence-only recall, durably recorded before the agent begins.
@@ -79,5 +118,5 @@ function connect() {
 }
 function fail(emit, error) { emit({ kind: "error", message: error.message, at: new Date().toISOString() }); emit({ kind: "status", status: "failed", at: new Date().toISOString() }); }
 async function fetchSession(id) { const u = new URL(serverUrl); u.protocol = u.protocol === "wss:" ? "https:" : "http:"; u.pathname = `/api/sessions/${encodeURIComponent(id)}`; u.search = ""; const r = await fetch(u); if (!r.ok) throw new Error(`Unable to load session ${id}`); return r.json(); }
-async function shutdown() { shuttingDown = true; if (heartbeat) clearInterval(heartbeat); ws?.close(); setTimeout(() => process.exit(0), 30).unref(); }
+async function shutdown() { shuttingDown = true; if (heartbeat) clearInterval(heartbeat); await terminals?.close(); ws?.close(); setTimeout(() => process.exit(0), 30).unref(); }
 process.on("SIGINT", shutdown); process.on("SIGTERM", shutdown); connect();

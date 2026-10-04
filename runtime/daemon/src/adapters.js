@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from "node:child_process";
 import readline from "node:readline";
+import { createTurnHealthGate } from "./turn-health.js";
 
 const now = () => new Date().toISOString();
 
@@ -16,7 +17,8 @@ export class EchoAdapter {
   name = "echo";
   capability() { return { name: "echo", executable: "builtin", version: "1" }; }
   async run(request, emit) {
-    emit({ kind: "status", status: "running", message: "Echo adapter started", at: now() });
+    const health = createTurnHealthGate({ sessionId: request.sessionId, provider: this.name, emit, now });
+    health.confirm("builtin_echo_ready", "Echo adapter ready");
     const nativeSessionId = request.nativeSessionId ?? `echo-${request.sessionId}`;
     if (!request.nativeSessionId) emit({ kind: "thread", nativeSessionId, at: now() });
     await new Promise((resolve) => setTimeout(resolve, 60));
@@ -44,7 +46,7 @@ export class CodexAdapter {
     if (request.nativeSessionId) args.push("resume", request.nativeSessionId, request.prompt);
     else args.push(request.prompt);
 
-    emit({ kind: "status", status: "running", message: "Codex turn started", at: now() });
+    const health = createTurnHealthGate({ sessionId: request.sessionId, provider: this.name, emit, now });
     const child = spawn(this.found.executable, args, { cwd: request.cwd, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
     this.children.set(request.sessionId, child);
     let nativeSessionId = request.nativeSessionId;
@@ -56,16 +58,19 @@ export class CodexAdapter {
       try {
         const event = JSON.parse(line);
         if (event.type === "thread.started" && typeof event.thread_id === "string") {
+          health.confirm("codex.thread.started", "Codex structured session started");
           nativeSessionId = event.thread_id; emit({ kind: "thread", nativeSessionId, at: now() }); return;
         }
         if (event.type === "item.started" || event.type === "item.completed") {
           const item = event.item ?? {}; const itemType = item.type ?? "item";
+          if (itemType !== "error") health.confirm(`codex.${event.type}`, "Codex structured turn event received");
           if (itemType === "agent_message" && typeof item.text === "string" && event.type === "item.completed") emit({ kind: "text", text: item.text, at: now() });
           else if (itemType === "error") emit({ kind: "error", message: String(item.message ?? "Codex item error"), at: now() });
           else emit({ kind: "tool", name: String(itemType), phase: event.type === "item.started" ? "started" : "completed", payload: item, at: now() });
           return;
         }
         if (event.type === "turn.completed") {
+          health.confirm("codex.turn.completed", "Codex completed with structured evidence");
           emit({ kind: "usage", usage: normalizeUsage(event.usage), at: now() }); emit({ kind: "status", status: "completed", at: now() }); terminal = true; return;
         }
         if (event.type === "turn.failed" || event.type === "error") {
@@ -82,6 +87,7 @@ export class CodexAdapter {
       .finally(() => { this.children.delete(request.sessionId); stdout.close(); stderr.close(); });
     if (!terminal) {
       if (code !== 0) emit({ kind: "error", message: `Codex exited with code ${code ?? "unknown"}`, at: now() });
+      if (code === 0) health.confirm("codex.exit_0", "Codex process completed successfully");
       emit({ kind: "status", status: code === 0 ? "completed" : "failed", at: now() });
     }
     return { nativeSessionId };
