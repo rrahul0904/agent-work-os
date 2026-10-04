@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Multiplayer Canvas · Agent Work OS</title>
+  <link rel="stylesheet" href="/canvas.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brandBlock">
+      <small>AGENT WORK OS</small>
+      <h1>Multiplayer Canvas</h1>
+    </div>
+    <div class="topActions">
+      <div class="viewSwitch" role="group" aria-label="Workspace view">
+        <button id="canvasMode" class="active" type="button">Canvas</button>
+        <button id="listMode" type="button">List</button>
+      </div>
+      <span id="connection" class="connection">Connecting…</span>
+      <a href="/rooms.html">Shared Rooms</a>
+      <a href="/">Operations Atlas</a>
+    </div>
+  </header>
+  <main id="app" aria-live="polite"></main>
+  <script type="module" src="/canvas.js"></script>
+</body>
+</html>
