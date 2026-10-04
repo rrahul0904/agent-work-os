@@ -35,3 +35,9 @@ export function isPositiveProviderAction(action) {
   if (action.kind === 'status' && action.status === 'failed') return false;
   return ['thread', 'text', 'tool', 'usage', 'status'].includes(action.kind);
 }
+
+export function hasPositiveProviderEvidence(actions) {
+  const list = Array.isArray(actions) ? actions : [];
+  if (list.some((action) => action?.kind === 'error' || (action?.kind === 'status' && action.status === 'failed'))) return false;
+  return list.some(isPositiveProviderAction);
+}
