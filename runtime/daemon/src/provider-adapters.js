@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import readline from "node:readline";
 import { findCommand } from "./adapters.js";
+import { createTurnHealthGate, isPositiveProviderAction } from "./turn-health.js";
 
 const now = () => new Date().toISOString();
 const jsonArgs = (value) => {
@@ -59,7 +60,7 @@ class StructuredCliAdapter {
     const model = request.model || process.env["AGENT_WORK_OS_" + this.envPrefix + "_MODEL"];
     const extra = jsonArgs(process.env["AGENT_WORK_OS_" + this.envPrefix + "_ARGS"]);
     const args = this.buildArgs(request, model, extra);
-    emit({ kind: "status", status: "running", message: this.name + " turn started", at: now() });
+    const health = createTurnHealthGate({ sessionId: request.sessionId, provider: this.name, emit, now });
     const child = spawn(this.found.executable, args, { cwd: request.cwd, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
     this.children.set(request.sessionId, child);
     let nativeSessionId = request.nativeSessionId;
@@ -72,6 +73,9 @@ class StructuredCliAdapter {
         const actions = this.normalize(event);
         if (!actions.length) emit({ kind: "log", stream: "stdout", text: line, at: now() });
         for (const action of actions) {
+          if (isPositiveProviderAction(action)) {
+            health.confirm(`${this.name}.structured_event`, `${this.name} structured provider event received`);
+          }
           if (action.kind === "thread") {
             if (action.nativeSessionId && action.nativeSessionId !== nativeSessionId) {
               nativeSessionId = action.nativeSessionId;
@@ -99,7 +103,10 @@ class StructuredCliAdapter {
     if (code !== 0) {
       emit({ kind: "error", message: this.name + " exited with code " + (code ?? "unknown"), at: now() });
       if (terminalStatus !== "failed") emit({ kind: "status", status: "failed", at: now() });
-    } else if (!terminalStatus) emit({ kind: "status", status: "completed", at: now() });
+    } else if (!terminalStatus) {
+      health.confirm(`${this.name}.exit_0`, `${this.name} process completed successfully`);
+      emit({ kind: "status", status: "completed", at: now() });
+    }
     return { nativeSessionId };
   }
   async interrupt(sessionId) {
