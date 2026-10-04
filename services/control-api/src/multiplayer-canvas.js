@@ -292,9 +292,8 @@ export class MultiplayerCanvasStore {
     const actorId = cleanRequired(input.actorId, 'actor_id_required', 160);
     const member = canvas.members.find((candidate) => candidate.actorId === actorId);
     if (!member || member.role !== 'driver') throw new Error('driver_role_required');
-    const payload = { actorId, leaseSeconds: clampLease(input.leaseSeconds) };
-    const idem = this.#replay(canvasId, 'driver.acquire', input.idempotencyKey, payload);
-    if (idem) return { ...structuredClone(idem.result), duplicate: true };
+    if (input.idempotencyKey) throw new Error('driver_idempotency_secret_unsupported');
+    const leaseSeconds = clampLease(input.leaseSeconds);
 
     this.#expireLeaseIfNeeded(canvas);
     if (canvas.driverLease?.status === 'active' && canvas.driverLease.actorId !== actorId) throw new Error('driver_lease_busy');
@@ -307,16 +306,14 @@ export class MultiplayerCanvasStore {
       actorId,
       status: 'active',
       acquiredAt: acquired.toISOString(),
-      expiresAt: new Date(acquired.getTime() + payload.leaseSeconds * 1000).toISOString(),
+      expiresAt: new Date(acquired.getTime() + leaseSeconds * 1000).toISOString(),
       tokenHash: digest(token)
     };
     canvas.driverLease = lease;
     canvas.updatedAt = acquired.toISOString();
     const receipt = this.#receipt(canvas, 'driver.acquired', { actorId, leaseId: lease.id, expiresAt: lease.expiresAt });
-    const result = { lease: publicLease(lease), token, receipt: structuredClone(receipt), duplicate: false };
-    this.#recordReplay(canvasId, 'driver.acquire', input.idempotencyKey, payload, result);
     await this.#persist();
-    return result;
+    return { lease: publicLease(lease), token, receipt: structuredClone(receipt), duplicate: false };
   }
 
   authorizeInput(canvasId, { actorId, token }) {
