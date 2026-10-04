@@ -5,6 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
+import { reconcileCanvasNodeFromSession, syncCanvasSessionEvent } from "./canvas-session-sync.js";
+import { MultiplayerCanvasStore } from "./multiplayer-canvas.js";
 import { RoomStore } from "./rooms.js";
 import { JsonStore } from "./store.js";
 
@@ -15,11 +17,13 @@ const port = Number(process.env.AGENT_WORK_OS_PORT ?? 8787);
 const token = process.env.AGENT_WORK_OS_TOKEN ?? "dev-token";
 const statePath = path.resolve(process.env.AGENT_WORK_OS_STATE_PATH ?? ".data/state.json");
 const roomsPath = path.resolve(process.env.AGENT_WORK_OS_ROOMS_PATH ?? ".data/rooms.json");
+const canvasesPath = path.resolve(process.env.AGENT_WORK_OS_CANVASES_PATH ?? ".data/canvases.json");
 
 export async function createControlPlane() {
   const store = new JsonStore(statePath);
   const rooms = new RoomStore(roomsPath);
-  await Promise.all([store.load(), rooms.load()]);
+  const canvases = new MultiplayerCanvasStore(canvasesPath);
+  await Promise.all([store.load(), rooms.load(), canvases.load()]);
   const daemonSockets = new Map();
   const clientSockets = new Set();
   const pendingCommands = new Map();
@@ -31,6 +35,10 @@ export async function createControlPlane() {
   const broadcastRoom = (roomId) => {
     const room = rooms.publicRoom(roomId);
     if (room) broadcast({ type: "room.updated", room });
+  };
+  const broadcastCanvas = (canvasId) => {
+    const canvas = canvases.publicCanvas(canvasId);
+    if (canvas) broadcast({ type: "canvas.updated", canvas });
   };
   const sendCommand = (machineId, command) => {
     const peer = daemonSockets.get(machineId);
@@ -71,7 +79,111 @@ export async function createControlPlane() {
       if (req.method === "OPTIONS") return end(res, 204);
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, protocolVersion: PROTOCOL_VERSION });
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions(), rooms: rooms.listRooms() });
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, {
+        machines: store.listMachines(), sessions: store.listSessions(), rooms: rooms.listRooms(), canvases: canvases.listCanvases()
+      });
+
+      if (req.method === "GET" && url.pathname === "/api/canvases") return json(res, 200, { canvases: canvases.listCanvases() });
+      if (req.method === "POST" && url.pathname === "/api/canvases") {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const body = await readJson(req);
+        if (!rooms.getRoom(body.roomId)) return json(res, 404, { error: "room_not_found" });
+        try {
+          const canvas = await canvases.createCanvas(body);
+          broadcastCanvas(canvas.id);
+          return json(res, 201, canvas);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)$/);
+      if (req.method === "GET" && canvasMatch) {
+        const canvas = canvases.publicCanvas(decodeURIComponent(canvasMatch[1]));
+        return canvas ? json(res, 200, canvas) : json(res, 404, { error: "canvas_not_found" });
+      }
+      const canvasMemberMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/members$/);
+      if (req.method === "POST" && canvasMemberMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasMemberMatch[1]);
+        try {
+          const member = await canvases.upsertMember(canvasId, await readJson(req));
+          broadcastCanvas(canvasId);
+          return json(res, 200, member);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasNodeMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/nodes$/);
+      if (req.method === "POST" && canvasNodeMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasNodeMatch[1]);
+        const canvas = canvases.publicCanvas(canvasId);
+        if (!canvas) return json(res, 404, { error: "canvas_not_found" });
+        const body = await readJson(req);
+        if (body.kind === "agent") {
+          const room = rooms.getRoom(canvas.roomId);
+          if (!room?.agents.some((agent) => agent.id === body.roomAgentId)) return json(res, 400, { error: "room_agent_not_found" });
+        }
+        const session = body.sessionId ? store.getSession(body.sessionId) : undefined;
+        if (body.sessionId && !session) return json(res, 404, { error: "session_not_found" });
+        try {
+          const node = await canvases.addNode(canvasId, body);
+          if (session) await reconcileCanvasNodeFromSession(canvases, canvasId, node.id, session);
+          broadcastCanvas(canvasId);
+          return json(res, 201, canvases.publicCanvas(canvasId).nodes.find((candidate) => candidate.id === node.id));
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasLayoutMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/nodes\/([^/]+)\/layout$/);
+      if (req.method === "POST" && canvasLayoutMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasLayoutMatch[1]);
+        const nodeId = decodeURIComponent(canvasLayoutMatch[2]);
+        try {
+          const node = await canvases.updateLayout(canvasId, nodeId, await readJson(req));
+          broadcastCanvas(canvasId);
+          return json(res, 200, node);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasLinkMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/links$/);
+      if (req.method === "POST" && canvasLinkMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasLinkMatch[1]);
+        try {
+          const link = await canvases.addContextLink(canvasId, await readJson(req));
+          broadcastCanvas(canvasId);
+          return json(res, 201, link);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasDriverAcquireMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/driver\/acquire$/);
+      if (req.method === "POST" && canvasDriverAcquireMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasDriverAcquireMatch[1]);
+        try {
+          const result = await canvases.acquireDriver(canvasId, await readJson(req));
+          broadcastCanvas(canvasId);
+          return json(res, 201, result);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasDriverRevokeMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/driver\/revoke$/);
+      if (req.method === "POST" && canvasDriverRevokeMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasDriverRevokeMatch[1]);
+        try {
+          const lease = await canvases.revokeDriver(canvasId, await readJson(req));
+          broadcastCanvas(canvasId);
+          return json(res, 200, lease);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
 
       if (req.method === "GET" && url.pathname === "/api/rooms") return json(res, 200, { rooms: rooms.listRooms() });
       if (req.method === "POST" && url.pathname === "/api/rooms") {
@@ -278,7 +390,15 @@ export async function createControlPlane() {
     if (role !== "daemon" && role !== "client") return socket.destroy();
     const peer = acceptWebSocket(req, socket); if (!peer) return;
     if (role === "client") {
-      clientSockets.add(peer); peer.send(encodeMessage({ type: "state.snapshot", machines: store.listMachines(), sessions: store.listSessions(), rooms: rooms.listRooms() })); peer.on("close", () => clientSockets.delete(peer)); return;
+      clientSockets.add(peer);
+      peer.send(encodeMessage({
+        type: "state.snapshot",
+        machines: store.listMachines(),
+        sessions: store.listSessions(),
+        rooms: rooms.listRooms(),
+        canvases: canvases.listCanvases()
+      }));
+      peer.on("close", () => clientSockets.delete(peer)); return;
     }
     let machineId;
     peer.on("message", async (raw) => {
@@ -298,7 +418,9 @@ export async function createControlPlane() {
             let session = await store.addEvent(pending.sessionId, { kind: "error", message: String(msg.error ?? "daemon rejected command"), at: new Date().toISOString() });
             if (pending.action === "session.start") session = await store.addEvent(pending.sessionId, { kind: "status", status: "failed", at: new Date().toISOString() });
             broadcast({ type: "session.updated", session });
-            await syncRoomFromEvent(session, { kind: "status", status: "failed", at: new Date().toISOString() });
+            const failedEvent = { kind: "status", status: "failed", at: new Date().toISOString() };
+            await syncRoomFromEvent(session, failedEvent);
+            await syncCanvasFromEvent(session, failedEvent);
           }
           return;
         }
@@ -307,6 +429,7 @@ export async function createControlPlane() {
           const session = await store.addEvent(msg.sessionId, msg.event);
           broadcast({ type: "session.updated", session });
           await syncRoomFromEvent(session, msg.event);
+          await syncCanvasFromEvent(session, msg.event);
           return;
         }
       } catch (error) { console.warn("[api] invalid daemon message", error.message); }
@@ -360,8 +483,13 @@ export async function createControlPlane() {
     broadcastRoom(context.roomId);
   }
 
+  async function syncCanvasFromEvent(session, event) {
+    const changedCanvasIds = await syncCanvasSessionEvent(canvases, session, event);
+    for (const canvasId of changedCanvasIds) broadcastCanvas(canvasId);
+  }
+
   return {
-    server, store, rooms,
+    server, store, rooms, canvases,
     listen: () => new Promise((resolve) => server.listen(port, host, resolve)),
     close: () => new Promise((resolve) => {
       for (const peer of daemonSockets.values()) peer.close(1001, "server_shutdown");
@@ -391,6 +519,15 @@ function controlTokenMatches(value, expected) {
   const left = Buffer.from(supplied);
   const right = Buffer.from(String(expected));
   return left.length === right.length && crypto.timingSafeEqual(left, right);
+}
+function canvasError(res, error) {
+  const notFound = new Set(["canvas_not_found", "canvas_node_not_found"]);
+  const conflict = new Set([
+    "driver_lease_busy", "driver_lease_already_active", "driver_lease_inactive",
+    "driver_lease_actor_mismatch", "driver_lease_token_invalid", "idempotency_conflict"
+  ]);
+  const status = notFound.has(error.message) ? 404 : conflict.has(error.message) ? 409 : 400;
+  return json(res, status, { error: error.message });
 }
 async function readJson(req) { let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error("request too large"); } return raw ? JSON.parse(raw) : {}; }
 
