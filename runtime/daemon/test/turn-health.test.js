@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createTurnHealthGate, isPositiveProviderAction } from '../src/turn-health.js';
+import { createTurnHealthGate, hasPositiveProviderEvidence, isPositiveProviderAction } from '../src/turn-health.js';
 
 test('health gate emits exact-session evidence before running exactly once', () => {
   const events = [];
@@ -31,4 +31,17 @@ test('provider action classifier never treats errors or failed status as health 
   assert.equal(isPositiveProviderAction({ kind: 'text', text: 'hello' }), true);
   assert.equal(isPositiveProviderAction({ kind: 'tool', phase: 'started' }), true);
   assert.equal(isPositiveProviderAction({ kind: 'status', status: 'completed' }), true);
+});
+
+test('a structured provider event containing failure never becomes health evidence even if it also reports usage', () => {
+  assert.equal(hasPositiveProviderEvidence([
+    { kind: 'usage', usage: { inputTokens: 10 } },
+    { kind: 'error', message: 'provider rejected request' },
+    { kind: 'status', status: 'failed' }
+  ]), false);
+
+  assert.equal(hasPositiveProviderEvidence([
+    { kind: 'usage', usage: { inputTokens: 10 } },
+    { kind: 'status', status: 'completed' }
+  ]), true);
 });
