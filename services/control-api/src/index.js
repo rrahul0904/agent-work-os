@@ -8,6 +8,7 @@ import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
 import { reconcileCanvasNodeFromSession, syncCanvasSessionEvent } from "./canvas-session-sync.js";
 import { MultiplayerCanvasStore } from "./multiplayer-canvas.js";
 import { RoomStore } from "./rooms.js";
+import { isEphemeralSessionEvent, sanitizeTerminalSnapshot } from "./session-event-policy.js";
 import { JsonStore } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -27,6 +28,7 @@ export async function createControlPlane() {
   const daemonSockets = new Map();
   const clientSockets = new Set();
   const pendingCommands = new Map();
+  const terminalSnapshots = new Map();
 
   const broadcast = (event) => {
     const encoded = encodeMessage(event);
@@ -180,6 +182,121 @@ export async function createControlPlane() {
           const lease = await canvases.revokeDriver(canvasId, await readJson(req));
           broadcastCanvas(canvasId);
           return json(res, 200, lease);
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+
+      const canvasTerminalCreateMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/terminals$/);
+      if (req.method === "POST" && canvasTerminalCreateMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasTerminalCreateMatch[1]);
+        const canvas = canvases.publicCanvas(canvasId);
+        if (!canvas) return json(res, 404, { error: "canvas_not_found" });
+        const body = await readJson(req);
+        try {
+          const authority = canvases.authorizeInput(canvasId, { actorId: body.actorId, token: body.driverToken });
+          const machine = store.getMachine(body.machineId);
+          if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
+          if (!machine.terminal?.executable) return json(res, 409, { error: "tmux_terminal_unavailable" });
+          const cwd = String(body.cwd ?? "").trim();
+          if (!cwd || !cwd.startsWith("/")) return json(res, 400, { error: "terminal_cwd_invalid" });
+          const now = new Date().toISOString();
+          const sessionId = crypto.randomUUID();
+          const node = await canvases.addNode(canvasId, {
+            kind: "terminal",
+            title: body.title || "Live terminal",
+            sessionId,
+            x: body.x,
+            y: body.y,
+            width: body.width ?? 620,
+            height: body.height ?? 360
+          });
+          await canvases.transitionNode(canvasId, node.id, { to: "starting", reason: "terminal_start_requested" });
+          const session = {
+            id: sessionId, kind: "terminal", machineId: body.machineId, cwd, agent: "terminal",
+            status: "queued", createdAt: now, updatedAt: now,
+            context: { kind: "canvas-terminal", canvasId, nodeId: node.id, driverLeaseId: authority.leaseId },
+            messages: [], events: []
+          };
+          await store.createSession(session);
+          broadcast({ type: "session.updated", session });
+          broadcastCanvas(canvasId);
+          try {
+            sendCommand(body.machineId, {
+              type: "server.command", commandId: crypto.randomUUID(), sessionId, action: "terminal.start",
+              payload: { cwd, cols: body.cols, rows: body.rows }
+            });
+          } catch (error) {
+            const failed = await store.addEvent(sessionId, { kind: "status", status: "failed", at: new Date().toISOString() });
+            await syncCanvasFromEvent(failed, { kind: "status", status: "failed", at: new Date().toISOString() });
+            broadcast({ type: "session.updated", session: failed });
+            return json(res, 409, { error: error.message, session: failed });
+          }
+          return json(res, 201, { sessionId, node: canvases.publicCanvas(canvasId).nodes.find((candidate) => candidate.id === node.id) });
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasTerminalInputMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/nodes\/([^/]+)\/input$/);
+      if (req.method === "POST" && canvasTerminalInputMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasTerminalInputMatch[1]);
+        const nodeId = decodeURIComponent(canvasTerminalInputMatch[2]);
+        const body = await readJson(req);
+        try {
+          const authority = canvases.authorizeInput(canvasId, { actorId: body.actorId, token: body.driverToken });
+          const canvas = canvases.publicCanvas(canvasId);
+          const node = canvas?.nodes.find((candidate) => candidate.id === nodeId);
+          if (!node) return json(res, 404, { error: "canvas_node_not_found" });
+          const session = node.sessionId ? store.getSession(node.sessionId) : undefined;
+          if (!session || session.kind !== "terminal") return json(res, 409, { error: "terminal_session_required" });
+          if (body.text === undefined && body.key === undefined) return json(res, 400, { error: "terminal_input_required" });
+          sendCommand(session.machineId, {
+            type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "terminal.input",
+            payload: { text: body.text, key: body.key }
+          });
+          return json(res, 202, { accepted: true, sessionId: session.id, leaseId: authority.leaseId });
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasTerminalResizeMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/nodes\/([^/]+)\/resize$/);
+      if (req.method === "POST" && canvasTerminalResizeMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasTerminalResizeMatch[1]);
+        const nodeId = decodeURIComponent(canvasTerminalResizeMatch[2]);
+        const body = await readJson(req);
+        try {
+          const authority = canvases.authorizeInput(canvasId, { actorId: body.actorId, token: body.driverToken });
+          const node = canvases.publicCanvas(canvasId)?.nodes.find((candidate) => candidate.id === nodeId);
+          const session = node?.sessionId ? store.getSession(node.sessionId) : undefined;
+          if (!session || session.kind !== "terminal") return json(res, 409, { error: "terminal_session_required" });
+          sendCommand(session.machineId, {
+            type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "terminal.resize",
+            payload: { cols: body.cols, rows: body.rows }
+          });
+          return json(res, 202, { accepted: true, sessionId: session.id, leaseId: authority.leaseId });
+        } catch (error) {
+          return canvasError(res, error);
+        }
+      }
+      const canvasTerminalStopMatch = url.pathname.match(/^\/api\/canvases\/([^/]+)\/nodes\/([^/]+)\/stop$/);
+      if (req.method === "POST" && canvasTerminalStopMatch) {
+        if (!controlTokenMatches(req.headers.authorization, token)) return json(res, 401, { error: "control_token_required" });
+        const canvasId = decodeURIComponent(canvasTerminalStopMatch[1]);
+        const nodeId = decodeURIComponent(canvasTerminalStopMatch[2]);
+        const body = await readJson(req);
+        try {
+          const authority = canvases.authorizeInput(canvasId, { actorId: body.actorId, token: body.driverToken });
+          const node = canvases.publicCanvas(canvasId)?.nodes.find((candidate) => candidate.id === nodeId);
+          const session = node?.sessionId ? store.getSession(node.sessionId) : undefined;
+          if (!session || session.kind !== "terminal") return json(res, 409, { error: "terminal_session_required" });
+          sendCommand(session.machineId, {
+            type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "terminal.stop"
+          });
+          terminalSnapshots.delete(session.id);
+          return json(res, 202, { accepted: true, sessionId: session.id, leaseId: authority.leaseId });
         } catch (error) {
           return canvasError(res, error);
         }
@@ -398,6 +515,9 @@ export async function createControlPlane() {
         rooms: rooms.listRooms(),
         canvases: canvases.listCanvases()
       }));
+      for (const [sessionId, snapshot] of terminalSnapshots) {
+        peer.send(encodeMessage({ type: "terminal.snapshot", sessionId, snapshot }));
+      }
       peer.on("close", () => clientSockets.delete(peer)); return;
     }
     let machineId;
@@ -416,7 +536,7 @@ export async function createControlPlane() {
           pendingCommands.delete(msg.commandId);
           if (!msg.ok) {
             let session = await store.addEvent(pending.sessionId, { kind: "error", message: String(msg.error ?? "daemon rejected command"), at: new Date().toISOString() });
-            if (pending.action === "session.start") session = await store.addEvent(pending.sessionId, { kind: "status", status: "failed", at: new Date().toISOString() });
+            if (pending.action === "session.start" || pending.action === "terminal.start") session = await store.addEvent(pending.sessionId, { kind: "status", status: "failed", at: new Date().toISOString() });
             broadcast({ type: "session.updated", session });
             const failedEvent = { kind: "status", status: "failed", at: new Date().toISOString() };
             await syncRoomFromEvent(session, failedEvent);
@@ -426,7 +546,15 @@ export async function createControlPlane() {
         }
         if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
         if (msg.type === "daemon.session.event") {
+          if (isEphemeralSessionEvent(msg.event)) {
+            if (!store.getSession(msg.sessionId)) return;
+            const snapshot = sanitizeTerminalSnapshot(msg.event);
+            terminalSnapshots.set(msg.sessionId, snapshot);
+            broadcast({ type: "terminal.snapshot", sessionId: msg.sessionId, snapshot });
+            return;
+          }
           const session = await store.addEvent(msg.sessionId, msg.event);
+          if (msg.event.kind === "status" && ["failed", "stopped"].includes(msg.event.status)) terminalSnapshots.delete(msg.sessionId);
           broadcast({ type: "session.updated", session });
           await syncRoomFromEvent(session, msg.event);
           await syncCanvasFromEvent(session, msg.event);
@@ -494,6 +622,7 @@ export async function createControlPlane() {
     close: () => new Promise((resolve) => {
       for (const peer of daemonSockets.values()) peer.close(1001, "server_shutdown");
       for (const peer of clientSockets) peer.close(1001, "server_shutdown");
+      terminalSnapshots.clear();
       server.close(resolve);
     })
   };
@@ -524,7 +653,8 @@ function canvasError(res, error) {
   const notFound = new Set(["canvas_not_found", "canvas_node_not_found"]);
   const conflict = new Set([
     "driver_lease_busy", "driver_lease_already_active", "driver_lease_inactive",
-    "driver_lease_actor_mismatch", "driver_lease_token_invalid", "idempotency_conflict"
+    "driver_lease_actor_mismatch", "driver_lease_token_invalid", "idempotency_conflict",
+    "terminal_session_required", "tmux_terminal_unavailable", "machine_not_online"
   ]);
   const status = notFound.has(error.message) ? 404 : conflict.has(error.message) ? 409 : 400;
   return json(res, status, { error: error.message });
