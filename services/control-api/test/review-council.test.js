@@ -101,6 +101,7 @@ test("consultation planning is deterministic, transcript-scoped and budget gated
   assert.throws(
     () => buildConsultationPlan({
       ...input,
+      transcript: [{ id: "large", role: "assistant", text: "x".repeat(1_200) }],
       council: { ...COUNCIL, perObserverTokenBudget: 128, consultationTokenBudget: 128 }
     }),
     /consultation_observer_budget_exceeded/
