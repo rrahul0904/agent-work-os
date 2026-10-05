@@ -43,13 +43,40 @@ test("accepts a bounded acyclic flow and returns a stable digest", () => {
   assert.match(first.digest, /^sha256:[a-f0-9]{64}$/);
 
   const reordered = validFlow();
-  reordered.nodes.reverse();
-  reordered.edges.reverse();
-  reordered.nodes[0] = { type: reordered.nodes[0].type, id: reordered.nodes[0].id };
+  reordered.nodes = reordered.nodes.reverse().map((node) => ({
+    config: node.config,
+    type: node.type,
+    id: node.id
+  }));
+  reordered.edges = reordered.edges.reverse().map((edge) => ({
+    target: edge.target,
+    sourceHandle: edge.sourceHandle,
+    source: edge.source,
+    id: edge.id
+  }));
   const second = validateFlowGraph(reordered);
 
   assert.equal(second.valid, true);
   assert.equal(second.digest, first.digest);
+});
+
+test("changes the digest when executable configuration changes", () => {
+  const first = validateFlowGraph(validFlow());
+  const changed = validFlow();
+  changed.nodes.find((node) => node.id === "tests").config.commandRef = "test:strict";
+  const second = validateFlowGraph(changed);
+
+  assert.equal(first.valid, true);
+  assert.equal(second.valid, true);
+  assert.notEqual(second.digest, first.digest);
+});
+
+test("rejects unknown top-level fields instead of leaving them outside the digest", () => {
+  const flow = validFlow();
+  flow.runtimePolicy = { autoShip: true };
+  const result = validateFlowGraph(flow);
+  assert.ok(result.errors.some((error) => error.code === "graph.field" && error.subject === "runtimePolicy"));
+  assert.equal(result.digest, null);
 });
 
 test("rejects a graph with zero or multiple triggers", () => {
