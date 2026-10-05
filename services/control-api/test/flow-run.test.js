@@ -97,12 +97,20 @@ test("supports concurrent active nodes for fan-out", () => {
   assert.deepEqual(verifyFlowRunSnapshot(run), { valid: true, errors: [] });
 });
 
-test("refuses terminal completion while live nodes remain", () => {
+test("refuses any non-running run state while live nodes remain", () => {
   let run = running(fresh("live-run", ["agent"]));
   run = transitionFlowNode(run, "agent", { to: "running", at: T3 });
   assert.throws(
     () => transitionFlowRun(run, { to: "completed", at: T4 }),
-    /flow_run_terminal_with_active_nodes/
+    /flow_run_nonrunning_with_active_nodes/
+  );
+  assert.throws(
+    () => transitionFlowRun(run, { to: "cancelled", at: T4 }),
+    /flow_run_nonrunning_with_active_nodes/
+  );
+  assert.throws(
+    () => transitionFlowRun(run, { to: "interrupted", at: T4 }),
+    /flow_run_nonrunning_with_active_nodes/
   );
 });
 
