@@ -118,8 +118,8 @@ export function transitionFlowRun(run, { to, at = new Date().toISOString(), reas
 
   const from = run.status;
   if (!RUN_TRANSITIONS[from]?.has(to)) throw new Error(`flow_run_transition_refused:${from}->${to}`);
-  if ((to === "completed" || to === "failed") && run.activeNodeIds.length > 0) {
-    throw new Error("flow_run_terminal_with_active_nodes");
+  if (to !== "running" && run.activeNodeIds.length > 0) {
+    throw new Error("flow_run_nonrunning_with_active_nodes");
   }
 
   const next = clone(run);
@@ -127,7 +127,6 @@ export function transitionFlowRun(run, { to, at = new Date().toISOString(), reas
   next.updatedAt = at;
   if (to === "running" && !next.startedAt) next.startedAt = at;
   if (isTerminalRunState(to)) next.completedAt = at;
-  if (to === "interrupted" || isTerminalRunState(to)) next.activeNodeIds = [];
   appendReceipt(next, {
     event: "run.transition",
     from,
