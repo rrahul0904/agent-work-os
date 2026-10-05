@@ -18,6 +18,7 @@ export const SUPPORTED_FLOW_NODE_TYPES = Object.freeze([
 
 const NODE_TYPES = new Set(SUPPORTED_FLOW_NODE_TYPES);
 const NODE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const GRAPH_FIELDS = new Set(["version", "id", "name", "nodes", "edges"]);
 
 /**
  * Validate an independently authored Agent Work OS flow graph.
@@ -31,6 +32,12 @@ export function validateFlowGraph(input) {
 
   if (!isPlainObject(input)) {
     return invalid([problem("graph.invalid", "Flow graph must be an object.")]);
+  }
+
+  for (const field of Object.keys(input)) {
+    if (!GRAPH_FIELDS.has(field)) {
+      errors.push(problem("graph.field", `Flow graph field '${field}' is not defined by ${FLOW_GRAPH_VERSION}.`, field));
+    }
   }
 
   if (input.version !== FLOW_GRAPH_VERSION) {
