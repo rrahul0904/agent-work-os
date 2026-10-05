@@ -96,7 +96,7 @@ export function createFlowRun({ id, flowDigest, nodeIds, trigger = {}, at = new 
     flowDigest,
     status: "queued",
     trigger: sortObject(trigger),
-    activeNodeId: null,
+    activeNodeIds: [],
     createdAt: at,
     updatedAt: at,
     startedAt: null,
@@ -118,13 +118,16 @@ export function transitionFlowRun(run, { to, at = new Date().toISOString(), reas
 
   const from = run.status;
   if (!RUN_TRANSITIONS[from]?.has(to)) throw new Error(`flow_run_transition_refused:${from}->${to}`);
+  if ((to === "completed" || to === "failed") && run.activeNodeIds.length > 0) {
+    throw new Error("flow_run_terminal_with_active_nodes");
+  }
 
   const next = clone(run);
   next.status = to;
   next.updatedAt = at;
   if (to === "running" && !next.startedAt) next.startedAt = at;
   if (isTerminalRunState(to)) next.completedAt = at;
-  if (to === "interrupted" || isTerminalRunState(to)) next.activeNodeId = null;
+  if (to === "interrupted" || isTerminalRunState(to)) next.activeNodeIds = [];
   appendReceipt(next, {
     event: "run.transition",
     from,
@@ -151,6 +154,7 @@ export function transitionFlowNode(run, nodeId, {
 
   const from = current.status;
   if (!NODE_TRANSITIONS[from]?.has(to)) throw new Error(`flow_node_transition_refused:${from}->${to}`);
+  if (to === "running" && run.status !== "running") throw new Error("flow_node_run_not_running");
 
   const next = clone(run);
   const node = next.nodes[nodeId];
@@ -158,7 +162,10 @@ export function transitionFlowNode(run, nodeId, {
   node.updatedAt = at;
   if (to === "running" && NEW_ATTEMPT_FROM.has(from)) node.attempts += 1;
   next.updatedAt = at;
-  next.activeNodeId = to === "running" ? nodeId : next.activeNodeId === nodeId ? null : next.activeNodeId;
+  const active = new Set(next.activeNodeIds);
+  if (to === "running") active.add(nodeId);
+  else active.delete(nodeId);
+  next.activeNodeIds = [...active].sort();
   appendReceipt(next, {
     event: "node.transition",
     nodeId,
@@ -182,10 +189,11 @@ export function reconcileFlowRunOnStartup(run, { at = new Date().toISOString() }
   if (isTerminalRunState(run.status)) return clone(run);
 
   let next = clone(run);
-  let hadLiveNode = false;
-  for (const [nodeId, node] of Object.entries(next.nodes)) {
-    if (node.status !== "running") continue;
-    hadLiveNode = true;
+  const runningNodeIds = Object.entries(next.nodes)
+    .filter(([, node]) => node.status === "running")
+    .map(([nodeId]) => nodeId)
+    .sort();
+  for (const nodeId of runningNodeIds) {
     next = transitionFlowNode(next, nodeId, {
       to: "interrupted",
       at,
@@ -194,7 +202,7 @@ export function reconcileFlowRunOnStartup(run, { at = new Date().toISOString() }
   }
 
   const runWasLive = run.status === "admitted" || run.status === "running";
-  if ((hadLiveNode || runWasLive) && next.status !== "interrupted") {
+  if ((runningNodeIds.length > 0 || runWasLive) && next.status !== "interrupted") {
     next = transitionFlowRun(next, {
       to: "interrupted",
       at,
@@ -213,15 +221,31 @@ export function verifyFlowRunSnapshot(run) {
   if (!RUN_STATES.has(run.status)) errors.push("flow_run_status_invalid");
   if (!isPlainObject(run.trigger)) errors.push("flow_run_trigger_invalid");
   if (!isPlainObject(run.nodes) || Object.keys(run.nodes).length === 0) errors.push("flow_run_nodes_invalid");
+  if (!Array.isArray(run.activeNodeIds) || new Set(run.activeNodeIds ?? []).size !== (run.activeNodeIds?.length ?? 0)) {
+    errors.push("flow_run_active_nodes_invalid");
+  }
   if (!Array.isArray(run.receipts)) errors.push("flow_run_receipts_invalid");
 
+  const runningNodeIds = [];
   if (isPlainObject(run.nodes)) {
     for (const [nodeId, node] of Object.entries(run.nodes)) {
       if (!isPlainObject(node) || !NODE_STATES.has(node.status) || !Number.isInteger(node.attempts) || node.attempts < 0) {
         errors.push(`flow_node_snapshot_invalid:${nodeId}`);
+      } else if (node.status === "running") {
+        runningNodeIds.push(nodeId);
       }
     }
   }
+
+  if (Array.isArray(run.activeNodeIds)) {
+    const declared = [...run.activeNodeIds].sort();
+    const actual = runningNodeIds.sort();
+    if (JSON.stringify(declared) !== JSON.stringify(actual)) errors.push("flow_run_active_nodes_mismatch");
+    if (declared.some((nodeId) => !run.nodes?.[nodeId])) errors.push("flow_run_active_node_unknown");
+  }
+
+  if (runningNodeIds.length > 0 && run.status !== "running") errors.push("flow_run_live_node_status_mismatch");
+  if (isTerminalRunState(run.status) && runningNodeIds.length > 0) errors.push("flow_run_terminal_has_live_nodes");
 
   if (Array.isArray(run.receipts)) {
     let previousReceiptDigest = null;
