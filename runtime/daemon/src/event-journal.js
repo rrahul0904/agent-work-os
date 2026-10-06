@@ -50,6 +50,10 @@ export class DurableSessionEventJournal {
     return this.snapshot(sessionId);
   }
 
+  async flush() {
+    await this.writeChain;
+  }
+
   listUnacked(sessionId, { fromSequence = 1 } = {}) {
     if (!Number.isInteger(fromSequence) || fromSequence < 1) throw new Error("event_journal_replay_sequence_invalid");
     if (sessionId !== undefined) {
