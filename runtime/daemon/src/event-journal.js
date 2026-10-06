@@ -60,12 +60,12 @@ export class DurableSessionEventJournal {
       assertSessionId(sessionId);
       const record = this.state.sessions[sessionId];
       if (!record) return [];
-      return record.events.filter((entry) => entry.sequence >= fromSequence).map(structuredClone);
+      return record.events.filter((entry) => entry.sequence >= fromSequence).map((entry) => structuredClone(entry));
     }
     return Object.values(this.state.sessions)
       .flatMap((record) => record.events.filter((entry) => entry.sequence >= fromSequence))
       .sort((a, b) => a.journaledAt.localeCompare(b.journaledAt) || a.sessionId.localeCompare(b.sessionId) || a.sequence - b.sequence)
-      .map(structuredClone);
+      .map((entry) => structuredClone(entry));
   }
 
   snapshot(sessionId) {
