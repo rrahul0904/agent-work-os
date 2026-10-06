@@ -54,13 +54,13 @@ export async function createControlPlane() {
           model: body.model || undefined, status: "queued", createdAt: now, updatedAt: now,
           messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: []
         };
-        await store.createSession(session); broadcast({ type: "session.updated", session });
+        const created = await store.createSession(session); broadcast({ type: "session.updated", session: created });
         try {
-          sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } });
+          sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: created.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } });
         } catch (error) {
-          const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed });
+          const failed = await store.setSessionStatus(created.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed });
         }
-        return json(res, 201, session);
+        return json(res, 201, created);
       }
       const messageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
       if (req.method === "POST" && messageMatch) {
@@ -106,8 +106,24 @@ export async function createControlPlane() {
           const machine = { ...msg.machine, status: "online", lastSeenAt: new Date().toISOString() };
           daemonSockets.set(machineId, peer); await store.upsertMachine(machine); broadcast({ type: "machine.updated", machine }); return;
         }
-        if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
-        if (msg.type === "daemon.session.event") { const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return; }
+        if (msg.type === "daemon.heartbeat") {
+          if (!machineId || msg.machineId !== machineId) throw new Error("machine_identity_mismatch");
+          const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return;
+        }
+        if (msg.type === "daemon.session.event") {
+          if (!machineId || msg.machineId !== machineId) throw new Error("machine_identity_mismatch");
+          const current = store.getSession(msg.sessionId);
+          if (!current) throw new Error(`Unknown session: ${msg.sessionId}`);
+          if (current.machineId !== machineId) throw new Error("session_machine_mismatch");
+          const result = await store.addSequencedEvent(msg.sessionId, msg.sequence, msg.event);
+          if (result.disposition === "gap") {
+            peer.send(encodeMessage({ type: "server.session.replay.request", sessionId: msg.sessionId, fromSequence: result.expectedSequence }));
+            return;
+          }
+          peer.send(encodeMessage({ type: "server.session.ack", sessionId: msg.sessionId, throughSequence: result.ackThrough }));
+          if (result.disposition === "accepted") broadcast({ type: "session.updated", session: result.session });
+          return;
+        }
       } catch (error) { console.warn("[api] invalid daemon message", error.message); }
     });
     peer.on("close", async () => {

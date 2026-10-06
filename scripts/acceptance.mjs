@@ -19,10 +19,12 @@ const create = await fetch(`http://127.0.0.1:${port}/api/sessions`,{method:'POST
 assert.equal(create.status,201);const session=await create.json();
 let completed = await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/sessions/${session.id}`)).json();return s.status==='completed'?s:null;},8000,'first echo turn');
 assert.ok(completed.messages.some(m=>m.text==='Echo: acceptance'));
+assert.equal(completed.lastEventSequence,4);
 const follow = await fetch(`http://127.0.0.1:${port}/api/sessions/${session.id}/messages`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text:'second'})}); assert.equal(follow.status,202);
 completed = await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/sessions/${session.id}`)).json();return s.messages.some(m=>m.text==='Echo: second')?s:null;},8000,'follow-up echo turn');
 assert.equal(completed.nativeSessionId,`echo-${session.id}`);
-console.log('[acceptance] PASS: API -> daemon -> adapter -> persisted session -> follow-up');
+assert.equal(completed.lastEventSequence,7);
+console.log('[acceptance] PASS: API -> daemon durable journal -> persisted sequenced events -> ack -> follow-up');
 for(const child of children.reverse()) child.kill('SIGTERM');
 await new Promise(r=>setTimeout(r,120));
 
