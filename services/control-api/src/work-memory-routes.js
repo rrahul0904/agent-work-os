@@ -1,8 +1,16 @@
 import { WorkMemoryProjectionError } from "./work-memory-projection.js";
 
-export function handleWorkMemoryRequest(req, res, url, { service, json }) {
+export function handleWorkMemoryRequest(req, res, url, { service, json, authorize }) {
   const match = url.pathname.match(/^\/api\/work-items\/([^/]+)\/work-memory$/);
-  if (req.method !== "GET" || !match) return false;
+  if (!match) return false;
+  if (!authorize(req)) {
+    json(res, 401, { error: "control_token_required" });
+    return true;
+  }
+  if (req.method !== "GET") {
+    json(res, 405, { error: "work_memory_read_only" });
+    return true;
+  }
   try {
     const workItemId = decodeURIComponent(match[1]);
     json(res, 200, service.getProjection(workItemId));
