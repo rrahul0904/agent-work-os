@@ -1,0 +1,54 @@
+{
+  "version": "connector-assisted-shipping-receipt/v1",
+  "runId": "provenance-cleaner-pilot-001",
+  "project": {
+    "id": "provenance-cleaner",
+    "repository": "rrahul0904/provenance-cleaner",
+    "releaseVersion": "0.7.0"
+  },
+  "source": {
+    "testedSha": "173074b71130fc08051ac86bee43dd6b0c33e2ef",
+    "certifiedSourceHash": "3e7bc99180c04a743b22fcf09e36868be59473aa55c4a081778d9503acd54e17",
+    "releaseId": "pc-0.7.0-20261001",
+    "checks": {
+      "verify": "PASS",
+      "e2e": "PASS",
+      "certify": "PASS"
+    }
+  },
+  "preview": {
+    "deploymentId": "dpl_5RjB4wySGzr5meh9BPLFwDchuzMS",
+    "state": "READY",
+    "health": "PASS",
+    "readiness": "FAIL",
+    "missingRequired": [
+      "promoFingerprintSecret",
+      "supportEmail"
+    ],
+    "followUpIssue": "rrahul0904/provenance-cleaner#44"
+  },
+  "production": {
+    "deploymentId": "dpl_3phVuKfYvrwUStiBsHQRBhwwYN5g",
+    "canonicalHost": "provenance-cleaner.vercel.app",
+    "deployedSha": "173074b71130fc08051ac86bee43dd6b0c33e2ef",
+    "health": "PASS",
+    "readiness": "PASS",
+    "readinessMissing": [],
+    "publicHomeSmoke": "PASS",
+    "publicCapabilitiesSmoke": "PASS",
+    "productionIntegrityWorkflowRun": 37627273569,
+    "productionIntegrityRetryJob": 112933137758,
+    "productionIntegrity": "PASS"
+  },
+  "rollback": {
+    "candidateDeploymentId": "dpl_6KX3eXVwEHTUeQ8Mxe3YdjHw2Exm",
+    "used": false
+  },
+  "status": "SHIPPED",
+  "notes": [
+    "Pilot used connected GitHub/Vercel actions to exercise the Shipping OS release policy against a real backlog product.",
+    "The standalone CLI/runtime is separately merged and CI-proven in agent-work-os main.",
+    "Preview environment parity remains explicitly tracked and did not change the production readiness result."
+  ],
+  "receiptDigest": "sha256:3234bd73ce294a0dac4c584ea69147361780b46ef574c6e5b091d8d132b36523"
+}
