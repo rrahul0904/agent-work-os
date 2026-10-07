@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
 import { JsonStore } from "./store.js";
+import { WorkspaceError } from "./workspace.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, "../../../apps/web/public");
@@ -24,6 +25,7 @@ export async function createControlPlane() {
     const encoded = encodeMessage(event);
     for (const peer of clientSockets) peer.send(encoded);
   };
+  const broadcastWorkspace = () => broadcast({ type: "workspace.updated", workspace: store.getWorkspace() });
   const sendCommand = (machineId, command) => {
     const peer = daemonSockets.get(machineId);
     if (!peer || peer.closed) throw new Error(`Machine ${machineId} is not connected`);
@@ -36,7 +38,33 @@ export async function createControlPlane() {
       if (req.method === "OPTIONS") return end(res, 204);
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, protocolVersion: PROTOCOL_VERSION });
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions() });
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions(), workspace: store.getWorkspace() });
+      if (req.method === "GET" && url.pathname === "/api/workspace") return json(res, 200, store.getWorkspace());
+
+      if (req.method === "POST" && url.pathname === "/api/workspace/projects") {
+        const project = await store.createProject(await readJson(req)); broadcastWorkspace(); return json(res, 201, project);
+      }
+      if (req.method === "POST" && url.pathname === "/api/workspace/tasks") {
+        const task = await store.createTask(await readJson(req)); broadcastWorkspace(); return json(res, 201, task);
+      }
+      const taskMatch = url.pathname.match(/^\/api\/workspace\/tasks\/([^/]+)$/);
+      if (req.method === "PATCH" && taskMatch) {
+        const task = await store.updateTask(decodeURIComponent(taskMatch[1]), await readJson(req)); broadcastWorkspace(); return json(res, 200, task);
+      }
+      if (req.method === "POST" && url.pathname === "/api/workspace/events") {
+        const event = await store.createCalendarEvent(await readJson(req)); broadcastWorkspace(); return json(res, 201, event);
+      }
+      if (req.method === "POST" && url.pathname === "/api/workspace/workdays") {
+        const workday = await store.createWorkday(await readJson(req)); broadcastWorkspace(); return json(res, 201, workday);
+      }
+      if (req.method === "POST" && url.pathname === "/api/workspace/notes") {
+        const note = await store.createNote(await readJson(req)); broadcastWorkspace(); return json(res, 201, note);
+      }
+      const noteMatch = url.pathname.match(/^\/api\/workspace\/notes\/([^/]+)$/);
+      if (req.method === "PATCH" && noteMatch) {
+        const note = await store.updateNote(decodeURIComponent(noteMatch[1]), await readJson(req)); broadcastWorkspace(); return json(res, 200, note);
+      }
+
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (req.method === "GET" && sessionMatch) {
         const session = store.getSession(decodeURIComponent(sessionMatch[1]));
@@ -83,6 +111,7 @@ export async function createControlPlane() {
       if (req.method === "GET" && !url.pathname.startsWith("/api/")) return serveStatic(url.pathname, res);
       return json(res, 404, { error: "not_found" });
     } catch (error) {
+      if (error instanceof WorkspaceError) return json(res, error.status, { error: error.code, message: error.message });
       console.error("[api] request error", error); return json(res, 500, { error: "internal_error", message: error.message });
     }
   });
@@ -94,7 +123,7 @@ export async function createControlPlane() {
     if (role !== "daemon" && role !== "client") return socket.destroy();
     const peer = acceptWebSocket(req, socket); if (!peer) return;
     if (role === "client") {
-      clientSockets.add(peer); peer.send(encodeMessage({ type: "state.snapshot", machines: store.listMachines(), sessions: store.listSessions() })); peer.on("close", () => clientSockets.delete(peer)); return;
+      clientSockets.add(peer); peer.send(encodeMessage({ type: "state.snapshot", machines: store.listMachines(), sessions: store.listSessions(), workspace: store.getWorkspace() })); peer.on("close", () => clientSockets.delete(peer)); return;
     }
     let machineId;
     peer.on("message", async (raw) => {
@@ -138,7 +167,7 @@ async function serveStatic(urlPath, res) {
   } catch { if (rel !== "index.html") return serveStatic("/index.html", res); json(res, 404, { error: "not_found" }); }
 }
 function mime(ext) { return ({ ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml" }[ext] ?? "application/octet-stream"); }
-function addCors(res) { res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type"); res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS"); }
+function addCors(res) { res.setHeader("access-control-allow-origin", "*"); res.setHeader("access-control-allow-headers", "content-type"); res.setHeader("access-control-allow-methods", "GET,POST,PATCH,OPTIONS"); }
 function json(res, status, body) { res.statusCode = status; res.setHeader("content-type", "application/json; charset=utf-8"); res.end(JSON.stringify(body)); }
 function end(res, status) { res.statusCode = status; res.end(); }
 async function readJson(req) { let raw = ""; for await (const chunk of req) { raw += chunk; if (raw.length > 1_000_000) throw new Error("request too large"); } return raw ? JSON.parse(raw) : {}; }
