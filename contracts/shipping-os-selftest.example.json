@@ -1,0 +1,27 @@
+{
+  "version": "shipping-contract/v1",
+  "project": { "id": "agent-work-os-shipping-selftest", "repoPath": "/absolute/path/to/agent-work-os" },
+  "release": { "version": "0.0.1" },
+  "worktree": { "baseRef": "HEAD", "root": "/tmp/agent-work-os-worktrees", "cleanupOnSuccess": false },
+  "builder": {
+    "command": { "name": "builder", "command": "npm test" },
+    "repairCommand": { "name": "codex-repair", "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE. Repair only the failing release gate, run the narrowest relevant tests, and do not deploy or push.'" },
+    "maxRepairAttempts": 3
+  },
+  "verification": [
+    { "name": "unit", "command": "npm test" },
+    { "name": "acceptance", "command": "npm run acceptance" }
+  ],
+  "preview": { "required": true, "deployCommand": { "name": "preview-deploy", "command": "./scripts/deploy-preview.sh" }, "uat": [{ "name": "preview-uat", "command": "./scripts/uat-preview.sh" }] },
+  "production": { "required": true, "deployCommand": { "name": "production-deploy", "command": "./scripts/deploy-production.sh" }, "uat": [{ "name": "production-uat", "command": "./scripts/uat-production.sh" }] },
+  "exactSha": { "required": true, "testedShaCommand": { "name": "tested-sha", "command": "git rev-parse HEAD" }, "deployedShaCommand": { "name": "deployed-sha", "command": "./scripts/deployed-sha.sh" } },
+  "goldenPath": [
+    { "id": "SHIP-001", "description": "Contract is validated and a bounded task executes in an isolated worktree." },
+    { "id": "SHIP-002", "description": "Verification failure triggers bounded repair and re-verification." },
+    { "id": "SHIP-003", "description": "Preview and production UAT pass before SHIPPED." },
+    { "id": "SHIP-004", "description": "The deployed SHA equals the tested SHA." },
+    { "id": "SHIP-005", "description": "A tamper-evident release receipt is written." }
+  ],
+  "excludedFromRelease": ["dashboard UI", "ChatGPT plugin", "remote hosted runner", "portfolio ranking UI"],
+  "policy": { "commandTimeoutMs": 600000, "retainFailureLogs": true }
+}
