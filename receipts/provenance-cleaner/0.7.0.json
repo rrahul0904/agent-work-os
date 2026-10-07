@@ -17,15 +17,16 @@
     }
   },
   "preview": {
-    "deploymentId": "dpl_5RjB4wySGzr5meh9BPLFwDchuzMS",
+    "initialDeploymentId": "dpl_5RjB4wySGzr5meh9BPLFwDchuzMS",
+    "initialReadiness": "FAIL",
+    "parityIssue": "rrahul0904/provenance-cleaner#44",
+    "parityIssueState": "CLOSED",
+    "verifiedDeploymentId": "dpl_BYcSbTtSao1zHunTwgLFHdxrtwfy",
     "state": "READY",
     "health": "PASS",
-    "readiness": "FAIL",
-    "missingRequired": [
-      "promoFingerprintSecret",
-      "supportEmail"
-    ],
-    "followUpIssue": "rrahul0904/provenance-cleaner#44"
+    "readiness": "PASS",
+    "readinessMissing": [],
+    "sourceSha": "173074b71130fc08051ac86bee43dd6b0c33e2ef"
   },
   "production": {
     "deploymentId": "dpl_3phVuKfYvrwUStiBsHQRBhwwYN5g",
@@ -48,7 +49,7 @@
   "notes": [
     "Pilot used connected GitHub/Vercel actions to exercise the Shipping OS release policy against a real backlog product.",
     "The standalone CLI/runtime is separately merged and CI-proven in agent-work-os main.",
-    "Preview environment parity remains explicitly tracked and did not change the production readiness result."
+    "Preview environment parity was detected, repaired with a distinct Preview-only secret plus shared public support contact, and reverified before final receipt closure."
   ],
-  "receiptDigest": "sha256:3234bd73ce294a0dac4c584ea69147361780b46ef574c6e5b091d8d132b36523"
+  "receiptDigest": "sha256:57bdd761f6972bc349ac196e161505be6efbf611d0d5c525e84e24158c871bfc"
 }
