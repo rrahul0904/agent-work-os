@@ -19,13 +19,14 @@ const shippingRuns = new Set();
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter(); if (codex.capability()) adapters.set("codex", codex);
 
-let ws; let heartbeat; let reconnectAttempt = 0; let shuttingDown = false;
+let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
 function connect() {
   if (shuttingDown) return;
   const url = new URL(serverUrl); url.searchParams.set("role", "daemon"); url.searchParams.set("token", token);
   ws = new WebSocket(url);
   ws.addEventListener("open", () => {
     reconnectAttempt = 0;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = undefined; }
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
     ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
@@ -55,7 +56,13 @@ function connect() {
       if (command.action === "session.interrupt") { await adapter.interrupt(command.sessionId); emit({ kind: "status", status: "interrupted", at: new Date().toISOString() }); ack(true); }
     } catch (error) { try { ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: decodeMessage(String(event.data)).commandId, ok: false, error: error.message })); } catch {} }
   });
-  ws.addEventListener("close", () => { if (heartbeat) clearInterval(heartbeat); if (shuttingDown) return; const delay = Math.min(30000, 500 * 2 ** reconnectAttempt++); console.warn(`[daemon] disconnected; reconnecting in ${delay}ms`); setTimeout(connect, delay).unref(); });
+  ws.addEventListener("close", () => {
+    if (heartbeat) { clearInterval(heartbeat); heartbeat = undefined; }
+    if (shuttingDown) return;
+    const delay = Math.min(30000, 500 * 2 ** reconnectAttempt++);
+    console.warn(`[daemon] disconnected; reconnecting in ${delay}ms`);
+    reconnectTimer = setTimeout(connect, delay);
+  });
   ws.addEventListener("error", () => {});
 }
 
@@ -87,5 +94,11 @@ async function runShipping(runId, contract) {
 }
 function fail(emit, error) { emit({ kind: "error", message: error.message, at: new Date().toISOString() }); emit({ kind: "status", status: "failed", at: new Date().toISOString() }); }
 async function fetchSession(id) { const u = new URL(serverUrl); u.protocol = u.protocol === "wss:" ? "https:" : "http:"; u.pathname = `/api/sessions/${encodeURIComponent(id)}`; u.search = ""; const r = await fetch(u, { headers: { authorization: `Bearer ${token}` } }); if (!r.ok) throw new Error(`Unable to load session ${id}`); return r.json(); }
-async function shutdown() { shuttingDown = true; if (heartbeat) clearInterval(heartbeat); ws?.close(); setTimeout(() => process.exit(0), 30).unref(); }
+async function shutdown() {
+  shuttingDown = true;
+  if (heartbeat) clearInterval(heartbeat);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  ws?.close();
+  setTimeout(() => process.exit(0), 30).unref();
+}
 process.on("SIGINT", shutdown); process.on("SIGTERM", shutdown); connect();
