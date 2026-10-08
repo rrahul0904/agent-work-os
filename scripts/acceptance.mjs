@@ -64,8 +64,9 @@ try {
     goldenPath:[{id:'ACCEPT-1',description:'remote control plane launches local receipt-gated shipping run'}]
   };
   const shipResponse = await fetch(`http://127.0.0.1:${port}/api/shipping/runs`,{method:'POST',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({machineId:machine.id,contract})});
-  assert.equal(shipResponse.status,202,await shipResponse.text());
-  const queued = await shipResponse.json();
+  const shipBody = await shipResponse.json();
+  assert.equal(shipResponse.status,202,JSON.stringify(shipBody));
+  const queued = shipBody;
   const shipped = await waitFor(async()=>{
     const r=await fetch(`http://127.0.0.1:${port}/api/shipping/runs/${queued.runId}`,{headers});
     if(!r.ok)return null;
