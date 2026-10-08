@@ -1,0 +1,113 @@
+{
+  "schema_version": "3.0",
+  "tracker_id": "RE-384",
+  "target": "sqlbuild-refactorable-warehouse",
+  "canonical_product": "Warehouse Refactor Engine (working title)",
+  "governance_issue": 70,
+  "draft_pr": 71,
+  "classification": "pre_phase_a_locally_verified_core_v3",
+  "classification_reason": "The independent clean-room core now operates from a bounded repository checkout and exposes validate/compile/plan/fixture/diff CLI paths. The full local non-DuckDB suite and CLI rehearsals pass. DuckDB-native acceptance remains an explicit skipped gate because DuckDB cannot be installed/imported in the current execution environment.",
+  "prototype_artifact": {
+    "filename": "refactor-warehouse-phase-a-v3.zip",
+    "sha256": "eb2e0966e0778ee777a1f2155001bf7f1d65e655bd1a748e220788d7fb32570c",
+    "source_repository": null,
+    "dedicated_repository_required": true,
+    "duckdb_optional_dependency": "duckdb>=1.5.6,<2",
+    "duckdb_runtime_verified": false
+  },
+  "verification": {
+    "pytest_passed": 47,
+    "pytest_skipped": 4,
+    "pytest_failed": 0,
+    "python_compileall": "pass",
+    "validate_cli": "pass",
+    "compile_cli": "pass",
+    "plan_cli": "pass",
+    "fixture_cli": "pass",
+    "sqlite_compatibility_harness": "pass",
+    "duckdb_skips_reason": "dependency unavailable in current execution environment",
+    "project_digest": "90127e8974d5a90c27fc033ef6d46290637cbe97d8f3778a02a205e5ac24758d",
+    "candidate_project_digest": "98a6080e51f27f1c255686c9e4ded7e4aa6e1443c24adde23f1f021ba0051cc7",
+    "cli_plan_digest": "58ec226b838071a393252d17c4efec61ff77d384a97a5dc563074b7487fad20f",
+    "prephase_verification_digest": "9d53bea84a8703ad74c3b26e6e08420a5f6bbab5ba8132250a42e37af6789989"
+  },
+  "repository_checkout_contracts": [
+    "strict warehouse-project.json schema",
+    "unknown-key rejection",
+    "relative SQL paths only",
+    "path traversal refusal",
+    "symlink refusal",
+    "UTF-8 requirement",
+    "bounded SQL file size",
+    "stable model identity",
+    "deterministic project digest"
+  ],
+  "cli_surface": [
+    "validate",
+    "compile",
+    "plan",
+    "fixture",
+    "diff"
+  ],
+  "verified_safety_behavior": [
+    "unknown references and dependency cycles fail closed",
+    "declared/inferred type mismatch fails closed",
+    "unknown type proof with an explicit contract fails closed",
+    "model rename requires explicit stable identity continuity",
+    "column rename requires exactly one bounded lineage proof",
+    "downstream old-column references block column rename",
+    "compatibility alias collision blocks planning",
+    "window replay requires sufficient history evidence",
+    "stale base or candidate snapshots block apply",
+    "row diff rejects duplicate/null keys",
+    "uncertain janitor ownership is proposal-only",
+    "archive creates and verifies a separate copy before deletion",
+    "delete requires explicit authorization and rechecks source drift",
+    "exact receipt retry is idempotent",
+    "conflicting reuse of an operation ID is rejected"
+  ],
+  "cli_acceptance": {
+    "plan": {
+      "blocked": false,
+      "actions": [
+        {
+          "kind": "rename_model",
+          "from": "order_facts",
+          "to": "commerce_orders",
+          "stable_id": "commerce.order_facts.v1",
+          "compatibility_alias": "order_facts",
+          "destructive": false
+        },
+        {
+          "kind": "replay",
+          "mode": "window",
+          "required_history_days": 14,
+          "available_history_days": 30,
+          "destructive": false
+        }
+      ]
+    },
+    "fixture": {
+      "row_count": 2,
+      "rows": [
+        {"order_id": 1, "total_cents": 1500},
+        {"order_id": 2, "total_cents": 2000}
+      ]
+    }
+  },
+  "prepared_ci": {
+    "python_matrix": ["3.12", "3.13", "3.14"],
+    "installs_duckdb_extra": true,
+    "runs_full_pytest": true,
+    "runs_duckdb_acceptance": true,
+    "runs_prephase_receipt": true
+  },
+  "open_gates": [
+    "provision dedicated warehouse-engineering implementation repository",
+    "port the exact v3 artifact into that repository",
+    "run prepared DuckDB CI on an exact repository SHA",
+    "attach adapter-native compile/fixture/rename/archive receipts",
+    "perform independent review of the exact DuckDB head",
+    "only then advance from pre-Phase-A to Phase-A verified"
+  ]
+}
