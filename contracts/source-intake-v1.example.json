@@ -1,0 +1,41 @@
+{
+  "contractVersion": "source-intake/v1",
+  "authority": "read-only-certification",
+  "candidate": {
+    "name": "Example donor",
+    "url": "https://example.com/product",
+    "observedAt": "2026-10-07T20:00:00Z",
+    "observedLive": true,
+    "ageDays": 45,
+    "signals": {
+      "publicBuildEvidence": true,
+      "usedByOthers": true
+    },
+    "evidence": [
+      {
+        "class": "first-party-public",
+        "uri": "https://example.com/about",
+        "observedAt": "2026-10-07T20:00:00Z",
+        "note": null
+      },
+      {
+        "class": "official-source",
+        "uri": "https://github.com/example/project",
+        "observedAt": "2026-10-07T20:00:00Z",
+        "note": null
+      }
+    ]
+  },
+  "policy": {
+    "minAgeDays": 30,
+    "minimumEvidenceItems": 1,
+    "requiredSignals": [
+      "publicBuildEvidence",
+      "usedByOthers"
+    ]
+  },
+  "decision": "accept",
+  "hardFailures": [],
+  "reviewReasons": [],
+  "receiptId": "sha256-of-canonical-receipt-payload"
+}
