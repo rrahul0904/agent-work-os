@@ -10,7 +10,7 @@
     "product": "node scripts/product.mjs",
     "start:api": "node services/control-api/src/index.js",
     "start:daemon": "node runtime/daemon/src/index.js",
-    "test": "node --test services/control-api/test/*.test.js runtime/daemon/test/*.test.js",
+    "test": "node --test services/control-api/test/*.test.js runtime/daemon/test/*.test.js runtime/simulator/test/*.test.js",
     "acceptance": "node scripts/acceptance.mjs",
     "check": "npm test && npm run acceptance",
     "ship": "node scripts/ship.mjs run",
