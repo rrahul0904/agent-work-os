@@ -1,0 +1,68 @@
+{
+  "version": "shipping-portfolio/v1",
+  "projects": [
+    {
+      "id": "agent-work-os",
+      "name": "Shipping OS / Agent Work OS",
+      "repository": "rrahul0904/agent-work-os",
+      "category": "platform",
+      "status": "READY",
+      "readiness": 92,
+      "value": 5,
+      "effort": 2,
+      "risk": 2,
+      "blockers": [],
+      "nextAction": "Ship the hosted Shipping Console and connect a local daemon for remote execution.",
+      "evidence": ["Shipping OS v0 runtime merged", "Provenance Cleaner pilot shipped", "receipt chain and CI proven"],
+      "updatedAt": "2026-10-08T15:15:18Z"
+    },
+    {
+      "id": "provenance-cleaner",
+      "name": "Provenance Cleaner",
+      "repository": "rrahul0904/provenance-cleaner",
+      "category": "product",
+      "status": "SHIPPED",
+      "readiness": 100,
+      "value": 4,
+      "effort": 1,
+      "risk": 1,
+      "blockers": [],
+      "nextAction": "Monitor production integrity and use the release as the factory reference implementation.",
+      "evidence": ["0.7.0 exact-SHA production release", "Preview and production readiness PASS", "production-integrity PASS"],
+      "updatedAt": "2026-10-07T18:01:26Z"
+    },
+    {
+      "id": "friendship-wrapped",
+      "name": "ThreadTales / Friendship Wrapped",
+      "repository": "rrahul0904/friendship-wrapped",
+      "category": "product",
+      "status": "BUILDING",
+      "readiness": 66,
+      "value": 5,
+      "effort": 3,
+      "risk": 2,
+      "blockers": [],
+      "nextAction": "Finish the Memory Studio release path: export/recipient flow, hosted verification, and human emotional UAT.",
+      "evidence": ["Memory Graph slice", "intent-specific Story Plan", "local Memory Studio PR #28"],
+      "updatedAt": "2026-10-06T03:47:42Z"
+    },
+    {
+      "id": "snowflake-brain",
+      "name": "Snowflake Brain",
+      "repository": "rrahul0904/snowflake-brain",
+      "category": "product",
+      "status": "BLOCKED",
+      "readiness": 79,
+      "value": 5,
+      "effort": 3,
+      "risk": 3,
+      "blockers": [
+        { "code": "BLOCKED_CREDENTIAL", "message": "Hosted Preview verification needs usable protected-preview access." },
+        { "code": "BLOCKED_PERMISSION", "message": "Independent human review remains required for the donor-suite release." }
+      ],
+      "nextAction": "Restore authenticated Preview verification, complete independent review, then continue question-bank QA/promotion.",
+      "evidence": ["24 exact-head checks green on donor-suite candidate", "exact-SHA Preview deployed", "60k-question draft corpus materialized in PR #59"],
+      "updatedAt": "2026-10-08T03:53:38Z"
+    }
+  ]
+}
