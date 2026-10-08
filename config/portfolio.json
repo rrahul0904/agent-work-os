@@ -6,15 +6,17 @@
       "name": "Shipping OS / Agent Work OS",
       "repository": "rrahul0904/agent-work-os",
       "category": "platform",
-      "status": "READY",
-      "readiness": 92,
+      "status": "BLOCKED",
+      "readiness": 95,
       "value": 5,
-      "effort": 2,
+      "effort": 1,
       "risk": 2,
-      "blockers": [],
-      "nextAction": "Ship the hosted Shipping Console and connect a local daemon for remote execution.",
-      "evidence": ["Shipping OS v0 runtime merged", "Provenance Cleaner pilot shipped", "receipt chain and CI proven"],
-      "updatedAt": "2026-10-08T15:15:18Z"
+      "blockers": [
+        { "code": "BLOCKED_PAYMENT", "message": "Hosted Railway provisioning is blocked because the account trial has expired." }
+      ],
+      "nextAction": "Use the shipped local product via `npm run product`; enable a long-lived hosting plan to publish the hosted control plane.",
+      "evidence": ["Shipping Console v1 merged", "one-command product acceptance PASS", "local release receipt recorded", "post-merge CI PASS"],
+      "updatedAt": "2026-10-08T15:39:46Z"
     },
     {
       "id": "provenance-cleaner",
