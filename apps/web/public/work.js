@@ -45,6 +45,31 @@ $("#decisionForm").addEventListener("submit", async (event) => {
   } catch (error) { notice(error.message, true); }
 });
 
+$("#completionReportForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  if (!state.selectedId) return;
+  try {
+    const report = await api(`/api/work-items/${encodeURIComponent(state.selectedId)}/completion-report`, {
+      method: "POST",
+      body: {
+        actor: agentActor(),
+        report: {
+          summary: $("#reportSummary").value.trim(),
+          commitSha: $("#reportCommit").value.trim(),
+          ciStatus: $("#reportCi").value.trim(),
+          testInstructions: $("#reportTests").value.trim(),
+          prUrl: $("#reportPr").value.trim() || undefined,
+        },
+      },
+    });
+    const receipt = $("#completionReceipt");
+    receipt.textContent = JSON.stringify(report.completionReport, null, 2);
+    receipt.hidden = false;
+    await refresh();
+    notice("Completion report submitted. Work moved to review; human finalization is still required.");
+  } catch (error) { notice(error.message, true); }
+});
+
 $("#handoffForm").addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!state.selectedId) return;
@@ -177,6 +202,15 @@ function renderDetail(item) {
   addDefinition(dl, "Owner", item.owner?.id || "Unowned");
   addDefinition(dl, "Human only", item.humanOnly ? "Yes" : "No");
   addDefinition(dl, "Completed", projection.workState.done ? "Yes" : "No");
+  addDefinition(dl, "Completion report", item.completionReport ? `${item.completionReport.commitSha} · ${item.completionReport.ciStatus}` : "Not submitted");
+
+  if (item.completionReport) {
+    const receipt = $("#completionReceipt");
+    receipt.textContent = JSON.stringify(item.completionReport, null, 2);
+    receipt.hidden = false;
+  } else {
+    $("#completionReceipt").hidden = true;
+  }
 
   renderDecisions(item.id);
   const timeline = $("#memoryEntries");
