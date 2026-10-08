@@ -26,17 +26,16 @@ const children = [];
 function start(args){const child=spawn(process.execPath,args,{cwd:root,env,stdio:['ignore','pipe','pipe']});children.push(child);child.stdout.on('data',d=>process.stdout.write(d));child.stderr.on('data',d=>process.stderr.write(d));return child;}
 
 try {
-  start(['services/control-api/src/index.js']);
-  await waitFor(async()=> (await fetch(`http://127.0.0.1:${port}/health`)).ok, 8000, 'api health');
+  start(['scripts/product.mjs']);
+  await waitFor(async()=> (await fetch(`http://127.0.0.1:${port}/health`)).ok, 8000, 'product health');
   const denied = await fetch(`http://127.0.0.1:${port}/api/state`);
   assert.equal(denied.status, 401, 'product API must reject missing token');
 
-  start(['runtime/daemon/src/index.js']);
   const machine = await waitFor(async()=>{
     const r=await fetch(`http://127.0.0.1:${port}/api/state`,{headers});
     const s=await r.json();
     return s.machines.find(m=>m.name==='acceptance-machine'&&m.status==='online'&&m.shipping?.enabled);
-  },8000,'daemon registration with shipping capability');
+  },8000,'one-command product executor registration');
 
   const productResponse = await fetch(`http://127.0.0.1:${port}/api/product`,{headers});
   assert.equal(productResponse.status,200);
@@ -61,7 +60,7 @@ try {
     preview:{required:false},
     production:{required:false},
     exactSha:{required:false,testedShaCommand:{name:'tested-sha',command:'git rev-parse HEAD'}},
-    goldenPath:[{id:'ACCEPT-1',description:'remote control plane launches local receipt-gated shipping run'}]
+    goldenPath:[{id:'ACCEPT-1',description:'one-command product launches local receipt-gated shipping run'}]
   };
   const shipResponse = await fetch(`http://127.0.0.1:${port}/api/shipping/runs`,{method:'POST',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({machineId:machine.id,contract})});
   const shipBody = await shipResponse.json();
@@ -76,10 +75,10 @@ try {
   assert.ok(shipped.testedSha);
   assert.equal(shipped.testedSha,shipped.deployedSha);
   assert.equal(shipped.releaseReceipt.goldenPath[0].status,'PASS');
-  console.log('[acceptance] PASS: authenticated product API -> daemon -> agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
+  console.log('[acceptance] PASS: one-command product -> authenticated console API -> local agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
 } finally {
   for(const child of children.reverse()) child.kill('SIGTERM');
-  await new Promise(r=>setTimeout(r,120));
+  await new Promise(r=>setTimeout(r,220));
 }
 
 async function waitFor(fn, timeout, label){const start=Date.now();let last;while(Date.now()-start<timeout){try{last=await fn();if(last)return last;}catch(e){last=e;}await new Promise(r=>setTimeout(r,80));}throw new Error(`Timed out waiting for ${label}: ${last?.message||last||''}`)}
