@@ -1,0 +1,84 @@
+{
+  "schema_version": "2.0",
+  "target": "sqlbuild-refactorable-warehouse",
+  "governance_issue": 70,
+  "draft_pr": 71,
+  "classification": "pre_phase_a_locally_verified_core_v2",
+  "classification_reason": "Independent clean-room core strengthened and locally verified. DuckDB remains the explicit Phase-A certification gate because the current execution environment cannot install or import DuckDB.",
+  "prototype_artifact": {
+    "filename": "refactor-warehouse-phase-a-v2.zip",
+    "sha256": "4603b17d5643381989ba598a7db0ed8b98f5242f44d550c5407f59a3e409ec00",
+    "source_repository": null,
+    "durability": "conversation artifact until dedicated implementation repository is provisioned",
+    "duckdb_adapter_present": true,
+    "duckdb_runtime_verified": false
+  },
+  "verification": {
+    "tests": 38,
+    "passed": 38,
+    "failed": 0,
+    "python_compileall": "pass",
+    "sqlite_compatibility_harness": "pass",
+    "duckdb_dependency_gate": "explicit_unavailable",
+    "verification_digest": "9d53bea84a8703ad74c3b26e6e08420a5f6bbab5ba8132250a42e37af6789989",
+    "base_digest": "97abcdacea14cf102a7534e5ba8923f8872be19bb69452a5d7950cd3ccf3932e",
+    "candidate_digest": "e3c41eaff69df1d7b1c2ec1a965630540c0236e8c81c64b259ea5861654cf319",
+    "plan_digest": "8977f5c6d3d81c5c3eef576380341c07b23d69bb34cf4d51d87cb8eb4e5af4bb"
+  },
+  "newly_verified_since_v1": [
+    "declared_vs_inferred_type_contract_mismatch",
+    "unknown_expression_type_fails_closed",
+    "window_replay_requires_history_proof",
+    "insufficient_replay_history_blocks",
+    "invalid_replay_window_blocks",
+    "explicit_column_rename_requires_unambiguous_lineage",
+    "ambiguous_column_lineage_blocks",
+    "unresolved_downstream_column_reference_blocks",
+    "compatibility_alias_collision_blocks",
+    "stale_base_snapshot_blocks_apply",
+    "archive_is_verified_copy_before_delete",
+    "delete_requires_explicit_authorization",
+    "source_change_after_archive_blocks_delete",
+    "exact_receipt_retry_is_idempotent",
+    "conflicting_operation_id_reuse_is_rejected",
+    "optional_duckdb_acceptance_adapter_dependency_gate"
+  ],
+  "synthetic_acceptance": {
+    "rename": {
+      "from": "order_facts",
+      "to": "commerce_orders",
+      "stable_id": "commerce.order_facts.v1",
+      "history_rows_before": 2,
+      "history_rows_after": 2,
+      "compatibility_alias": "order_facts"
+    },
+    "replay": {
+      "mode": "window",
+      "required_history_days": 14,
+      "available_history_days": 30,
+      "blocked": false
+    },
+    "row_diff_changed_rows": 2,
+    "archive": {
+      "relation": "stale_owned",
+      "archive_relation": "__archive__stale_owned",
+      "verified_copy": true,
+      "delete_authorization_is_separate": true
+    },
+    "receipt": {
+      "first_write": true,
+      "exact_retry_written": false,
+      "conflicting_reuse_blocked": true,
+      "semantic_digest": "0be0a6427e4c613f21346c0d9f7def9df4f4889833d0260ff1e3b7825aaf4eee"
+    }
+  },
+  "open_gates": [
+    "provision dedicated warehouse-engineering implementation repository",
+    "port the v2 bundle into that repository without changing clean-room provenance",
+    "install DuckDB in repository CI",
+    "run adapter-native compile/fixture/rename/archive acceptance on exact repository SHA",
+    "run full negative corpus on DuckDB",
+    "attach exact-head CI evidence",
+    "assign collision-free RE tracker ID after current portfolio intake reconciliation"
+  ]
+}
