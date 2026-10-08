@@ -11,9 +11,14 @@
   "scripts": {
     "start:api": "node services/control-api/src/integrated-index.js",
     "start:daemon": "node runtime/daemon/src/index.js",
-    "test": "node --test services/control-api/test/*.test.js runtime/daemon/test/*.test.js packages/decision-memory/test/*.test.js",
+    "mcp": "node services/mcp/src/index.js",
+    "test": "node --test services/control-api/test/*.test.js services/mcp/test/*.test.js runtime/daemon/test/*.test.js packages/decision-memory/test/*.test.js",
     "acceptance": "node scripts/acceptance.mjs && node scripts/work-memory-acceptance.mjs && node scripts/work-handoff-acceptance.mjs",
     "check": "npm test && npm run acceptance",
     "memory": "node packages/decision-memory/src/cli.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.3.1",
+    "zod": "4.6.5"
   }
 }
