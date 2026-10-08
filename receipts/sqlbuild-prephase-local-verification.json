@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0",
+  "target": "sqlbuild-refactorable-warehouse",
+  "governance_issue": 70,
+  "draft_pr": 71,
+  "classification": "pre_phase_a_locally_verified_core",
+  "classification_reason": "The clean-room core is executable and locally verified, but the roadmap requires DuckDB for Phase A acceptance. This execution environment did not have DuckDB and could not install it from the network, so sqlite3 was used only as a compatibility harness.",
+  "prototype_artifact": {
+    "filename": "refactor-warehouse-phase-a.zip",
+    "sha256": "3df1e786f2da95b2df7c0515dd64cd2afd3a5e430ca0edf5b4f6328e98bf5c42",
+    "source_repository": null,
+    "durability": "conversation artifact until dedicated implementation repository is provisioned"
+  },
+  "verification": {
+    "tests": 21,
+    "passed": 21,
+    "failed": 0,
+    "harness": "Python stdlib sqlite3",
+    "verified_behaviors": [
+      "deterministic graph validation",
+      "unknown-reference diagnostics",
+      "cycle diagnostics",
+      "duplicate stable-identity diagnostics",
+      "local SQL/output-column contract checks",
+      "deterministic custom rules",
+      "multi-model fixture execution",
+      "explicit stable-identity rename planning",
+      "rename collision blocking",
+      "stale-plan blocking",
+      "bounded replay policy",
+      "keyed row diff with numeric tolerance",
+      "duplicate/null diff-key rejection",
+      "unknown-ownership janitor proposal-only behavior",
+      "history-preserving physical rename",
+      "compatibility alias",
+      "archive-before-delete split",
+      "archive failure blocking",
+      "idempotent append-only receipt store",
+      "deterministic plan digest"
+    ]
+  },
+  "synthetic_demo": {
+    "base_digest": "5a4c8fab659c2103ac76b2a56d6892a9a22233fd1fc5e1c8c930d75057e40ad0",
+    "candidate_digest": "6b7d22bcdd2c8a1dd01533a809248c9dca70dd7d25c95b09019b6251142df359",
+    "plan_digest": "6b1e13b31bb7727d2238f2dc7270023505ce1497c17a2b3a92aa02cc6c02adc9",
+    "actions": [
+      {
+        "kind": "rename_model",
+        "from": "order_facts",
+        "to": "commerce_orders",
+        "stable_id": "commerce.order_facts.v1",
+        "compatibility_alias": "order_facts",
+        "destructive": false
+      },
+      {
+        "kind": "replay",
+        "resource": "commerce_orders",
+        "mode": "window",
+        "window": "14d",
+        "destructive": false
+      }
+    ],
+    "history_rows_before": 2,
+    "history_rows_after": 2,
+    "compatibility_alias_rows": 2,
+    "duplicate_receipt_written": false
+  },
+  "open_gates": [
+    "provision dedicated warehouse-engineering implementation repository",
+    "replace sqlite3 compatibility harness with DuckDB adapter",
+    "port prototype source into dedicated repository",
+    "run full negative corpus on exact repository SHA",
+    "attach exact-head CI evidence",
+    "assign collision-free RE tracker ID after current intake reconciliation"
+  ]
+}
