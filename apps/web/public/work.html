@@ -71,6 +71,20 @@
           </section>
 
           <section class="card wide">
+            <h3>Agent completion report</h3>
+            <p class="muted">Agent-owned work must submit evidence before a human can finalize it.</p>
+            <form id="completionReportForm" class="handoffForm">
+              <input id="reportSummary" maxlength="500" placeholder="What was completed" required>
+              <input id="reportCommit" maxlength="120" placeholder="Exact commit SHA" required>
+              <input id="reportCi" maxlength="120" placeholder="CI status / run" required>
+              <input id="reportTests" maxlength="500" placeholder="Verification instructions" required>
+              <input id="reportPr" maxlength="500" placeholder="PR URL (optional)">
+              <button type="submit">Submit report</button>
+            </form>
+            <pre id="completionReceipt" class="receipt" hidden></pre>
+          </section>
+
+          <section class="card wide">
             <div class="cardTitle">
               <h3>Work Memory</h3>
               <span class="readOnly">Read-only projection</span>
