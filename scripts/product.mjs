@@ -25,7 +25,7 @@ function start(args, label) {
   child.on('exit', (code, signal) => {
     children.delete(child);
     if (shuttingDown) return;
-    console.error(`[product] ${label} exited unexpectedly (${signal || code ?? 'unknown'})`);
+    console.error(`[product] ${label} exited unexpectedly (${signal || code || 'unknown'})`);
     shutdown(code || 1);
   });
   return child;
@@ -46,13 +46,14 @@ start(['runtime/daemon/src/index.js'], 'local daemon');
 function shutdown(code = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  for (const child of children) child.kill('SIGTERM');
+  const exiting = [...children];
+  for (const child of exiting) child.kill('SIGTERM');
   const timer = setTimeout(() => {
     for (const child of children) child.kill('SIGKILL');
     process.exit(code);
   }, 1500);
   timer.unref();
-  Promise.all([...children].map(child => new Promise(resolve => child.once('exit', resolve)))).finally(() => process.exit(code));
+  Promise.all(exiting.map(child => new Promise(resolve => child.once('exit', resolve)))).finally(() => process.exit(code));
 }
 
 process.on('SIGINT', () => shutdown(0));
