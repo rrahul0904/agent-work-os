@@ -4,6 +4,8 @@ import { ProjectDesk } from "./project-desk.js";
 import { handleProjectDeskRequest } from "./project-desk-routes.js";
 import { WorkMemoryService } from "./work-memory-service.js";
 import { handleWorkMemoryRequest } from "./work-memory-routes.js";
+import { WorkMemoryHandoffService } from "./work-memory-handoff.js";
+import { handleWorkMemoryHandoffRequest } from "./work-memory-handoff-routes.js";
 
 const host = process.env.AGENT_WORK_OS_HOST ?? "127.0.0.1";
 const port = Number(process.env.AGENT_WORK_OS_PORT ?? 8787);
@@ -21,6 +23,7 @@ export async function createIntegratedControlPlane() {
 
   const desk = new ProjectDesk(controlPlane.store);
   const workMemory = new WorkMemoryService(controlPlane.store);
+  const workMemoryHandoffs = new WorkMemoryHandoffService(controlPlane.store, workMemory);
   const authorize = (req) => controlTokenMatches(req.headers.authorization, token);
 
   controlPlane.server.on("request", async (req, res) => {
@@ -30,6 +33,7 @@ export async function createIntegratedControlPlane() {
       addCors(res);
       if (await handleProjectDeskRequest(req, res, url, { desk, json, readJson, authorize })) return;
       if (handleWorkMemoryRequest(req, res, url, { service: workMemory, json, authorize })) return;
+      if (await handleWorkMemoryHandoffRequest(req, res, url, { service: workMemoryHandoffs, json, readJson, authorize })) return;
       return legacyRequestHandler(req, res);
     } catch (error) {
       console.error("[integrated-api] request error", error);
@@ -38,7 +42,7 @@ export async function createIntegratedControlPlane() {
     }
   });
 
-  return { ...controlPlane, desk, workMemory };
+  return { ...controlPlane, desk, workMemory, workMemoryHandoffs };
 }
 
 function addCors(res) {
