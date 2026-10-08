@@ -2,6 +2,16 @@
 
 Shipping Console is the product surface for Shipping OS. It combines the evidence-first release supervisor with the existing local-agent control plane so a portfolio can be prioritized, executed, verified and receipted from one interface.
 
+## Quick start — one command
+
+From the repository root:
+
+```bash
+npm run product
+```
+
+The launcher starts both the control plane and a local executor, creates an ephemeral control token when one is not supplied, and prints a local console URL. Open that URL to use the complete local product. Set `AGENT_WORK_OS_TOKEN` yourself when you want a stable token across restarts.
+
 ## Product surfaces
 
 ### Overview
@@ -50,7 +60,7 @@ Browser
    |
    | HTTPS / WSS + control-plane token
    v
-Shipping Console / Control API (Railway)
+Shipping Console / Control API (long-lived host)
    |
    | WSS + same token
    v
@@ -67,7 +77,7 @@ Local daemon on your workstation
           +-- release receipt
 ```
 
-The hosted control plane should use durable storage for `AGENT_WORK_OS_STATE_PATH`. On Railway, mount a volume at `/data` and set:
+A hosted control plane should use durable storage for `AGENT_WORK_OS_STATE_PATH`. On Railway, mount a volume at `/data` and set:
 
 ```bash
 AGENT_WORK_OS_STATE_PATH=/data/state.json
@@ -75,7 +85,7 @@ AGENT_WORK_OS_STATE_PATH=/data/state.json
 
 Railway supplies `PORT`; the control API honors it automatically.
 
-## Run locally
+## Run components separately
 
 Start the control plane:
 
@@ -93,9 +103,9 @@ npm run start:daemon
 
 Then open `http://127.0.0.1:8787` and enter the token.
 
-## Connect a workstation to the hosted console
+## Connect a workstation to a hosted console
 
-Once the Railway domain is available, run from a checkout of Agent Work OS on the workstation that contains the product repositories and deployment credentials:
+Run from a checkout of Agent Work OS on the workstation that contains the product repositories and deployment credentials:
 
 ```bash
 AGENT_WORK_OS_TOKEN='<same-token-as-hosted-control-plane>' \
@@ -112,7 +122,7 @@ The machine appears under **Local agents** and becomes eligible in **Launch Ship
 
 ## Product proof
 
-Repository acceptance now covers both control paths:
+Repository acceptance covers both control paths:
 
 1. authenticated control API -> local daemon -> Echo adapter -> persisted follow-up session;
 2. authenticated control API -> local daemon -> Shipping Supervisor -> isolated Git worktree -> verification -> exact tested SHA -> `SHIPPED` release receipt.
