@@ -7,6 +7,7 @@
   "license": "MIT",
   "engines": { "node": ">=22" },
   "scripts": {
+    "product": "node scripts/product.mjs",
     "start:api": "node services/control-api/src/index.js",
     "start:daemon": "node runtime/daemon/src/index.js",
     "test": "node --test services/control-api/test/*.test.js runtime/daemon/test/*.test.js",
