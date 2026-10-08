@@ -41,7 +41,30 @@ console.log('Press Ctrl+C to stop the local product.');
 console.log('');
 
 start(['services/control-api/src/index.js'], 'control plane');
-start(['runtime/daemon/src/index.js'], 'local daemon');
+try {
+  await waitForHealth();
+  if (!shuttingDown) start(['runtime/daemon/src/index.js'], 'local daemon');
+} catch (error) {
+  console.error(`[product] control plane did not become healthy: ${error.message}`);
+  shutdown(1);
+}
+
+async function waitForHealth() {
+  const healthUrl = `http://${daemonHost}:${port}/health`;
+  const deadline = Date.now() + Number(process.env.AGENT_WORK_OS_STARTUP_TIMEOUT_MS ?? 10000);
+  let lastError;
+  while (Date.now() < deadline && !shuttingDown) {
+    try {
+      const response = await fetch(healthUrl);
+      if (response.ok) return;
+      lastError = new Error(`health status ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise(resolve => setTimeout(resolve, 80));
+  }
+  throw lastError ?? new Error('startup timeout');
+}
 
 function shutdown(code = 0) {
   if (shuttingDown) return;
