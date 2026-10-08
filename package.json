@@ -9,10 +9,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "start:api": "node services/control-api/src/index.js",
+    "start:api": "node services/control-api/src/integrated-index.js",
     "start:daemon": "node runtime/daemon/src/index.js",
     "test": "node --test services/control-api/test/*.test.js runtime/daemon/test/*.test.js packages/decision-memory/test/*.test.js",
-    "acceptance": "node scripts/acceptance.mjs",
+    "acceptance": "node scripts/acceptance.mjs && node scripts/work-memory-acceptance.mjs",
     "check": "npm test && npm run acceptance",
     "memory": "node packages/decision-memory/src/cli.js"
   }
