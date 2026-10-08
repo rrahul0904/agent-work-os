@@ -1,12 +1,14 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "1.1",
   "kind": "reverse_engineering_phase_contract",
   "target": {
+    "tracker_id": "RE-384",
+    "tracker_id_state": "collision_checked_after_RE-383",
     "slug": "sqlbuild-refactorable-warehouse",
+    "canonical_product": "Warehouse Refactor Engine (working title)",
     "source_url": "https://www.reddit.com/r/dataengineering/s/xV3ShBPKae",
     "governance_issue": 70,
-    "tracker_id": null,
-    "tracker_id_state": "deferred_pending_collision_reconciliation"
+    "governance_pr": 71
   },
   "boundary": {
     "governance_repository": "rrahul0904/agent-work-os",
@@ -17,8 +19,9 @@
     "copy_upstream_source": false
   },
   "phase_a": {
-    "goal": "Prove a safe SQL refactor loop from offline validation through history-preserving migration and archive-before-delete cleanup.",
+    "goal": "Prove a safe SQL refactor loop from bounded repository discovery and offline validation through history-preserving migration and archive-before-delete cleanup.",
     "capabilities": [
+      "bounded_repository_project_discovery",
       "deterministic_project_graph",
       "offline_reference_and_column_contract_diagnostics",
       "deterministic_custom_rules",
@@ -29,7 +32,8 @@
       "bounded_replay_on_change",
       "keyed_row_level_diff",
       "archive_before_delete_janitor",
-      "append_only_operation_receipts"
+      "append_only_operation_receipts",
+      "validate_compile_plan_fixture_diff_cli"
     ],
     "replay_policies": ["new_only", "window", "full"],
     "safety_defaults": {
@@ -37,29 +41,42 @@
       "ambiguous_lineage": "block",
       "uncertain_relation_ownership": "proposal_only",
       "delete_without_archive_receipt": "forbidden",
+      "delete_without_explicit_authorization": "forbidden",
+      "source_drift_after_archive": "block_delete",
       "stale_plan_apply": "forbidden",
-      "duplicate_operation_receipt": "idempotent_noop"
+      "exact_duplicate_operation_receipt": "idempotent_noop",
+      "conflicting_operation_id_reuse": "reject",
+      "path_traversal": "reject",
+      "symlink_model_path": "reject"
     }
   },
   "required_negative_cases": [
     "unknown_reference",
     "missing_column",
     "declared_inferred_type_conflict",
+    "unknown_expression_type_with_explicit_contract",
     "dependency_cycle",
     "duplicate_model_identity",
     "rename_target_collision",
     "rename_unresolved_downstream_reference",
     "ambiguous_column_lineage",
-    "replay_history_unavailable",
+    "replay_history_unknown_or_unavailable",
     "diff_duplicate_or_null_keys",
     "janitor_uncertain_ownership",
     "archive_failure_blocks_delete",
+    "delete_without_authorization",
+    "source_drift_after_archive",
     "stale_plan",
-    "operation_replay",
-    "compatibility_alias_collision"
+    "exact_operation_replay",
+    "conflicting_operation_id_reuse",
+    "compatibility_alias_collision",
+    "project_path_traversal",
+    "project_symlink_refusal",
+    "project_unknown_key"
   ],
   "acceptance_scenario": [
-    "build_original_commerce_fixture",
+    "load_original_commerce_project_from_checkout",
+    "prove_bounded_project_discovery",
     "prove_multi_model_test",
     "prove_offline_contract_failure",
     "produce_bounded_replay_plan",
@@ -67,8 +84,8 @@
     "prove_history_retained",
     "prove_compatibility_alias",
     "produce_row_diff",
-    "archive_stale_owned_relation",
-    "prove_delete_requires_archive_receipt",
+    "archive_stale_owned_relation_as_verified_copy",
+    "prove_delete_requires_archive_receipt_and_authorization",
     "replay_migration_and_prove_idempotency"
   ],
   "evidence_required": [
@@ -79,8 +96,18 @@
     "operation_receipts",
     "negative_case_results",
     "independent_review",
-    "exact_head_ci"
+    "exact_head_ci",
+    "duckdb_native_acceptance"
   ],
+  "current_evidence": {
+    "classification": "pre_phase_a_locally_verified_core_v3",
+    "artifact": "refactor-warehouse-phase-a-v3.zip",
+    "artifact_sha256": "eb2e0966e0778ee777a1f2155001bf7f1d65e655bd1a748e220788d7fb32570c",
+    "local_tests_passed": 47,
+    "duckdb_tests_skipped": 4,
+    "local_tests_failed": 0,
+    "governance_receipt": "receipts/re384-sql-refactor-prephase-v3.json"
+  },
   "deferred": [
     "production_warehouse_adapters",
     "zero_copy_clone",
