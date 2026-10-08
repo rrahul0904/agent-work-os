@@ -112,9 +112,13 @@ export async function createControlPlane() {
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
         if (!machine.capabilities.some((c) => c.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
         const now = new Date().toISOString();
-        const session = { id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent, model: body.model || undefined, status: "queued", createdAt: now, updatedAt: now, messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: [] };
+        const sessionId = crypto.randomUUID();
+        let context;
+        try { context = normalizeContextRequest(body.context, sessionId); }
+        catch (error) { return json(res, 400, { error: "invalid_context_request", message: error.message }); }
+        const session = { id: sessionId, machineId: body.machineId, cwd: body.cwd, agent: body.agent, model: body.model || undefined, context, status: "queued", createdAt: now, updatedAt: now, messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: [] };
         await store.createSession(session); broadcast({ type: "session.updated", session });
-        try { sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
+        try { sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim(), context } }); }
         catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
         return json(res, 201, session);
       }
@@ -188,6 +192,28 @@ export async function createControlPlane() {
   };
 }
 
+function normalizeContextRequest(value, defaultRunId) {
+  if (value === undefined || value === null) return undefined;
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("context must be an object");
+  const allowed = new Set(["projectId", "worktreeId", "taskId", "runId", "budgetChars"]);
+  const unknown = Object.keys(value).filter((key) => !allowed.has(key));
+  if (unknown.length) throw new Error(`unsupported context fields: ${unknown.join(", ")}`);
+  const safeId = (label, input, required = false) => {
+    if ((input === undefined || input === null || input === "") && !required) return null;
+    if (typeof input !== "string" || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(input)) throw new Error(`${label} must be a safe identifier`);
+    return input;
+  };
+  const projectId = safeId("context.projectId", value.projectId, true);
+  const budgetChars = value.budgetChars ?? 12000;
+  if (!Number.isInteger(budgetChars) || budgetChars < 256 || budgetChars > 50000) throw new Error("context.budgetChars must be an integer between 256 and 50000");
+  return {
+    projectId,
+    worktreeId: safeId("context.worktreeId", value.worktreeId),
+    taskId: safeId("context.taskId", value.taskId),
+    runId: safeId("context.runId", value.runId) ?? defaultRunId,
+    budgetChars,
+  };
+}
 function isAuthorized(req) {
   const raw = req.headers.authorization ?? req.headers["x-agent-work-os-token"] ?? "";
   const supplied = String(raw).startsWith("Bearer ") ? String(raw).slice(7) : String(raw);
