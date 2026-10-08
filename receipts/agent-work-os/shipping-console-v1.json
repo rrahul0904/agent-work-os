@@ -1,0 +1,39 @@
+{
+  "version": "product-release-receipt/v1",
+  "product": {
+    "id": "agent-work-os",
+    "name": "Shipping OS / Agent Work OS",
+    "release": "shipping-console-v1"
+  },
+  "source": {
+    "sha": "e1536adbbf2b6a4051809a053f7a0aa3e137ec7c",
+    "ciRun": 37802491235,
+    "unitTests": "PASS",
+    "acceptance": "PASS"
+  },
+  "distribution": {
+    "channel": "local",
+    "command": "npm run product",
+    "status": "PASS"
+  },
+  "surfaces": [
+    "Overview",
+    "Portfolio",
+    "Shipping Runs",
+    "Evidence",
+    "Local Agents"
+  ],
+  "execution": {
+    "agentSessions": "PASS",
+    "shippingSupervisor": "PASS",
+    "isolatedWorktree": "PASS",
+    "exactShaReceipt": "PASS"
+  },
+  "hosting": {
+    "target": "Railway",
+    "status": "BLOCKED_PAYMENT",
+    "message": "Railway rejected new project creation because the account trial has expired."
+  },
+  "status": "SHIPPED_LOCAL",
+  "receiptDigest": "sha256:b57919c3b567fcd93caa3ecb7553812955c8e41933fef20529d98d5520d138a2"
+}
