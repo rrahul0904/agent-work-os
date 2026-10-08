@@ -5,18 +5,17 @@ import path from "node:path";
 import test from "node:test";
 
 const root = await fs.mkdtemp(path.join(os.tmpdir(), "agent-work-os-context-api-"));
+const statePath = path.join(root, "state.json");
 process.env.PORT = "0";
 process.env.AGENT_WORK_OS_TOKEN = "context-test-token";
-process.env.AGENT_WORK_OS_STATE_PATH = path.join(root, "state.json");
+process.env.AGENT_WORK_OS_STATE_PATH = statePath;
 const { createControlPlane } = await import(`../src/index.js?context-request-test=${Date.now()}`);
 
 async function startControlPlane(t) {
+  await fs.rm(statePath, { force: true });
   const cp = await createControlPlane();
   await cp.listen();
-  t.after(async () => {
-    await cp.close();
-    await fs.rm(root, { recursive: true, force: true });
-  });
+  t.after(async () => cp.close());
   await cp.store.upsertMachine({
     id: "machine-1",
     name: "test-machine",
