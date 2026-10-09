@@ -149,17 +149,18 @@ export class ProjectDesk {
     if (!DECISION_STATUSES.has(input.status)) {
       throw new ProjectDeskError("invalid_decision_status", "status must be approved, changes_requested, or discarded", 400);
     }
+    const options = decision.options ?? [];
     const selectedOptionId = input.selectedOptionId?.trim() || null;
-    if (selectedOptionId && !decision.options.some((option) => option.id === selectedOptionId)) {
+    if (selectedOptionId && !options.some((option) => option.id === selectedOptionId)) {
       throw new ProjectDeskError("invalid_decision_option", "selectedOptionId must reference one of the decision options", 400);
     }
-    if (input.status === "approved" && decision.options.length > 0 && !selectedOptionId) {
+    if (input.status === "approved" && options.length > 0 && !selectedOptionId) {
       throw new ProjectDeskError("decision_option_required", "approved decisions with options require selectedOptionId", 400);
     }
     const resolvedAt = this.now();
     const resolution = {
       decisionId: decision.id,
-      proposalDigest: decision.proposalDigest,
+      proposalDigest: decision.proposalDigest ?? null,
       status: input.status,
       selectedOptionId,
       rationale: input.rationale?.trim() || input.comment?.trim() || null,
@@ -167,6 +168,7 @@ export class ProjectDesk {
       resolvedBy: actor,
       resolvedAt,
     };
+    decision.options = options;
     decision.status = input.status;
     decision.resolvedBy = actor;
     decision.resolvedAt = resolvedAt;
@@ -179,9 +181,9 @@ export class ProjectDesk {
       decisionId,
       status: decision.status,
       selectedOptionId,
-      proposalDigest: decision.proposalDigest,
+      proposalDigest: decision.proposalDigest ?? null,
       resolutionDigest: decision.resolutionDigest,
-      policyRef: decision.policyRef,
+      policyRef: decision.policyRef ?? null,
     });
     return decision;
   }
