@@ -5,7 +5,7 @@ import path from "node:path";
 export class JsonStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.state = { machines: {}, sessions: {}, workItems: {}, decisions: {}, activity: [] };
+    this.state = { machines: {}, sessions: {}, workItems: {}, decisions: {}, activity: [], organization: null };
     this.writeChain = Promise.resolve();
   }
 
@@ -18,6 +18,7 @@ export class JsonStore {
         workItems: parsed.workItems ?? {},
         decisions: parsed.decisions ?? {},
         activity: parsed.activity ?? [],
+        organization: parsed.organization ?? null,
       };
       for (const machine of Object.values(this.state.machines)) machine.status = "offline";
     } catch (error) {
@@ -34,6 +35,7 @@ export class JsonStore {
   getSession(id) { return this.state.sessions[id]; }
   getWorkItem(id) { return this.state.workItems[id]; }
   getDecision(id) { return this.state.decisions[id]; }
+  getOrganization() { return this.state.organization ? structuredClone(this.state.organization) : null; }
 
   async upsertMachine(machine) { this.state.machines[machine.id] = machine; await this.#persist(); return machine; }
   async touchMachine(id) {
@@ -59,6 +61,7 @@ export class JsonStore {
   async upsertWorkItem(item) { this.state.workItems[item.id] = item; await this.#persist(); return item; }
   async upsertDecision(decision) { this.state.decisions[decision.id] = decision; await this.#persist(); return decision; }
   async addActivity(event) { this.state.activity.push(event); await this.#persist(); return event; }
+  async upsertOrganization(organization) { this.state.organization = structuredClone(organization); await this.#persist(); return organization; }
 
   #session(id) { const s = this.getSession(id); if (!s) throw new Error(`Unknown session: ${id}`); return s; }
   #persist() {
