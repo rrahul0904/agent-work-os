@@ -1,5 +1,7 @@
 import crypto from "node:crypto";
 import { createControlPlane } from "./index.js";
+import { CompanyCommandCenter } from "./company-command-center.js";
+import { handleCompanyCommandCenterRequest } from "./company-command-center-routes.js";
 import { ProjectDesk } from "./project-desk.js";
 import { handleProjectDeskRequest } from "./project-desk-routes.js";
 import { WorkMemoryService } from "./work-memory-service.js";
@@ -24,6 +26,7 @@ export async function createIntegratedControlPlane() {
   const desk = new ProjectDesk(controlPlane.store);
   const workMemory = new WorkMemoryService(controlPlane.store);
   const workMemoryHandoffs = new WorkMemoryHandoffService(controlPlane.store, workMemory);
+  const company = new CompanyCommandCenter(controlPlane.store, desk);
   const authorize = (req) => controlTokenMatches(req.headers.authorization, token);
 
   controlPlane.server.on("request", async (req, res) => {
@@ -31,6 +34,7 @@ export async function createIntegratedControlPlane() {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
     try {
       addCors(res);
+      if (await handleCompanyCommandCenterRequest(req, res, url, { service: company, json, readJson, authorize })) return;
       if (await handleProjectDeskRequest(req, res, url, { desk, json, readJson, authorize })) return;
       if (handleWorkMemoryRequest(req, res, url, { service: workMemory, json, authorize })) return;
       if (await handleWorkMemoryHandoffRequest(req, res, url, { service: workMemoryHandoffs, json, readJson, authorize })) return;
@@ -42,7 +46,7 @@ export async function createIntegratedControlPlane() {
     }
   });
 
-  return { ...controlPlane, desk, workMemory, workMemoryHandoffs };
+  return { ...controlPlane, desk, workMemory, workMemoryHandoffs, company };
 }
 
 function addCors(res) {
