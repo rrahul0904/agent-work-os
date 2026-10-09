@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Company Command Center · Agent Work OS</title>
+  <link rel="stylesheet" href="/company.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">AGENT WORK OS</p>
+      <h1>Company Command Center</h1>
+      <p class="sub">One evidence-backed view of your AI workforce, work, decisions, and runs.</p>
+    </div>
+    <div class="auth">
+      <input id="token" type="password" autocomplete="off" placeholder="Control token">
+      <button id="connect">Connect</button>
+      <button id="export" class="secondary">Export audit</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="status" class="status">Enter the control token to load company state.</section>
+    <section id="metrics" class="metrics"></section>
+
+    <div class="grid">
+      <section class="panel span2">
+        <div class="panel-head"><div><p class="eyebrow">PRESIDENT OVERVIEW</p><h2>Needs your attention</h2></div><a href="/work.html">Open Work Queue →</a></div>
+        <div id="attention" class="attention empty">No data loaded.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div><p class="eyebrow">COMPANY STRUCTURE</p><h2>Reporting lines</h2></div></div>
+        <div id="structure" class="org empty">No data loaded.</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head"><div><p class="eyebrow">LIVE OPERATIONS</p><h2>Agent workforce</h2></div><a href="/">Open Agents →</a></div>
+        <div id="members" class="members empty">No data loaded.</div>
+      </section>
+
+      <section class="panel span2">
+        <div class="panel-head"><div><p class="eyebrow">DECISION DESK</p><h2>Evidence before authority</h2></div></div>
+        <div id="decisions" class="decisions empty">No data loaded.</div>
+      </section>
+    </div>
+  </main>
+
+  <template id="decision-template">
+    <article class="decision-card">
+      <div class="decision-top"><span class="risk"></span><span class="policy"></span></div>
+      <h3 class="question"></h3>
+      <p class="reason"></p>
+      <div class="evidence"></div>
+      <label>Decision <select class="option"></select></label>
+      <label>Rationale <textarea class="rationale" rows="2" placeholder="Why is this the right call?"></textarea></label>
+      <div class="actions"><button data-status="approved">Approve</button><button class="secondary" data-status="changes_requested">Request revision</button><button class="danger" data-status="discarded">Reject</button></div>
+      <p class="receipt"></p>
+    </article>
+  </template>
+  <script type="module" src="/company.js"></script>
+</body>
+</html>
