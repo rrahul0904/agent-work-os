@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Work Queue · Agent Work OS</title>
+  <link rel="stylesheet" href="/work.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <a class="back" href="/">← Agent Work OS</a>
+      <h1>Work Queue</h1>
+      <p>Authoritative Project Desk state with read-only Work Memory continuity.</p>
+    </div>
+    <div class="auth">
+      <label for="token">Control token</label>
+      <input id="token" type="password" autocomplete="off" placeholder="Bearer token">
+      <button id="saveToken">Use token</button>
+      <span id="authState">Not connected</span>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="queue panel">
+      <div class="panelTitle">
+        <h2>Queue</h2>
+        <button id="refresh">Refresh</button>
+      </div>
+      <form id="createWork" class="createForm">
+        <input id="newTitle" maxlength="160" placeholder="New work item" required>
+        <textarea id="newDescription" maxlength="1200" placeholder="Goal / description"></textarea>
+        <button type="submit">Create work</button>
+      </form>
+      <div id="workItems" class="workItems"></div>
+    </aside>
+
+    <section class="workspace panel">
+      <div id="emptyState" class="emptyState">Select a work item to inspect authoritative state and continuity memory.</div>
+      <div id="workDetail" hidden>
+        <div class="detailHeader">
+          <div>
+            <span id="laneBadge" class="badge"></span>
+            <h2 id="workTitle"></h2>
+            <p id="workDescription"></p>
+          </div>
+          <div class="digestBlock">
+            <span>Projection digest</span>
+            <code id="projectionDigest"></code>
+          </div>
+        </div>
+
+        <div class="grid">
+          <section class="card">
+            <h3>Authoritative state</h3>
+            <dl id="authoritativeState"></dl>
+            <div class="actions">
+              <button data-action="claim">Claim as agent</button>
+              <button data-action="review">Move to review</button>
+              <button data-action="complete">Human complete</button>
+            </div>
+          </section>
+
+          <section class="card">
+            <h3>Decision gate</h3>
+            <form id="decisionForm">
+              <input id="decisionQuestion" maxlength="240" placeholder="Decision / approval question">
+              <button type="submit">Request decision</button>
+            </form>
+            <div id="decisions" class="stack"></div>
+          </section>
+
+          <section class="card wide">
+            <h3>Agent completion report</h3>
+            <p class="muted">Agent-owned work must submit evidence before a human can finalize it.</p>
+            <form id="completionReportForm" class="handoffForm">
+              <input id="reportSummary" maxlength="500" placeholder="What was completed" required>
+              <input id="reportCommit" maxlength="120" placeholder="Exact commit SHA" required>
+              <input id="reportCi" maxlength="120" placeholder="CI status / run" required>
+              <input id="reportTests" maxlength="500" placeholder="Verification instructions" required>
+              <input id="reportPr" maxlength="500" placeholder="PR URL (optional)">
+              <button type="submit">Submit report</button>
+            </form>
+            <pre id="completionReceipt" class="receipt" hidden></pre>
+          </section>
+
+          <section class="card wide">
+            <div class="cardTitle">
+              <h3>Work Memory</h3>
+              <span class="readOnly">Read-only projection</span>
+            </div>
+            <div id="memoryEntries" class="timeline"></div>
+          </section>
+
+          <section class="card wide">
+            <h3>Verified handoff</h3>
+            <p class="muted">Creates an RE-297 handoff from a real source session. Work status and approvals remain Project Desk authority.</p>
+            <form id="handoffForm" class="handoffForm">
+              <input id="sourceSession" placeholder="Source session ID" required>
+              <input id="nextAction" maxlength="280" placeholder="Next action for the fresh agent session">
+              <button type="submit">Create handoff</button>
+            </form>
+            <pre id="handoffReceipt" class="receipt" hidden></pre>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div id="notice" class="notice" hidden></div>
+  <script type="module" src="/work.js"></script>
+</body>
+</html>

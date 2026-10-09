@@ -1,33 +1,41 @@
 # Agent Work OS
 
-Agent Work OS is a clean-room, local-first control plane for coding agents. It lets a browser control an agent CLI running on your own machine while your repository and agent credentials stay local.
+Agent Work OS is a clean-room, local-first control plane for coding agents. It combines local agent runtimes, governed work/approval state, shared rooms, durable verified handoffs, Work Memory projections, and a bounded MCP interface while keeping repository and provider credentials on the machine running the daemon.
 
-## Current status
+## Current integrated slice
 
-The first end-to-end vertical slice is implemented and acceptance-tested:
+The `integrate/work-truth-memory` line now includes:
 
-- zero-dependency Node 22 control plane with REST + native WebSocket server
-- persistent machine/session state
-- authenticated local daemon connection
-- machine registration, capability discovery, presence and heartbeat
-- session start, follow-up message and interrupt commands
-- Codex CLI adapter using `codex exec --json`, native thread IDs and `resume`
-- normalized agent text/tool/status/usage/log/error events
-- deterministic built-in echo adapter for CI and local acceptance testing
-- responsive operator web UI served by the control plane
-- Docker packaging
-- unit tests and end-to-end acceptance test
-- GitHub Actions CI
+- Node 22 REST + native WebSocket control plane;
+- persistent machine/session state and authenticated daemon connection;
+- Codex, Claude, Gemini, Grok and deterministic echo capability adapters;
+- shared multi-agent rooms, webhook routines and exact-intent tool approvals;
+- RE-297 worktree-local decision memory with hash-chained verified handoffs and recall proofs;
+- authoritative Project Desk work items, ownership, decision gates, completion reports and human finalization;
+- deterministic, read-only Work Memory projections over Project Desk facts;
+- verified Work Memory -> RE-297 handoff receipts bound to the exact projection digest;
+- fresh-session `verified-context` continuation containing bounded goal/tasks/risks/checks plus explicitly shareable verified decisions;
+- responsive Work Queue UI at `/work.html` and Shared Rooms UI at `/rooms.html`;
+- MCP v2 stdio server exposing only work discovery, Work Memory reads and verified handoff creation;
+- Docker packaging and GitHub Actions verification.
 
-## Run it
+Project Desk is the source of truth for work status and approvals. Work Memory, RE-297 handoffs, the web UI and MCP tools cannot silently convert an agent claim into authoritative completion.
 
-No dependency installation is required beyond Node 22+.
+## Install and run
+
+Node 22+ is required. Install the pinned runtime dependencies first:
+
+```bash
+npm install --ignore-scripts --no-audit --no-fund
+```
+
+Start the integrated control plane:
 
 ```bash
 AGENT_WORK_OS_TOKEN=dev-token npm run start:api
 ```
 
-In a second terminal on the machine that owns your repository:
+In a second terminal on the machine that owns the repository:
 
 ```bash
 AGENT_WORK_OS_TOKEN=dev-token \
@@ -35,58 +43,113 @@ AGENT_WORK_OS_SERVER_URL=ws://127.0.0.1:8787/ws \
 npm run start:daemon
 ```
 
-Open `http://127.0.0.1:8787`. The built-in `echo` adapter is always available unless disabled. If `codex` is installed and authenticated, the daemon automatically advertises a `codex` capability.
+Open `http://127.0.0.1:8787`. The main page links to Work Queue and Shared Rooms. The deterministic `echo` adapter is available unless disabled; locally installed/authenticated provider CLIs are advertised when their adapters detect them.
+
+## Work Queue / Work Memory
+
+Open `http://127.0.0.1:8787/work.html` and provide the same control token. The operator surface can:
+
+- create and inspect authoritative work items;
+- claim work with the bounded UI agent identity;
+- submit an agent completion report with commit/CI/test evidence;
+- request and human-resolve decision gates;
+- finalize work through the human completion path;
+- inspect the read-only Work Memory timeline and projection digest;
+- create a verified RE-297 handoff from a real source session.
+
+Work Memory has no mutation endpoint for lane/status/approval changes.
+
+## Verified cross-session continuation
+
+RE-297 stores decision memory locally under the worktree. A verified Work Memory handoff:
+
+1. projects current authoritative Project Desk facts;
+2. binds the exact projection SHA-256 into an RE-297 handoff snapshot;
+3. carries bounded goal, recent actions, open tasks, risks, next action and checks;
+4. references current verified decisions by revision/content/source hashes;
+5. records a durable recall proof before the fresh agent session starts;
+6. injects only the bounded handoff summary plus decisions that are both `verified` and `shareable` when `brainMode=verified-context`.
+
+All recalled content is explicitly delimited as untrusted reference data; the current user request remains authoritative.
+
+Use the memory CLI for direct local inspection:
+
+```bash
+npm run memory -- help
+```
+
+See `docs/RE297_PHASE_A.md` for the underlying journal contract.
+
+## MCP
+
+The repository uses the official MCP TypeScript v2 server package and stdio serving path. Start it locally with the control-plane URL and control token:
+
+```bash
+AGENT_WORK_OS_API_URL=http://127.0.0.1:8787 \
+AGENT_WORK_OS_TOKEN=dev-token \
+npm run mcp
+```
+
+Exposed tools are intentionally bounded:
+
+- `agent_work_list` — authoritative work discovery (read-only);
+- `agent_work_memory` — read one Work Memory projection (read-only);
+- `agent_work_create_handoff` — create a verified RE-297 handoff from an existing source session.
+
+There is no MCP tool for approving decisions, marking work complete, merging code or deploying.
 
 ## Verification
 
 ```bash
 npm test
 npm run acceptance
+npm run check
 ```
 
-The acceptance test launches an isolated control plane + daemon, creates a real session through HTTP, verifies the daemon/adapter event round trip, sends a follow-up, verifies native-session continuity, and shuts everything down.
+The acceptance chain exercises:
 
-## Codex integration
+- direct session + daemon + provider-adapter event flow;
+- verified RE-297 recall and bounded shared-brain context;
+- shared rooms, webhook idempotency and exact-intent tool approvals;
+- authorized Project Desk + Work Memory APIs and restart-stable projection digests;
+- authoritative Work Memory projection -> RE-297 handoff -> fresh verified-context session;
+- MCP v2 stdio startup with a clean protocol stdout channel.
 
-The adapter invokes Codex non-interactively with JSONL output and workspace automation. A first turn uses the CLI's generated thread ID; later messages resume that thread. Optional environment variables:
+CI also builds the Docker image.
+
+## Docker
 
 ```bash
-AGENT_WORK_OS_CODEX_MODEL=gpt-5.6-sol
-AGENT_WORK_OS_CODEX_ARGS='["--ephemeral"]'
+AGENT_WORK_OS_TOKEN=change-me docker compose up --build
 ```
 
-Use CLI permission/sandbox settings appropriate for your environment. The control plane never receives your Codex credentials.
+The image runs the integrated control plane and persists control-plane state under the configured `/data` volume. Local provider execution still requires the separate daemon on the machine holding the repository and provider credentials.
 
 ## Repository map
 
 ```text
-apps/web/public/              operator UI
-packages/protocol/src/        envelopes + native WebSocket transport
-services/control-api/src/     REST, realtime gateway, persistence
-runtime/daemon/src/           local machine daemon + agent adapters
-scripts/acceptance.mjs        end-to-end acceptance gate
-docs/                         architecture and provenance
-.github/workflows/            CI
+apps/web/public/                  operator, Work Queue and Shared Rooms UIs
+packages/protocol/src/            envelopes + native WebSocket transport
+packages/decision-memory/         RE-297 local verified decision/handoff journal
+services/control-api/src/         control plane, Project Desk and Work Memory APIs
+services/mcp/src/                 bounded MCP v2 stdio server
+runtime/daemon/src/               local machine daemon + provider adapters
+scripts/acceptance.mjs            core runtime acceptance
+scripts/work-memory-acceptance.mjs Project Desk / Work Memory acceptance
+scripts/work-handoff-acceptance.mjs cross-session verified handoff acceptance
+scripts/mcp-smoke.mjs             MCP stdio startup acceptance
+docs/                             architecture and reverse-engineering evidence
+.github/workflows/                exact-head CI
 ```
 
-## Next engineering wave
+## Remaining certification / protected gates
 
-1. Postgres-backed durable state and migrations.
-2. Redis/NATS connection routing for horizontally scaled gateways.
-3. Git status/diff/filesystem APIs and terminal/PTY streaming.
-4. Worktree lifecycle and parallel-agent isolation.
-5. Claude Code/OpenCode/ACP adapters with structured event normalization.
-6. Task -> worktree -> agent -> review workflow.
-7. PR/CI monitoring, human approvals, budgets and policy controls.
-8. Electron desktop shell and mobile/PWA remote controls.
-9. Agent routing, evaluation, cost and quality telemetry.
-10. Production auth, organizations/RBAC, audit and deployment hardening.
+The integrated branch is not a production-readiness claim. The remaining evidence gates are deliberately external or protected:
 
-See `docs/ARCHITECTURE.md` and `docs/PRODUCT_REVERSE_ENGINEERING.md`.
+- real-provider UAT for each locally installed/authenticated CLI beyond deterministic echo coverage;
+- browser/device certification across target environments;
+- production auth/RBAC, secret management, observability and horizontal-scale hardening;
+- production deployment certification;
+- merge/deploy authorization.
 
-## RE-297: opt-in local decision memory (Phase A only)
-
-A separate, independent local-memory slice is available via `npm run memory -- help`.
-It keeps versioned decision/provenance records in an append-safe worktree-local journal, permits explicit inspect/edit/retract/export/doctor, and creates bounded handoff snapshots. A new session with an explicit `handoffId` emits a persisted, hash-cited `memory.proof` event before an agent turn. Decision bodies stay on the daemon's local disk and are **not** auto-injected into agent prompts or sent to the control plane. See [Phase A documentation](docs/RE297_PHASE_A.md) and the [research dossier](docs/reverse-engineering/continuity-decision-memory-re297.md).
-
-This is not the commercial product implementation, team sync, automated capture, MCP/editor integration, secure erasure, or production readiness.
+Merge and production deployment remain explicit human gates.
