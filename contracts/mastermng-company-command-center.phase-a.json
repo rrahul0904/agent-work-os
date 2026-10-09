@@ -1,0 +1,35 @@
+{
+  "schema": "shipping-contract/v1",
+  "project": "agent-work-os",
+  "slice": "mastermng-company-command-center-v1",
+  "source": "https://www.reddit.com/r/AISaaSHunter/comments/1x15nag/mastermng_a_command_center_for_organizing_ai/",
+  "canonicalDestination": "rrahul0904/agent-work-os",
+  "boundary": "Clean-room capability convergence. Do not copy MasterMNG source, branding, private APIs, assets, schemas or visual design. Project Desk remains authoritative for work and decisions; existing Agent Work OS sessions remain authoritative for execution.",
+  "goldenPaths": [
+    "human configures a valid company hierarchy and cycles fail closed",
+    "agent owns work and submits evidence-backed completion",
+    "material decision carries reason, options, risk, policy and evidence references",
+    "human resolves the decision exactly once and replay is refused",
+    "President Overview reflects authoritative work, decision and run state",
+    "audit export binds company/work/decision/activity/run receipts with a deterministic digest",
+    "browser command center renders mobile-responsive overview, structure, live agents and Decision Desk"
+  ],
+  "verification": {
+    "required": ["npm test", "npm run acceptance", "docker build -t agent-work-os:company-command-center ."],
+    "negative": [
+      "agent cannot change company structure",
+      "management cycle is refused",
+      "unknown manager is refused",
+      "agent cannot resolve a human decision",
+      "resolved decision cannot be replayed",
+      "approved multi-option decision requires an exact selected option"
+    ]
+  },
+  "deployment": {
+    "artifact": "existing Agent Work OS Docker image",
+    "localRuntime": "npm run start:api plus local daemon",
+    "hostedControlPlane": "requires a durable Node/WebSocket host; do not represent a static-only deployment as the full product",
+    "credentials": "provider and repository credentials stay on the developer-owned local daemon"
+  },
+  "completionRule": "Do not claim SHIPPED from implementation alone. Exact-head CI, existing acceptance suite, Docker build, browser UAT, deployment/recovery and exact-SHA evidence are separate gates."
+}
