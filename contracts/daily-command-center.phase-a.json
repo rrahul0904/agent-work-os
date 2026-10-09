@@ -1,0 +1,109 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "daily-command-center-phase-a",
+    "repoPath": "."
+  },
+  "release": {
+    "version": "phase-a"
+  },
+  "worktree": {
+    "baseRef": "HEAD",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": {
+      "name": "daily-command-center-builder",
+      "command": "codex exec --full-auto 'Implement only Phase A from docs/reverse-engineering/dailyhub-daily-command-center.md. Build an independently authored dependency-light daily-command-center/v1 domain module plus deterministic Node tests. The module must derive a pure daily projection from canonical Project Desk / Work Queue style facts, emit explainable nudge reason codes, implement exact-revision bounded focus receipts with expiry/stale-target invalidation, keep task completion claims distinct from verifier/release/shipped truth, and produce deterministic analytics/output digests independent of input ordering. Do not create a second Project/Task database, copy DailyHub source/UI/assets/schema/tests, add network access, MCP expansion, UI, persistence migration, Git mutation, deployment or provider writes. Preserve existing behavior and run the narrowest focused tests before returning.'"
+    },
+    "repairCommand": {
+      "name": "daily-command-center-repair",
+      "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE plus docs/reverse-engineering/dailyhub-daily-command-center.md. Repair only the failing Phase A Daily Command Center gate. Preserve projection purity, exact-revision focus semantics, explainable nudges and completion-vs-verification-vs-shipping separation. Do not broaden scope, use network, copy donor implementation, create a second work database, push, merge or deploy. Run the narrowest relevant tests.'"
+    },
+    "maxRepairAttempts": 2
+  },
+  "verification": [
+    {
+      "name": "daily-command-center-focused",
+      "command": "node --test services/control-api/test/daily-command-center.test.js"
+    },
+    {
+      "name": "repository-unit",
+      "command": "npm test"
+    },
+    {
+      "name": "repository-acceptance",
+      "command": "npm run acceptance"
+    }
+  ],
+  "preview": {
+    "required": false
+  },
+  "production": {
+    "required": false
+  },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": {
+      "name": "tested-sha",
+      "command": "git rev-parse HEAD"
+    }
+  },
+  "goldenPath": [
+    {
+      "id": "DCC-A-001",
+      "description": "The same canonical work facts produce the same daily projection and digest regardless of input ordering."
+    },
+    {
+      "id": "DCC-A-002",
+      "description": "Overdue, blocked, human-decision, agent-input, failed-verification and production-gap facts produce explicit stable nudge reason codes."
+    },
+    {
+      "id": "DCC-A-003",
+      "description": "A valid bounded focus receipt emphasizes its exact target revision without suppressing required human, verification or production attention."
+    },
+    {
+      "id": "DCC-A-004",
+      "description": "Expired focus and focus bound to a changed, superseded or missing target revision are rejected or omitted rather than silently applied."
+    },
+    {
+      "id": "DCC-A-005",
+      "description": "Focus changes presentation only and cannot mutate priority, approval, verification, authorization or shipping truth."
+    },
+    {
+      "id": "DCC-A-006",
+      "description": "Actor completion, completion report, verified completion, deployed release, production verification and portfolio shipped states remain distinct in the projection."
+    },
+    {
+      "id": "DCC-A-007",
+      "description": "Project-grouped daily work and deterministic analytics are derived from canonical facts without creating or mutating a second task/project store."
+    },
+    {
+      "id": "DCC-A-008",
+      "description": "Unknown or malformed required source facts fail closed or surface unknown state instead of fabricating urgency, completion or release truth."
+    },
+    {
+      "id": "DCC-A-009",
+      "description": "Projection and focus receipts contain bounded identifiers/digests/reason codes and do not embed secrets or unrelated private context."
+    }
+  ],
+  "excludedFromRelease": [
+    "DailyHub source, schema, tests, branding, copy or UI asset reuse",
+    "standalone productivity application",
+    "new Project or Task authority",
+    "SQLite migration or new persistence authority",
+    "habit-tracking domain",
+    "MCP tool expansion",
+    "network access",
+    "provider or cloud writes",
+    "Git mutation",
+    "browser or device UAT",
+    "preview deployment",
+    "production deployment",
+    "DailyHub parity"
+  ],
+  "policy": {
+    "commandTimeoutMs": 600000,
+    "retainFailureLogs": true
+  }
+}
