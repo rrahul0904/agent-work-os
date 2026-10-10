@@ -12,7 +12,7 @@ test('classifies normalized session states into glanceable operator states', () 
 test('surfaces approval-like stalls while a session still reports running', () => {
   const result = classifySession({
     status:'running',
-    events:[{ kind:'log', stream:'stdout', text:'Waiting for deployment approval before promotion.' }]
+    events:[{ kind:'status', status:'running' }, { kind:'log', stream:'stdout', text:'Waiting for deployment approval before promotion.' }]
   });
   assert.equal(result.state, 'blocked');
   assert.equal(result.label, 'Needs approval');
@@ -20,9 +20,24 @@ test('surfaces approval-like stalls while a session still reports running', () =
 });
 
 test('errors win over nominal running state', () => {
-  const result = classifySession({ status:'running', events:[{ kind:'error', message:'test suite failed' }] });
+  const result = classifySession({ status:'running', events:[{ kind:'status', status:'running' }, { kind:'error', message:'test suite failed' }] });
   assert.equal(result.state, 'blocked');
   assert.equal(result.attention.severity, 'error');
+});
+
+test('a later terminal success clears stale historical attention', () => {
+  const result = classifySession({
+    status:'completed',
+    events:[
+      { kind:'status', status:'running' },
+      { kind:'error', message:'first attempt failed' },
+      { kind:'status', status:'running', message:'repair started' },
+      { kind:'tool', name:'test', phase:'completed', payload:{ failed:0 } },
+      { kind:'status', status:'completed' }
+    ]
+  });
+  assert.equal(result.state, 'done');
+  assert.equal(result.attention, null);
 });
 
 test('summarizes and sorts blocked work ahead of active and completed work', () => {

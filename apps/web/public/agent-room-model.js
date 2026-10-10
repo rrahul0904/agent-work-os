@@ -16,11 +16,13 @@ const ATTENTION_PATTERNS = [
 export function classifySession(session = {}) {
   const raw = String(session.status || 'unknown').toLowerCase();
   const attention = findAttention(session.events || []);
-  if (BLOCKED.has(raw) || attention?.severity === 'error') return { state: 'blocked', label: 'Blocked', raw, attention };
-  if (attention?.severity === 'approval' && ACTIVE.has(raw)) return { state: 'blocked', label: 'Needs approval', raw, attention };
-  if (ACTIVE.has(raw)) return { state: 'working', label: 'Working', raw, attention };
+  if (BLOCKED.has(raw)) return { state: 'blocked', label: 'Blocked', raw, attention };
   if (DONE.has(raw)) return { state: 'done', label: 'Done', raw, attention };
+  if (ACTIVE.has(raw) && attention?.severity === 'error') return { state: 'blocked', label: 'Blocked', raw, attention };
+  if (ACTIVE.has(raw) && attention?.severity === 'approval') return { state: 'blocked', label: 'Needs approval', raw, attention };
+  if (ACTIVE.has(raw)) return { state: 'working', label: 'Working', raw, attention };
   if (WAITING.has(raw)) return { state: 'waiting', label: raw === 'queued' ? 'Queued' : 'Waiting', raw, attention };
+  if (attention?.severity === 'error') return { state: 'blocked', label: 'Blocked', raw, attention };
   return { state: 'waiting', label: raw === 'unknown' ? 'Unknown' : titleCase(raw), raw, attention };
 }
 
@@ -35,6 +37,7 @@ export function findAttention(events = []) {
     if (/\b(approval|permission|confirm(?:ation)?)\b/i.test(haystack) && /\b(wait|need|required|request|ask|prompt)\w*\b/i.test(haystack)) {
       return { severity: 'approval', reason: compact(haystack, 180), eventIndex: i };
     }
+    if (event.kind === 'status') return null;
   }
   return null;
 }
