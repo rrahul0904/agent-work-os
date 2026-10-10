@@ -1,0 +1,133 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "local-team-inference-gateway-phase-a",
+    "repoPath": "."
+  },
+  "release": {
+    "version": "phase-a"
+  },
+  "worktree": {
+    "baseRef": "HEAD",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": {
+      "name": "inference-gateway-builder",
+      "command": "codex exec --full-auto 'Implement only Phase A from docs/reverse-engineering/anyscale-local-team-inference-gateway.md. Build an independently authored, dependency-free inference-routing/v1 domain module and deterministic Node tests. Implement InferenceRequest, InferenceLane, RoutingPolicy, InferencePlan, InferenceGrant and InferenceReceipt validation/canonical digests. Keep privacy, residency, authorization, capability, quality, cost, latency and cache evidence separate. Unknown must remain unknown. Planning must not grant execution. Hosted fallback for private-code traffic must fail closed unless the exact policy explicitly permits it. Fallback cannot widen provider/residency/privacy scope. Do not copy donor code/configuration. Do not add network, model/runtime launch, provider calls, secrets, Git mutation, deployment, model downloads, browser work or real GPU work. Preserve existing behavior and run the narrowest focused tests before returning.'"
+    },
+    "repairCommand": {
+      "name": "inference-gateway-repair",
+      "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE plus docs/reverse-engineering/anyscale-local-team-inference-gateway.md. Repair only the failing Phase A Local/Team Inference Gateway gate. Preserve plan-vs-grant separation, privacy/no-leak fallback, first-class unknown evidence and exact-digest binding. Do not broaden scope, use network, copy donor code, push, merge, deploy, call providers or execute model runtimes. Run the narrowest relevant tests.'"
+    },
+    "maxRepairAttempts": 2
+  },
+  "verification": [
+    {
+      "name": "inference-gateway-focused",
+      "command": "node --test services/control-api/test/inference-gateway.test.js"
+    },
+    {
+      "name": "repository-unit",
+      "command": "npm test"
+    },
+    {
+      "name": "repository-acceptance",
+      "command": "npm run acceptance"
+    }
+  ],
+  "preview": {
+    "required": false
+  },
+  "production": {
+    "required": false
+  },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": {
+      "name": "tested-sha",
+      "command": "git rev-parse HEAD"
+    }
+  },
+  "goldenPath": [
+    {
+      "id": "IG-A-001",
+      "description": "The same canonical request, lane evidence and policy produce the same deterministic inference-plan digest."
+    },
+    {
+      "id": "IG-A-002",
+      "description": "A client requiring Responses semantics rejects a chat-completions-only lane unless a separately declared compatible adapter exists."
+    },
+    {
+      "id": "IG-A-003",
+      "description": "Missing or stale lane health/capability evidence remains unknown or ineligible rather than being treated as healthy or supported."
+    },
+    {
+      "id": "IG-A-004",
+      "description": "Privacy/residency/provider constraints outrank cost, latency and cache-affinity preferences."
+    },
+    {
+      "id": "IG-A-005",
+      "description": "Private-code policy that forbids hosted providers stops after local/team failure instead of silently leaking to a hosted fallback."
+    },
+    {
+      "id": "IG-A-006",
+      "description": "A strict max-cost policy with unknown cost refuses or follows an explicit policy-defined unknown-cost rule; it never invents zero cost."
+    },
+    {
+      "id": "IG-A-007",
+      "description": "InferencePlan carries no execution authority; an exact request/plan/policy/lane-bound InferenceGrant is required."
+    },
+    {
+      "id": "IG-A-008",
+      "description": "Expired or mismatched grants fail closed and cannot be replayed for a different request, lane, policy or model revision."
+    },
+    {
+      "id": "IG-A-009",
+      "description": "Fallback can use only provider/residency/privacy scope already authorized by the original grant and policy digest."
+    },
+    {
+      "id": "IG-A-010",
+      "description": "InferenceReceipt distinguishes provider/runtime-reported token/cost values from local estimates and leaves unavailable measurements unknown."
+    },
+    {
+      "id": "IG-A-011",
+      "description": "Partial stream plus transport/restart failure records interrupted/partial or unknown outcome, never fabricated full success."
+    },
+    {
+      "id": "IG-A-012",
+      "description": "Successful inference cannot by itself upgrade an unverified model/lane to quality parity with another provider or model."
+    },
+    {
+      "id": "IG-A-013",
+      "description": "Raw repository/session source or secrets are excluded from canonical digests and are not persisted by the Phase A receipt model."
+    },
+    {
+      "id": "IG-A-014",
+      "description": "Changed policy, model revision, health evidence or capability evidence changes the corresponding canonical plan/grant identity where relevant."
+    }
+  ],
+  "excludedFromRelease": [
+    "Anyscale donor source or configuration reuse",
+    "vllmops donor source reuse",
+    "network access",
+    "real inference provider calls",
+    "local model/runtime process launch",
+    "GPU discovery or GPU certification",
+    "model download or installation",
+    "Ray Serve integration",
+    "vLLM integration",
+    "LiteLLM integration",
+    "dynamic routing against live services",
+    "real cost or quality benchmark claims",
+    "Git mutation outside the isolated builder worktree",
+    "browser or device UAT",
+    "preview deployment",
+    "production deployment",
+    "Anyscale or vllmops parity"
+  ],
+  "policy": {
+    "commandTimeoutMs": 600000,
+    "retainFailureLogs": true
+  }
+}
