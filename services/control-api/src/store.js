@@ -36,6 +36,19 @@ export class JsonStore {
     machine.status = "offline"; machine.lastSeenAt = new Date().toISOString(); await this.#persist(); return machine;
   }
   async createSession(session) { this.state.sessions[session.id] = session; await this.#persist(); return session; }
+  async upsertObservedSessions(sessions) {
+    const changed = [];
+    for (const candidate of sessions) {
+      if (!candidate?.id || !String(candidate.id).startsWith("observed:")) throw new Error("observed_session_id_required");
+      const next = structuredClone(candidate);
+      const previous = this.state.sessions[next.id];
+      if (previous && JSON.stringify(previous) === JSON.stringify(next)) continue;
+      this.state.sessions[next.id] = next;
+      changed.push(next);
+    }
+    if (changed.length) await this.#persist();
+    return changed;
+  }
   async addMessage(id, message) { const s = this.#session(id); s.messages.push(message); s.updatedAt = new Date().toISOString(); await this.#persist(); return s; }
   async addEvent(id, event) {
     const s = this.#session(id); s.events.push(event); s.updatedAt = new Date().toISOString();

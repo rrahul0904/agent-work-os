@@ -164,6 +164,14 @@ export async function createControlPlane() {
         }
         if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
         if (msg.type === "daemon.session.event") { const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return; }
+        if (msg.type === "daemon.observed.sessions") {
+          if (!machineId || msg.machineId !== machineId) throw new Error("observed_session_machine_mismatch");
+          if (!Array.isArray(msg.sessions) || msg.sessions.length > 100) throw new Error("invalid_observed_sessions");
+          const snapshots = msg.sessions.map((session) => sanitizeObservedSession(session, machineId));
+          const changed = await store.upsertObservedSessions(snapshots);
+          for (const session of changed) broadcast({ type: "session.updated", session });
+          return;
+        }
         if (msg.type === "daemon.shipping.run") {
           const run = { ...msg.run, machineId: msg.machineId ?? msg.run.machineId };
           await store.upsertShippingRun(run); broadcast({ type: "shipping.run.updated", run }); return;
@@ -185,6 +193,25 @@ export async function createControlPlane() {
       for (const peer of clientSockets) peer.close(1001, "server_shutdown");
       server.close(resolve);
     })
+  };
+}
+
+function sanitizeObservedSession(session, machineId) {
+  if (!session || typeof session !== "object" || !String(session.id || "").startsWith("observed:claude:")) throw new Error("invalid_observed_session_id");
+  if (session.source?.kind !== "claude-jsonl") throw new Error("invalid_observed_session_source");
+  const events = Array.isArray(session.events) ? session.events.slice(-100) : [];
+  const messages = Array.isArray(session.messages) ? session.messages.slice(-12) : [];
+  if (JSON.stringify(events).length > 750_000 || JSON.stringify(messages).length > 250_000) throw new Error("observed_session_payload_too_large");
+  return {
+    ...session,
+    machineId,
+    cwd: String(session.cwd || "claude://observed").slice(0, 4096),
+    agent: session.agent === "claude-subagent" ? "claude-subagent" : "claude",
+    status: String(session.status || "waiting").slice(0, 32),
+    createdAt: String(session.createdAt || new Date().toISOString()),
+    updatedAt: String(session.updatedAt || new Date().toISOString()),
+    messages,
+    events
   };
 }
 

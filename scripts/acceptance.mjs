@@ -1,12 +1,27 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const temp = await mkdtemp(path.join(os.tmpdir(), 'agent-work-os-acceptance-'));
+const claudeProjects = path.join(temp, 'claude-projects');
+const claudeProject = '-tmp-agent-work-os-acceptance';
+const claudeSessionId = 'claude-acceptance-session';
+const claudeProjectDir = path.join(claudeProjects, claudeProject);
+const claudeSubagents = path.join(claudeProjectDir, claudeSessionId, 'subagents');
+await mkdir(claudeSubagents, { recursive:true });
+const now = new Date().toISOString();
+const jsonl = value => `${JSON.stringify(value)}\n`;
+await writeFile(path.join(claudeProjectDir, `${claudeSessionId}.jsonl`), [
+  jsonl({ type:'user', timestamp:now, cwd:root, message:{ content:[{ type:'text', text:'Observe this external Claude session' }] } }),
+  jsonl({ type:'assistant', timestamp:now, message:{ id:'main-answer', model:'claude-sonnet', content:[{ type:'text', text:'Main Claude session is visible.' }] } })
+].join(''));
+await writeFile(path.join(claudeSubagents, 'agent-reviewer.jsonl'), jsonl({ type:'assistant', timestamp:now, message:{ id:'sub-answer', model:'claude-sonnet', content:[{ type:'text', text:'Sub-agent review complete.' }] } }));
+await writeFile(path.join(claudeSubagents, 'agent-reviewer.meta.json'), JSON.stringify({ description:'Acceptance reviewer', agentType:'reviewer' }));
+
 const port = 18787 + Math.floor(Math.random()*500);
 const token = 'acceptance-token';
 const headers = { authorization: `Bearer ${token}` };
@@ -20,7 +35,9 @@ const env = {
   AGENT_WORK_OS_HOME:path.join(temp,'daemon-home'),
   AGENT_WORK_OS_MACHINE_NAME:'acceptance-machine',
   AGENT_WORK_OS_ENABLE_ECHO:'true',
-  AGENT_WORK_OS_SHIPPING_STATE:path.join(temp,'shipping-state')
+  AGENT_WORK_OS_SHIPPING_STATE:path.join(temp,'shipping-state'),
+  AGENT_WORK_OS_CLAUDE_PROJECTS:claudeProjects,
+  AGENT_WORK_OS_CLAUDE_POLL_MS:'1000'
 };
 const children = [];
 function start(args){const child=spawn(process.execPath,args,{cwd:root,env,stdio:['ignore','pipe','pipe']});children.push(child);child.stdout.on('data',d=>process.stdout.write(d));child.stderr.on('data',d=>process.stderr.write(d));return child;}
@@ -31,11 +48,31 @@ try {
   const denied = await fetch(`http://127.0.0.1:${port}/api/state`);
   assert.equal(denied.status, 401, 'product API must reject missing token');
 
+  const roomResponse = await fetch(`http://127.0.0.1:${port}/agent-room.html`);
+  assert.equal(roomResponse.status, 200, 'Agent Room HTML should be served by the product');
+  assert.match(await roomResponse.text(), /Agent Room — Agent Work OS/);
+  const modelResponse = await fetch(`http://127.0.0.1:${port}/agent-room-model.js`);
+  assert.equal(modelResponse.status, 200, 'Agent Room state model should be served by the product');
+
   const machine = await waitFor(async()=>{
     const r=await fetch(`http://127.0.0.1:${port}/api/state`,{headers});
     const s=await r.json();
     return s.machines.find(m=>m.name==='acceptance-machine'&&m.status==='online'&&m.shipping?.enabled);
   },8000,'one-command product executor registration');
+
+  const observed = await waitFor(async()=>{
+    const r=await fetch(`http://127.0.0.1:${port}/api/state`,{headers});
+    const s=await r.json();
+    const main=s.sessions.find(item=>item.source?.kind==='claude-jsonl'&&item.source?.agentId==='main');
+    const child=s.sessions.find(item=>item.source?.kind==='claude-jsonl'&&item.source?.agentId==='reviewer');
+    return main&&child?{main,child}:null;
+  },8000,'Claude transcript observer propagation');
+  assert.equal(observed.main.machineId,machine.id);
+  assert.equal(observed.main.agent,'claude');
+  assert.equal(observed.child.agent,'claude-subagent');
+  assert.equal(observed.child.observedParentSessionId,observed.main.id);
+  assert.ok(observed.main.messages.some(message=>message.text==='Main Claude session is visible.'));
+  assert.ok(observed.child.messages.some(message=>message.text==='Sub-agent review complete.'));
 
   const productResponse = await fetch(`http://127.0.0.1:${port}/api/product`,{headers});
   assert.equal(productResponse.status,200);
@@ -75,7 +112,7 @@ try {
   assert.ok(shipped.testedSha);
   assert.equal(shipped.testedSha,shipped.deployedSha);
   assert.equal(shipped.releaseReceipt.goldenPath[0].status,'PASS');
-  console.log('[acceptance] PASS: one-command product -> authenticated console API -> local agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
+  console.log('[acceptance] PASS: one-command product -> Agent Room assets + Claude JSONL observer -> authenticated console API -> local agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
 } finally {
   for(const child of children.reverse()) child.kill('SIGTERM');
   await new Promise(r=>setTimeout(r,220));
