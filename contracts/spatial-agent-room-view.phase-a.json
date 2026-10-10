@@ -1,0 +1,133 @@
+{
+  "schema": "shipping-contract/v1",
+  "id": "spatial-agent-room-view-phase-a",
+  "title": "Spatial Agent Room View Phase A",
+  "canonicalProject": "Agent Work OS",
+  "sourceIssue": 100,
+  "status": "blocked_wip",
+  "dependency": {
+    "issue": 95,
+    "pullRequest": 96,
+    "requirement": "Reuse one verified Agent Room normalized truth model; do not create a parallel session/work authority."
+  },
+  "productBoundary": {
+    "purpose": "Project normalized Agent Work OS state into a deterministic, read-only spatial scene and render it as an alternate Agent Room view.",
+    "authority": "presentation_only",
+    "network": false,
+    "filesystemRead": false,
+    "filesystemWrite": false,
+    "modelCalls": false,
+    "agentCommands": false,
+    "approvalActions": false,
+    "deploymentActions": false,
+    "publicPublishing": false
+  },
+  "inputs": [
+    "normalized machines",
+    "normalized sessions",
+    "normalized session events",
+    "explicit repository/team metadata when present",
+    "declared metric presentation policies when present"
+  ],
+  "outputs": [
+    "spatial-scene/v1",
+    "canonical scene digest",
+    "read-only Canvas presentation"
+  ],
+  "invariants": [
+    "Equivalent canonical inputs produce equivalent normalized scene content and the same digest.",
+    "Unknown, missing and stale facts remain explicit and are never fabricated for visual completeness.",
+    "Spatial proximity never creates a delegation, ownership or causal edge.",
+    "Every attention/Town Hall item retains the exact source session/event evidence that justified it.",
+    "Replay cursor changes presentation only and never mutates canonical runtime state.",
+    "Renderer/projector failures cannot start, stop, interrupt, approve, edit or deploy agent work.",
+    "Metric-to-geometry mappings are bounded, clamped and retain policy ID, source and timestamp.",
+    "Secret-shaped values are omitted from presentation rather than exposed.",
+    "A future public scene must be produced from a separate allowlisted redaction projection, not by hiding private rendered fields."
+  ],
+  "goldenPaths": [
+    {
+      "name": "deterministic scene projection",
+      "given": "a valid synthetic Agent Room state with known machines, repositories, sessions and events",
+      "when": "the spatial projector runs twice",
+      "then": "both normalized scenes and digests are identical"
+    },
+    {
+      "name": "human attention queue",
+      "given": "a session with explicit approval, permission, waiting or error evidence",
+      "when": "the scene is projected",
+      "then": "the actor is represented in the attention/Town Hall queue with source evidence and without guessing an approver"
+    },
+    {
+      "name": "unknown topology",
+      "given": "sessions without explicit team or delegation relationships",
+      "when": "the scene is projected",
+      "then": "no relationship edge is invented; only known grouping metadata is used"
+    },
+    {
+      "name": "read-only replay",
+      "given": "a scene with event history",
+      "when": "the replay cursor changes",
+      "then": "display state changes while canonical runtime state remains byte-for-byte unchanged"
+    },
+    {
+      "name": "bounded metric geometry",
+      "given": "extreme, missing and stale metric inputs",
+      "when": "a declared presentation policy maps metrics to scene geometry",
+      "then": "values are clamped or marked unknown/stale and retain provenance metadata"
+    }
+  ],
+  "negativePaths": [
+    "malformed canonical state fails visibly and does not render fabricated actors",
+    "duplicate event identity is rejected or deterministically de-duplicated according to the projector contract",
+    "an attention item without source evidence is refused",
+    "an attempted causal path without a canonical relationship is not emitted",
+    "secret-shaped event payload content is omitted",
+    "public projection containing non-allowlisted private detail is refused",
+    "renderer exception leaves agent/session execution untouched"
+  ],
+  "implementationSlice": [
+    "pure spatial-scene/v1 projector",
+    "canonical serializer and SHA-256 digest",
+    "district/structure/actor/attention/activity-edge model",
+    "bounded metric presentation policy",
+    "read-only Canvas demo behind an Agent Room view switch",
+    "deterministic unit tests"
+  ],
+  "explicitNonGoals": [
+    "GaryStow visual or brand parity",
+    "copying donor assets, CSS, characters, layout or copy",
+    "SEO or trading semantics",
+    "new session/work persistence",
+    "agent command or approval execution from Canvas",
+    "Claude transcript ingestion",
+    "invented parent/sub-agent topology",
+    "public share mode",
+    "game-engine migration",
+    "hosted deployment",
+    "production readiness"
+  ],
+  "verification": {
+    "focusedTests": true,
+    "repositoryUnit": "npm test",
+    "repositoryAcceptance": "npm run acceptance",
+    "exactHeadCI": true,
+    "browserUAT": [
+      "deterministic demo",
+      "live normalized session",
+      "desktop width",
+      "phone width",
+      "keyboard navigation",
+      "reduced motion",
+      "dense session/label stress",
+      "renderer failure isolation"
+    ],
+    "previewReceiptRequiredBeforePromotion": true,
+    "independentReviewRequiredBeforeProductionClaim": true
+  },
+  "promotionGate": "Do not enter BUILDING until PR #96 Agent Room truth-model gates are green or this contract is explicitly scheduled as a bounded dependency using that same model.",
+  "tracker": {
+    "id": null,
+    "reason": "Collision-free canonical reconciliation required; do not guess beyond the current Library maximum during concurrent intake."
+  }
+}
