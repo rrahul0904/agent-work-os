@@ -5,6 +5,7 @@ import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../package
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
 import { CodexAdapter, EchoAdapter } from "./adapters.js";
+import { ClaudeTranscriptObserver, defaultClaudeProjectsRoot } from "./claude-transcripts.js";
 import { loadMachineId } from "./identity.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
@@ -19,7 +20,11 @@ const shippingRuns = new Set();
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter(); if (codex.capability()) adapters.set("codex", codex);
 
-let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
+const observeClaude = process.env.AGENT_WORK_OS_OBSERVE_CLAUDE !== "false";
+const claudePollMs = Math.max(1000, Number(process.env.AGENT_WORK_OS_CLAUDE_POLL_MS ?? 2500));
+const claudeObserver = observeClaude ? new ClaudeTranscriptObserver({ root: defaultClaudeProjectsRoot() }) : null;
+
+let ws; let heartbeat; let reconnectTimer; let claudeTimer; let reconnectAttempt = 0; let shuttingDown = false;
 function connect() {
   if (shuttingDown) return;
   const url = new URL(serverUrl); url.searchParams.set("role", "daemon"); url.searchParams.set("token", token);
@@ -30,7 +35,8 @@ function connect() {
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
     ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
-    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")} shipping=enabled`);
+    startClaudeObserver();
+    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")} shipping=enabled claude-observer=${observeClaude ? "enabled" : "disabled"}`);
   });
   ws.addEventListener("message", async (event) => {
     try {
@@ -58,12 +64,31 @@ function connect() {
   });
   ws.addEventListener("close", () => {
     if (heartbeat) { clearInterval(heartbeat); heartbeat = undefined; }
+    if (claudeTimer) { clearInterval(claudeTimer); claudeTimer = undefined; }
     if (shuttingDown) return;
     const delay = Math.min(30000, 500 * 2 ** reconnectAttempt++);
     console.warn(`[daemon] disconnected; reconnecting in ${delay}ms`);
     reconnectTimer = setTimeout(connect, delay);
   });
   ws.addEventListener("error", () => {});
+}
+
+function startClaudeObserver() {
+  if (claudeTimer) clearInterval(claudeTimer);
+  if (!claudeObserver) return;
+  void publishClaudeSessions();
+  claudeTimer = setInterval(() => void publishClaudeSessions(), claudePollMs);
+  claudeTimer.unref?.();
+}
+
+async function publishClaudeSessions() {
+  if (!claudeObserver || ws?.readyState !== WebSocket.OPEN) return;
+  try {
+    const sessions = await claudeObserver.scan(machineId);
+    ws.send(encodeMessage({ type: "daemon.observed.sessions", machineId, sessions }));
+  } catch (error) {
+    console.warn(`[daemon] Claude transcript observer skipped a poll: ${error.message}`);
+  }
 }
 
 async function runShipping(runId, contract) {
@@ -98,6 +123,7 @@ async function shutdown() {
   shuttingDown = true;
   if (heartbeat) clearInterval(heartbeat);
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (claudeTimer) clearInterval(claudeTimer);
   ws?.close();
   setTimeout(() => process.exit(0), 30).unref();
 }
