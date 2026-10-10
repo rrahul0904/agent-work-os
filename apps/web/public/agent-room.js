@@ -23,13 +23,17 @@ async function api(path) {
   return body;
 }
 
+async function reconcileSnapshot() {
+  const snapshot = await api('/api/state');
+  state.machines = snapshot.machines || [];
+  state.sessions = snapshot.sessions || [];
+  ensureSelection();
+}
+
 async function boot() {
   if (!token) return renderLogin();
   try {
-    const snapshot = await api('/api/state');
-    state.machines = snapshot.machines || [];
-    state.sessions = snapshot.sessions || [];
-    ensureSelection();
+    await reconcileSnapshot();
     connect();
     render();
   } catch (error) {
@@ -161,7 +165,18 @@ function timelineHtml(events, activeIndex) {
 function wire() {
   document.querySelectorAll('[data-session]').forEach(button => button.onclick = () => { state.selectedId = button.dataset.session; state.replayIndex = null; render(); });
   document.querySelectorAll('[data-event]').forEach(button => button.onclick = () => { state.replayIndex = Number(button.dataset.event); render(); });
-  document.querySelector('#pause')?.addEventListener('click', () => { state.paused = !state.paused; if (!state.paused) state.replayIndex = null; render(); });
+  document.querySelector('#pause')?.addEventListener('click', async () => {
+    const resuming = state.paused;
+    state.paused = !state.paused;
+    if (resuming) {
+      state.replayIndex = null;
+      if (!state.demo) {
+        try { await reconcileSnapshot(); }
+        catch (error) { if (error.message !== 'unauthorized') renderError(error.message); return; }
+      }
+    }
+    render();
+  });
   document.querySelector('#demo')?.addEventListener('click', () => {
     state.demo = !state.demo; state.replayIndex = null; state.paused = false;
     if (state.demo) { state.socket?.close(); state.connected = false; state.selectedId = demoSessions()[0].id; }
