@@ -1,0 +1,119 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "shape-agent-workbench-phase-a",
+    "repoPath": "."
+  },
+  "release": {
+    "version": "phase-a"
+  },
+  "worktree": {
+    "baseRef": "HEAD",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": {
+      "name": "agent-workbench-builder",
+      "command": "codex exec --full-auto 'Implement only Phase A from docs/reverse-engineering/shape-unified-agent-workbench.md. Build independently authored, dependency-light workbench-intent/v1, workbench-capability-profile/v1, source-preview-roundtrip/v1, and workbench-evidence-trail/v1 domain contracts plus deterministic Node tests. Enforce ask/plan/build/visual/review capability boundaries, stable canonical digests, exact project/worktree/revision binding, ambiguous UI-to-source refusal, explicit shared-component/design-token blast-radius facts, source+render round-trip verification semantics, restart staleness, and source+render revert proof. Phase A must be side-effect-free: do not mutate files, run shell commands from the feature, automate a browser, mutate Git, call networks/providers/MCP, deploy, or copy Shape source/prompts/schemas/UI/tests/assets. Preserve existing behavior and run the narrowest focused tests before returning.'"
+    },
+    "repairCommand": {
+      "name": "agent-workbench-repair",
+      "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE plus docs/reverse-engineering/shape-unified-agent-workbench.md. Repair only the failing Phase A Agent Workbench contract/test gate. Preserve hard mode capability boundaries, exact revision binding, fail-closed ambiguity, round-trip source/render evidence separation, restart staleness and revert proof. Do not broaden scope, copy donor code, add live filesystem/browser/Git/network/provider/MCP effects, push, merge or deploy. Run the narrowest relevant tests.'"
+    },
+    "maxRepairAttempts": 2
+  },
+  "verification": [
+    {
+      "name": "agent-workbench-focused",
+      "command": "node --test services/control-api/test/agent-workbench.test.js"
+    },
+    {
+      "name": "repository-unit",
+      "command": "npm test"
+    },
+    {
+      "name": "repository-acceptance",
+      "command": "npm run acceptance"
+    }
+  ],
+  "preview": {
+    "required": false
+  },
+  "production": {
+    "required": false
+  },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": {
+      "name": "tested-sha",
+      "command": "git rev-parse HEAD"
+    }
+  },
+  "goldenPath": [
+    {
+      "id": "AWB-A-001",
+      "description": "Canonical equivalent WorkbenchIntent inputs produce a stable intent digest bound to exact project, worktree and source revision."
+    },
+    {
+      "id": "AWB-A-002",
+      "description": "Ask and Plan capability profiles cannot authorize workspace, terminal, Git, browser or external-tool mutation."
+    },
+    {
+      "id": "AWB-A-003",
+      "description": "Build and Visual intents expose only explicitly declared capability classes and changing mode or source revision invalidates stale derived authority."
+    },
+    {
+      "id": "AWB-A-004",
+      "description": "Ambiguous rendered-element to source mapping remains unresolved and cannot be marked mutation-ready or round-trip verified."
+    },
+    {
+      "id": "AWB-A-005",
+      "description": "Shared-component or design-token candidates record explicit blast-radius facts rather than pretending the selected screen is the only affected surface."
+    },
+    {
+      "id": "AWB-A-006",
+      "description": "A source diff without rebuilt rendered evidence cannot be visually verified, and a rendered result without an exact source diff cannot prove source-preview round-trip integrity."
+    },
+    {
+      "id": "AWB-A-007",
+      "description": "Restart-render drift invalidates prior visual verification instead of inheriting success from the pre-restart observation."
+    },
+    {
+      "id": "AWB-A-008",
+      "description": "Revert verification requires the expected source digest and corresponding rendered observation to be restored; source-only restoration is insufficient."
+    },
+    {
+      "id": "AWB-A-009",
+      "description": "Dirty or unrelated working-tree facts remain explicit and cannot be silently overwritten or absorbed into a workbench completion claim."
+    },
+    {
+      "id": "AWB-A-010",
+      "description": "Subagent output and reviewer observations remain evidence inputs; they do not self-certify decisive completion without the required verifier/evidence trail."
+    },
+    {
+      "id": "AWB-A-011",
+      "description": "Unknown capability classes and authority-relevant unknown schema fields fail closed."
+    }
+  ],
+  "excludedFromRelease": [
+    "Shape source, prompts, schemas, tests, assets, branding or UI reuse",
+    "Shape parity",
+    "filesystem mutation",
+    "terminal execution",
+    "Git mutation",
+    "browser automation or CDP execution",
+    "live source-to-preview adapter",
+    "model/provider calls",
+    "MCP or external-tool execution",
+    "subagent process execution",
+    "desktop shell packaging",
+    "browser or device UAT",
+    "preview deployment",
+    "production deployment",
+    "production-readiness claims"
+  ],
+  "policy": {
+    "commandTimeoutMs": 600000,
+    "retainFailureLogs": true
+  }
+}
