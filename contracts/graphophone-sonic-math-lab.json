@@ -1,0 +1,44 @@
+{
+  "product_id": "graphophone-sonic-math-lab",
+  "issue": 113,
+  "claim": "SHIPPING-CONTRACT-READY",
+  "source": {
+    "reddit": "https://www.reddit.com/r/SideProject/comments/1x2omoz/built_a_website_where_you_can_plot_formulas_with/",
+    "demo": "https://graphophone-dist.vercel.app/"
+  },
+  "clean_room": true,
+  "runtime": "browser-only",
+  "entrypoint": "apps/graphophone-lab/index.html",
+  "required_behaviors": [
+    "safe-cartesian-formula",
+    "safe-parametric-formula",
+    "live-a-b-c-parameters",
+    "animated-trace",
+    "generated-audio",
+    "learning-presets",
+    "local-save",
+    "share-url",
+    "video-export-when-supported"
+  ],
+  "negative_tests": [
+    "reject-unknown-identifiers",
+    "reject-code-punctuation",
+    "clamp-audio-frequency",
+    "no-microphone-required",
+    "no-server-required"
+  ],
+  "verification": {
+    "repository_tests": "npm run test:graphophone",
+    "full_gate": "npm run check",
+    "exact_sha_required": true,
+    "hosted_fetch_required": true
+  },
+  "status": {
+    "evidence": "complete-public-surface",
+    "contract": "frozen-v1",
+    "implementation": "in-progress",
+    "ci": "pending",
+    "hosted": "pending",
+    "production": "not-claimed"
+  }
+}
