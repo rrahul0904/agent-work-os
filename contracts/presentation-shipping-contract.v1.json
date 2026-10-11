@@ -1,0 +1,130 @@
+{
+  "contract": "presentation-os.shipping",
+  "version": 1,
+  "canonical_issue": 142,
+  "status_model": [
+    "RESEARCHED",
+    "SPECIFIED",
+    "IMPLEMENTED_LOCAL",
+    "CI_GREEN",
+    "RUNTIME_VERIFIED",
+    "UAT_VERIFIED",
+    "SHIPPED"
+  ],
+  "clean_room": {
+    "required": true,
+    "donor": "hugohe3/ppt-master",
+    "allowed_evidence": [
+      "public observable behavior",
+      "public documentation",
+      "public issues and discussions",
+      "public file-format standards",
+      "independently authored fixtures and tests"
+    ],
+    "forbidden": [
+      "copying donor branding",
+      "copying donor prompt/workflow text into runtime",
+      "copying donor generated assets",
+      "claiming donor implementation as ours"
+    ]
+  },
+  "phase_a": {
+    "name": "native editable MVP",
+    "inputs": [
+      "markdown",
+      "docx_or_pdf_via_normalized_source_contract",
+      "optional_brand_reference_pptx"
+    ],
+    "outputs": [
+      "editable_pptx",
+      "browser_preview",
+      "provenance_sidecar",
+      "quality_findings",
+      "receipt_bundle"
+    ],
+    "minimum_deck": {
+      "slides_min": 6,
+      "slides_max": 10,
+      "native_text": true,
+      "native_shapes": true,
+      "native_chart_min": 1,
+      "native_table_min": 1,
+      "speaker_notes": true,
+      "accessibility_metadata": true
+    }
+  },
+  "gates": {
+    "research": [
+      "donor_dossier_committed",
+      "competitive_signals_recorded",
+      "clean_room_boundary_committed"
+    ],
+    "specification": [
+      "versioned_contracts_defined",
+      "acceptance_tests_defined_before_implementation",
+      "negative_tests_defined"
+    ],
+    "implementation": [
+      "deterministic_ids",
+      "persisted_deck_plan",
+      "persisted_object_graph",
+      "no_unrestricted_worker_network_or_shell"
+    ],
+    "verification": [
+      "schema_tests_green",
+      "package_validation_green",
+      "native_editability_checks_green",
+      "visual_regression_green",
+      "accessibility_checks_green",
+      "replay_test_green",
+      "independent_verifier_green"
+    ],
+    "release": [
+      "exact_commit_sha_recorded",
+      "ci_green_for_exact_sha",
+      "runtime_or_deployment_receipt_recorded",
+      "operator_uat_recorded_separately",
+      "tracker_promoted_only_after_all_prior_gates"
+    ]
+  },
+  "native_object_promises": {
+    "text": "must remain editable PowerPoint text",
+    "shapes": "must remain native editable shapes when the object type is promised native",
+    "charts": "must use editable native chart parts with verifiable data binding when promised native",
+    "tables": "must use editable native table parts when promised native",
+    "diagrams": "edges must use explicit node/port semantics and remain attached where PowerPoint supports attachment",
+    "fallbacks": "no silent raster fallback for any object advertised as native"
+  },
+  "quality_dimensions": [
+    "package_integrity",
+    "visual_regression",
+    "editability",
+    "brand_compliance",
+    "accessibility",
+    "claim_provenance",
+    "chart_table_data_consistency",
+    "layout_overflow_collision",
+    "localization_consistency"
+  ],
+  "receipt_requirements": [
+    "source_receipt",
+    "plan_receipt",
+    "object_graph_receipt",
+    "compiler_receipt",
+    "package_validation_receipt",
+    "visual_regression_receipt",
+    "accessibility_receipt",
+    "exact_sha_receipt",
+    "ci_receipt",
+    "runtime_receipt",
+    "uat_receipt"
+  ],
+  "non_goals_phase_a": [
+    "vba_macro_authoring",
+    "ole_or_3d_objects",
+    "camera_feeds",
+    "silent_destructive_source_pptx_mutation",
+    "unrestricted_provider_writes",
+    "shipping_claims_from_local_tests_only"
+  ]
+}
