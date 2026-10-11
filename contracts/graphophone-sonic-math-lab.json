@@ -1,7 +1,7 @@
 {
   "product_id": "graphophone-sonic-math-lab",
   "issue": 113,
-  "claim": "SHIPPING-CONTRACT-READY",
+  "claim": "HOSTED-CANDIDATE",
   "source": {
     "reddit": "https://www.reddit.com/r/SideProject/comments/1x2omoz/built_a_website_where_you_can_plot_formulas_with/",
     "demo": "https://graphophone-dist.vercel.app/"
@@ -31,14 +31,20 @@
     "repository_tests": "npm run test:graphophone",
     "full_gate": "npm run check",
     "exact_sha_required": true,
-    "hosted_fetch_required": true
+    "hosted_fetch_required": true,
+    "first_verified_sha": "b2f76d8a0a973f4f37cc8c8ffceb90ca3bc7e6c6",
+    "github_actions_run": 38118655230,
+    "github_actions_conclusion": "success",
+    "deployment_id": "dpl_C4fKak6W6AJH3nbwx9jt5SdUfDn5",
+    "deployment_url": "https://sonic-math-lab.vercel.app/",
+    "hosted_fetch_status": 200
   },
   "status": {
     "evidence": "complete-public-surface",
     "contract": "frozen-v1",
-    "implementation": "in-progress",
-    "ci": "pending",
-    "hosted": "pending",
+    "implementation": "complete",
+    "ci": "verified-first-head",
+    "hosted": "verified-first-head",
     "production": "not-claimed"
   }
 }
