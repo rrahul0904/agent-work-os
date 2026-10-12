@@ -14,7 +14,7 @@ export const DEFAULT_CHANGE_AIRLOCK_POLICY = Object.freeze({
 
 const BIDI_CONTROL = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 const TEST_PATH = /(^|\/)(test|tests|__tests__|spec|specs)(\/|$)|(?:^|\/)[^/]+\.(?:test|spec)\.[^/]+$/i;
-const ASSERTION = /\b(?:assert(?:\.[A-Za-z_$][\w$]*)?|expect\s*\(|pytest\.raises\s*\(|REQUIRE\s*\(|CHECK\s*\(|ASSERT_[A-Z0-9_]+\s*\(|EXPECT_[A-Z0-9_]+\s*\(|assert_(?:eq|ne|ok)!\s*\(|t\.(?:fatal|fatalf|error|errorf)\s*\()/;
+const ASSERTION = /\b(?:assert(?:\.[A-Za-z_$][\w$]*)?\s*\(|assert\s+(?![=])|assert!\s*\(|assert_(?:eq|ne)!\s*\(|debug_assert(?:_(?:eq|ne))?!\s*\(|expect\s*\(|pytest\.raises\s*\(|REQUIRE\s*\(|CHECK\s*\(|ASSERT_[A-Z0-9_]+\s*\(|EXPECT_[A-Z0-9_]+\s*\(|t\.(?:fatal|fatalf|error|errorf)\s*\()/;
 
 export function analyzeUnifiedDiff(diffText, { policy: policyInput = {}, baseSha = null, headSha = null } = {}) {
   const policy = normalizePolicy(policyInput);
