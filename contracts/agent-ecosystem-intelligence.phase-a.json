@@ -1,0 +1,95 @@
+{
+  "contract": "agent-ecosystem-intelligence.phase-a/v1",
+  "coordinationIssue": 147,
+  "status": "BUILDING",
+  "purpose": "Provide deterministic, side-effect-free ecosystem component evaluation and recommendation without installation or execution authority.",
+  "sourceProvenance": {
+    "donor": "tayyabimam1/awesome-ai-agent-stack",
+    "inspectedRevision": "14e54d4af57b299452d5c9cc28fa707e790677bf",
+    "license": "CC-BY-4.0",
+    "snapshotDate": "2026-10-12"
+  },
+  "schemas": [
+    "ecosystem-component/v1",
+    "ecosystem-evaluation/v1",
+    "ecosystem-recommendation/v1",
+    "agent-ecosystem-policy/v1"
+  ],
+  "authorityBoundary": {
+    "network": false,
+    "install": false,
+    "execute": false,
+    "gitWrite": false,
+    "providerWrite": false,
+    "merge": false,
+    "deploy": false,
+    "secretAccess": false
+  },
+  "phaseA": {
+    "identity": [
+      "canonicalize github.com repositories to lowercase owner/repo identity",
+      "deduplicate candidates before ranking",
+      "reject malformed or unsupported non-GitHub sources in Phase A"
+    ],
+    "evidence": [
+      "retain exact source/revision pin",
+      "separate observed facts from derived scores",
+      "preserve explicit unknowns rather than inventing positive evidence",
+      "retain evidence references without fetching them inside the pure core"
+    ],
+    "eligibility": [
+      "refuse archived repositories",
+      "refuse forks when policy disallows them",
+      "refuse stale repositories beyond policy maxAgeDays",
+      "refuse unpinned revisions when pinning is required",
+      "refuse unknown licenses when policy requires known license",
+      "refuse disallowed licenses",
+      "refuse candidates missing required task capabilities"
+    ],
+    "scoringDimensions": [
+      "freshness",
+      "popularity",
+      "maintenance",
+      "license",
+      "integrationFit",
+      "evidenceCompleteness"
+    ],
+    "recommendationReceipt": [
+      "rank eligible candidates deterministically",
+      "retain refused candidates and explicit reasons",
+      "retain duplicate identities",
+      "bind output to scoring-policy digest",
+      "bind output to catalog-snapshot digest",
+      "set noInstallAuthority=true",
+      "set noExecutionAuthority=true",
+      "emit deterministic receipt digest"
+    ]
+  },
+  "negativeTests": [
+    "archived candidate is ineligible",
+    "stale candidate is ineligible",
+    "unknown-license candidate is ineligible when required",
+    "unpinned candidate is ineligible when required",
+    "missing required capability fails closed",
+    "unknown popularity remains null/unknown",
+    "duplicate repo identities do not produce duplicate ranked candidates",
+    "object-key insertion order cannot change canonical digest"
+  ],
+  "verification": {
+    "focused": "node --test packages/ecosystem-intelligence/test/*.test.js",
+    "repository": "npm test",
+    "acceptance": "npm run acceptance",
+    "releaseGate": "Do not claim SHIPPED without exact-head CI plus the relevant runtime/UI/onboarding evidence."
+  },
+  "explicitNonClaims": [
+    "No donor parity",
+    "No ecosystem completeness",
+    "No live discovery provider in Phase A",
+    "No GitHub enrichment runtime certification yet",
+    "No security/CVE/license-provider enrichment yet",
+    "No install or execution automation",
+    "No Agent Studio onboarding integration yet",
+    "No browser UI or hosted deployment yet",
+    "No production-readiness claim"
+  ]
+}
