@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/change-airlock-v1.schema.json",
+  "title": "Agent Work OS Change Airlock Report v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "diffDigest",
+    "policy",
+    "metrics",
+    "findings",
+    "decision",
+    "receiptDigest"
+  ],
+  "properties": {
+    "schema": { "const": "agent-work-os/change-airlock/v1" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "baseRef": { "type": ["string", "null"] },
+    "headRef": { "type": ["string", "null"] },
+    "baseSha": { "type": ["string", "null"], "pattern": "^[A-Fa-f0-9]{40,64}$" },
+    "headSha": { "type": ["string", "null"], "pattern": "^[A-Fa-f0-9]{40,64}$" },
+    "diffDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "receiptDigest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "changedFiles": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "decision": { "enum": ["PASS", "BLOCK"] },
+    "policy": {
+      "type": "object",
+      "required": [
+        "maxChangedFiles",
+        "maxAddedLines",
+        "maxDeletedLines",
+        "maxTotalChangedLines",
+        "minAssertionDelta",
+        "blockOnDeletedTestFile",
+        "blockOnBidiControl"
+      ],
+      "properties": {
+        "maxChangedFiles": { "type": "integer", "minimum": 0 },
+        "maxAddedLines": { "type": "integer", "minimum": 0 },
+        "maxDeletedLines": { "type": "integer", "minimum": 0 },
+        "maxTotalChangedLines": { "type": "integer", "minimum": 0 },
+        "minAssertionDelta": { "type": "integer" },
+        "blockOnDeletedTestFile": { "type": "boolean" },
+        "blockOnBidiControl": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "metrics": {
+      "type": "object",
+      "required": [
+        "changedFiles",
+        "addedLines",
+        "deletedLines",
+        "totalChangedLines",
+        "addedAssertions",
+        "deletedAssertions",
+        "assertionDelta",
+        "deletedTestFiles",
+        "bidiControlAdditions"
+      ],
+      "additionalProperties": { "type": "integer" }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ruleId", "severity", "message", "evidence"],
+        "properties": {
+          "ruleId": { "type": "string" },
+          "severity": { "enum": ["blocker", "warning", "info"] },
+          "message": { "type": "string" },
+          "evidence": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": true
+}
