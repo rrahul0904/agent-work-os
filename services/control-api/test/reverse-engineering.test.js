@@ -41,12 +41,14 @@ function fixture() {
     outputSchemaDigest: D("e"),
     effects: {
       mutatesTarget: false,
-      mutatesSession: false,
+      mutatesSession: true,
       writesFilesystem: false,
       launchesProcess: true,
       accessesNetwork: false,
       changesUiState: false,
       mayDiscardData: false,
+      executesForeignCode: false,
+      mutatesDevice: false,
       idempotent: true
     },
     targetClasses: ["javascript-source"],
@@ -70,7 +72,7 @@ function fixture() {
   };
   const policy = {
     version: RE_POLICY_VERSION,
-    allowedEffects: ["launchesProcess"],
+    allowedEffects: ["launchesProcess", "mutatesSession"],
     maxProviderAgeMs: 3_600_000,
     allowedTargetPrefixes: ["/workspace/fixtures/"]
   };
@@ -89,7 +91,7 @@ test("read-only fixture produces a deterministic ready plan", () => {
   const first = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
   const second = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
   assert.equal(first.status, "ready");
-  assert.deepEqual(first.requiredEffects, ["launchesProcess"]);
+  assert.deepEqual(first.requiredEffects, ["launchesProcess", "mutatesSession"]);
   assert.equal(first.digest, second.digest);
 });
 
@@ -106,7 +108,7 @@ test("plan refuses disallowed mutation and stale provider state", () => {
 test("grant binds exact provider tool request target and effects", () => {
   const { provider, tool, request, policy } = fixture();
   const plan = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
-  const grant = createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess"], executionId: "exec-001", expiresAt: "2026-10-12T07:00:00Z" });
+  const grant = createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess", "mutatesSession"], executionId: "exec-001", expiresAt: "2026-10-12T07:00:00Z" });
   assert.equal(validateGrantBinding({ grant, provider, tool, request, asOf: "2026-10-12T06:45:00Z" }).valid, true);
   const driftedTool = structuredClone(tool);
   driftedTool.outputSchemaDigest = D("9");
@@ -118,7 +120,17 @@ test("grant binds exact provider tool request target and effects", () => {
 test("grant cannot widen approved effects", () => {
   const { provider, tool, request, policy } = fixture();
   const plan = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
-  assert.throws(() => createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess", "accessesNetwork"], executionId: "exec-002", expiresAt: "2026-10-12T07:00:00Z" }), /effects_widened_or_missing/);
+  assert.throws(() => createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess", "mutatesSession", "accessesNetwork"], executionId: "exec-002", expiresAt: "2026-10-12T07:00:00Z" }), /effects_widened_or_missing/);
+});
+
+test("device mutation and foreign-code execution require separate authority", () => {
+  const { provider, tool, request, policy } = fixture();
+  tool.effects.executesForeignCode = true;
+  tool.effects.mutatesDevice = true;
+  const plan = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
+  assert.equal(plan.status, "refused");
+  assert.ok(plan.reasons.includes("effect_not_allowed:executesForeignCode"));
+  assert.ok(plan.reasons.includes("effect_not_allowed:mutatesDevice"));
 });
 
 test("request rejects raw secret-shaped arguments", () => {
@@ -130,7 +142,7 @@ test("request rejects raw secret-shaped arguments", () => {
 test("receipt preserves partial coverage and cleanup truth", () => {
   const { provider, tool, request, policy } = fixture();
   const plan = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
-  const grant = createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess"], executionId: "exec-003", expiresAt: "2026-10-12T07:00:00Z" });
+  const grant = createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess", "mutatesSession"], executionId: "exec-003", expiresAt: "2026-10-12T07:00:00Z" });
   const receipt = createReverseEngineeringReceipt({
     grant, provider, tool, request,
     startedAt: "2026-10-12T06:40:00Z",
@@ -150,7 +162,7 @@ test("receipt preserves partial coverage and cleanup truth", () => {
 test("truncated result cannot claim complete coverage", () => {
   const { provider, tool, request, policy } = fixture();
   const plan = planReverseEngineering({ provider, tool, request, policy, asOf: "2026-10-12T06:30:00Z" });
-  const grant = createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess"], executionId: "exec-004", expiresAt: "2026-10-12T07:00:00Z" });
+  const grant = createReverseEngineeringGrant({ plan, provider, tool, request, policy, approvedEffects: ["launchesProcess", "mutatesSession"], executionId: "exec-004", expiresAt: "2026-10-12T07:00:00Z" });
   assert.throws(() => createReverseEngineeringReceipt({
     grant, provider, tool, request,
     startedAt: "2026-10-12T06:40:00Z",
