@@ -10,7 +10,8 @@ export const RE_RECEIPT_VERSION = "reverse-engineering-receipt/v1";
 
 export const RE_EFFECT_KEYS = Object.freeze([
   "mutatesTarget", "mutatesSession", "writesFilesystem", "launchesProcess",
-  "accessesNetwork", "changesUiState", "mayDiscardData"
+  "accessesNetwork", "changesUiState", "mayDiscardData", "executesForeignCode",
+  "mutatesDevice"
 ]);
 
 const PROVIDER_STATES = new Set(["ready", "unavailable", "degraded", "unknown"]);
