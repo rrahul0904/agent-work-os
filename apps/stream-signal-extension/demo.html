@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stream Signal — deterministic demo</title>
+  <link rel="stylesheet" href="src/styles.css" />
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: #0d0f14; color: #f3f4f6; }
+    main { max-width: 1100px; margin: 0 auto; padding: 28px; }
+    .top { display: flex; gap: 18px; justify-content: space-between; align-items: end; margin-bottom: 24px; flex-wrap: wrap; }
+    h1 { margin: 0; font-size: 32px; }
+    .sub { color: #9ca3af; max-width: 720px; }
+    .controls { display: flex; gap: 12px; align-items: center; background: #171a22; padding: 12px; border-radius: 12px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
+    .ss-card { min-height: 260px; border-radius: 14px; overflow: hidden; background: linear-gradient(145deg, #222939, #131722); border: 1px solid #292f3d; padding: 18px; display: flex; flex-direction: column; justify-content: end; }
+    .ss-card h2 { margin: 0; font-size: 22px; }
+    .meta { color: #9ca3af; }
+    .unmatched { background: linear-gradient(145deg, #30243a, #17131b); }
+    pre { white-space: pre-wrap; background: #11141b; border: 1px solid #292f3d; border-radius: 12px; padding: 14px; color: #b9c1d0; }
+    .note { margin-top: 24px; padding: 14px; border-left: 3px solid #7c8cff; background: #151925; color: #c8ceda; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="top">
+      <div>
+        <h1>Stream Signal</h1>
+        <div class="sub">Deterministic vertical slice: catalog card → observed title → confidence-bounded match → fixture rating → overlay/fade → receipt. No production ratings provider is used.</div>
+      </div>
+      <div class="controls">
+        <label for="minimum-score">Minimum score: <strong id="minimum-score-value">70</strong></label>
+        <input id="minimum-score" type="range" min="0" max="100" value="70" />
+      </div>
+    </div>
+
+    <section class="grid" aria-label="Demo streaming catalog">
+      <article class="ss-card" data-stream-title="Arrival" data-stream-year="2016" data-stream-kind="movie"><h2>Arrival</h2><div class="meta">2016 · Movie</div></article>
+      <article class="ss-card" data-stream-title="Dune" data-stream-year="2021" data-stream-kind="movie"><h2>Dune</h2><div class="meta">2021 · Movie</div></article>
+      <article class="ss-card" data-stream-title="Dark" data-stream-year="2017" data-stream-kind="series"><h2>Dark</h2><div class="meta">2017 · Series</div></article>
+      <article class="ss-card" data-stream-title="Heat" data-stream-year="1995" data-stream-kind="movie"><h2>Heat</h2><div class="meta">1995 · Movie</div></article>
+      <article class="ss-card" data-stream-title="Example Low Score" data-stream-year="2024" data-stream-kind="movie"><h2>Example Low Score</h2><div class="meta">2024 · Movie</div></article>
+      <article class="ss-card unmatched" data-stream-title="Unknown Fixture" data-stream-year="2026" data-stream-kind="series"><h2>Unknown Fixture</h2><div class="meta">2026 · Series · intentionally unmatched</div></article>
+    </section>
+
+    <div class="note">The intentionally unmatched card remains without a rating. Missing or uncertain evidence never becomes a fabricated score.</div>
+    <h2>Run receipt</h2>
+    <pre id="receipt">Running…</pre>
+  </main>
+  <script src="src/core.js"></script>
+  <script src="src/engine.js"></script>
+  <script src="src/demo.js"></script>
+</body>
+</html>
