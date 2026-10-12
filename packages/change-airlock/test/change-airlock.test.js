@@ -39,6 +39,23 @@ test("blocks a negative assertion delta", () => {
   assert.ok(report.findings.some((item) => item.ruleId === "AIRLOCK_ASSERTION_DELTA"));
 });
 
+test("does not count the word assertion as a replacement assertion", () => {
+  const diff = [
+    "diff --git a/test/math.test.js b/test/math.test.js",
+    "--- a/test/math.test.js",
+    "+++ b/test/math.test.js",
+    "@@ -1 +1 @@",
+    "-assert.equal(add(1, 2), 3);",
+    "+// assertion removed"
+  ].join("\n");
+
+  const report = analyzeUnifiedDiff(diff);
+  assert.equal(report.metrics.addedAssertions, 0);
+  assert.equal(report.metrics.deletedAssertions, 1);
+  assert.equal(report.metrics.assertionDelta, -1);
+  assert.equal(report.decision, "BLOCK");
+});
+
 test("blocks deleted test files", () => {
   const diff = [
     "diff --git a/tests/unit.test.js b/tests/unit.test.js",
