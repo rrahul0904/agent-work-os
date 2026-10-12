@@ -1,0 +1,102 @@
+{
+  "schema": "interview-coach/v1",
+  "session": {
+    "session_id": "demo-session-001",
+    "mode": "mock",
+    "consent": {
+      "recording_required": false,
+      "recording_state": "not_required",
+      "assistance_policy": "practice_only"
+    },
+    "context": {
+      "role": "Senior Data Engineer",
+      "company": "ExampleCo",
+      "job_description_revision": "jd-sha256:example",
+      "resume_revision": "resume-sha256:example"
+    },
+    "language": "en-US",
+    "retention": {
+      "save_transcript": true,
+      "save_suggestions": true,
+      "screen_capture_retention": "ephemeral",
+      "delete_after_days": 30
+    },
+    "runtime_policy_digest": "sha256:example-policy"
+  },
+  "observation": {
+    "observation_id": "obs-0001",
+    "source_channel": "system_audio_fixture",
+    "speaker": "interviewer",
+    "speaker_confidence": 0.98,
+    "text": "Tell me about a time you improved the reliability of a data pipeline.",
+    "started_at_ms": 1000,
+    "ended_at_ms": 5100,
+    "stt": {
+      "adapter": "fixture-stt",
+      "model": "deterministic-fixture-v1",
+      "revision": "1"
+    },
+    "correction_state": "final",
+    "evidence_digest": "sha256:example-observation"
+  },
+  "question": {
+    "question_id": "q-0001",
+    "type": "behavioral",
+    "topic": "reliability ownership",
+    "confidence": 0.97,
+    "source_observation_ids": ["obs-0001"],
+    "thread_id": "thread-0001",
+    "ambiguity_state": "clear"
+  },
+  "suggestion": {
+    "suggestion_id": "s-0001",
+    "mode": "STAR",
+    "question_id": "q-0001",
+    "evidence_refs": [
+      "resume-sha256:example",
+      "jd-sha256:example",
+      "obs-0001"
+    ],
+    "provider": {
+      "adapter": "fixture-llm",
+      "model": "deterministic-fixture-v1",
+      "revision": "1"
+    },
+    "policy_state": "allowed_practice_mode",
+    "limitations": [],
+    "timing_ms": {
+      "first_token": 120,
+      "complete": 420
+    }
+  },
+  "evaluation": {
+    "evaluation_id": "eval-0001",
+    "rubric_id": "behavioral-reliability-v1",
+    "evidence_refs": ["obs-0001", "s-0001"],
+    "band": "practice_feedback_only",
+    "rationale": "Fixture example only; no hiring authority.",
+    "uncertainty": "fixture",
+    "human_review_state": "not_required_for_mock"
+  },
+  "runtime_receipt": {
+    "application_commit": "REPLACE_WITH_EXACT_SHA",
+    "os": "fixture",
+    "capture_adapter": "fixture",
+    "stt_revision": "fixture-stt@1",
+    "llm_revision": "fixture-llm@1",
+    "privacy_mode": "practice-fixture",
+    "latency_ms": {
+      "stt_final": 80,
+      "suggestion_first_token": 120
+    },
+    "dropped_segments": 0,
+    "recovery_state": "not_exercised",
+    "terminal_state": "fixture_only"
+  },
+  "guardrails": {
+    "stealth_mode": false,
+    "proctoring_bypass": false,
+    "capture_exclusion_target": false,
+    "automatic_hiring_action": false
+  }
+}
