@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "Stream Signal Prototype",
+  "version": "0.1.0",
+  "description": "Clean-room streaming decision-layer prototype with confidence-aware title matching.",
+  "options_page": "demo.html"
+}
