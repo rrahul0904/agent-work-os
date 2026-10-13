@@ -1,0 +1,47 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "collaborative-design-os-phase-a",
+    "repoPath": "/absolute/path/to/agent-work-os"
+  },
+  "release": { "version": "0.1.0-alpha.1" },
+  "worktree": {
+    "baseRef": "reverse/figcraft-collaborative-design",
+    "root": "/tmp/agent-work-os-worktrees",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": { "name": "design-core-tests", "command": "node --test apps/web/test/design-core.test.js" },
+    "maxRepairAttempts": 0
+  },
+  "verification": [
+    { "name": "design-core-tests", "command": "node --test apps/web/test/design-core.test.js" },
+    { "name": "browser-module-syntax", "command": "node --check apps/web/public/design/core.js && node --check apps/web/public/design/app.js" }
+  ],
+  "preview": { "required": false },
+  "production": { "required": false },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": { "name": "tested-sha", "command": "git rev-parse HEAD" }
+  },
+  "goldenPath": [
+    { "id": "DESIGN-001", "description": "Create a frame, rectangle, text, and sticky note on the same canvas." },
+    { "id": "DESIGN-002", "description": "Move and resize an object; reload and recover the same local document." },
+    { "id": "DESIGN-003", "description": "Apply horizontal or vertical auto-layout to children of a frame." },
+    { "id": "DESIGN-004", "description": "Undo one actor's operation without erasing another actor's later operation." },
+    { "id": "DESIGN-005", "description": "Merge a duplicate remote operation idempotently and retain deterministic operation receipts." },
+    { "id": "DESIGN-006", "description": "Export a canonical JSON design document and import it without changing node state." }
+  ],
+  "excludedFromRelease": [
+    "real collaboration server",
+    "accounts/teams/RBAC",
+    ".fig import/export parity",
+    "components/variants",
+    "vector pen networks",
+    "production renderer parity",
+    "native macOS/Windows/Linux packaging",
+    "iPadOS/iOS/Android clients",
+    "production deployment"
+  ],
+  "policy": { "commandTimeoutMs": 120000, "retainFailureLogs": true }
+}
