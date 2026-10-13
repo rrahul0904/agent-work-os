@@ -1,0 +1,36 @@
+name: SEO Keyword Intelligence
+
+on:
+  push:
+    branches:
+      - reverse/seo-keyword-intelligence-v2
+    paths:
+      - 'products/seo-keyword-intelligence/**'
+      - '.github/workflows/seo-keyword-intelligence.yml'
+  pull_request:
+    paths:
+      - 'products/seo-keyword-intelligence/**'
+      - '.github/workflows/seo-keyword-intelligence.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Unit tests
+        working-directory: products/seo-keyword-intelligence
+        run: npm test
+      - name: Validate n8n workflow JSON
+        working-directory: products/seo-keyword-intelligence
+        run: node -e "JSON.parse(require('fs').readFileSync('n8n/keyword-intelligence-webhook.json','utf8')); console.log('n8n workflow JSON valid')"
+      - name: Smoke-test CLI
+        working-directory: products/seo-keyword-intelligence
+        run: cat fixtures/sample-input.json | node src/engine.mjs > /tmp/seo-keyword-output.json && node -e "const x=require('/tmp/seo-keyword-output.json'); if(!x.summary || !x.opportunities?.length) process.exit(1); console.log(x.summary)"
