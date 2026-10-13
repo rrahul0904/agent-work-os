@@ -1,0 +1,31 @@
+name: Design Supply Lab Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'apps/web/public/design-supply-lab/**'
+      - 'scripts/verify-design-supply-lab.mjs'
+      - '.github/workflows/design-supply-lab-smoke.yml'
+  push:
+    branches:
+      - 'rea/design-supply-lab-163'
+    paths:
+      - 'apps/web/public/design-supply-lab/**'
+      - 'scripts/verify-design-supply-lab.mjs'
+      - '.github/workflows/design-supply-lab-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Setup Node
+        uses: actions/setup-node@1e60f620b9541d7c243e7f88950c5c6fdb5c424c # v4.0.3
+        with:
+          node-version: '22'
+      - name: Verify Design Supply Lab
+        run: node scripts/verify-design-supply-lab.mjs
