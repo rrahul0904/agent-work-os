@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS agent_work_os_state_v1 (
+  state_key TEXT PRIMARY KEY,
+  payload JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
