@@ -17,8 +17,14 @@ export function normalizeKeyword(value = '') {
     .trim();
 }
 
+function stemToken(token) {
+  if (token.length > 5 && token.endsWith('ing')) return token.slice(0, -3);
+  if (token.length > 5 && token.endsWith('ed')) return token.slice(0, -2);
+  return token;
+}
+
 function words(value) {
-  return normalizeKeyword(value).split(' ').filter(Boolean);
+  return normalizeKeyword(value).split(/[\s-]+/).filter(Boolean).map(stemToken);
 }
 
 function contentWords(value) {
@@ -30,6 +36,7 @@ function clamp(value, min = 0, max = 100) {
 }
 
 function numberOrNull(value) {
+  if (value === null || value === undefined || value === '') return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
