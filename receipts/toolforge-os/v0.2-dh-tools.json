@@ -1,0 +1,46 @@
+{
+  "version": "product-release-receipt/v1",
+  "product": {
+    "id": "toolforge-os",
+    "name": "ToolForge OS",
+    "release": "v0.2-dh-tools-utility-os"
+  },
+  "source": {
+    "repo": "rrahul0904/agent-widget-runtime",
+    "request": "reddit:r/prettyusefulwebsites/s/P2ba0iAIBF",
+    "releaseSha": "728eef1568f3d6d2b304941b1637b898459a52e3",
+    "verifiedPreviewSha": "7a1f7a53bd52f630fa0b08dea64a341c27158470",
+    "pullRequest": 2,
+    "typecheck": "PASS",
+    "unitTests": "PASS (6/6)",
+    "productionBuild": "PASS"
+  },
+  "distribution": {
+    "channel": "Vercel production",
+    "deploymentId": "dpl_C7w9ZwjFPfkdgK8Pioum6QzxWAW2",
+    "url": "https://toolforge-os.vercel.app",
+    "http": "200",
+    "status": "PASS"
+  },
+  "capabilities": {
+    "canonicalTools": 59,
+    "browserLocal": 56,
+    "networkAssisted": 3,
+    "duplicateRegistryConflicts": 0,
+    "pwaManifest": "PASS",
+    "offlineRuntimeCache": "PASS"
+  },
+  "rea": {
+    "cleanRoom": "PASS",
+    "classifications": ["MATCH", "IMPROVE", "NEW", "OMIT", "INVESTIGATE"],
+    "investigate": [
+      "high-fidelity PPTX→PDF",
+      "OCR table→spreadsheet",
+      "AI background removal",
+      "Excel↔PDF fidelity",
+      "PDF rasterization/compression parity"
+    ]
+  },
+  "status": "SHIPPED_PRODUCTION",
+  "receiptDigest": "sha256:b8646751d965afe714c613e602237497d71cc3b258f789fc8c4ff082b39a71d9"
+}
