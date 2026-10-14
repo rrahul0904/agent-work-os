@@ -1,0 +1,42 @@
+{
+  "version": "shipping-receipt/v1",
+  "projectId": "homequest",
+  "releaseVersion": "core-preview-2026-10-14",
+  "state": "VERIFIED_CORE",
+  "source": {
+    "repository": "rrahul0904/agent-work-os",
+    "pullRequest": 183,
+    "branch": "reverse/homequest-household-game",
+    "testedSha": "67fd375369435797d3c670cf14670c361e04f47c"
+  },
+  "verification": {
+    "githubActionsRunId": 38590211631,
+    "job": "verify",
+    "conclusion": "success",
+    "checks": [
+      "npm install --no-audit --no-fund",
+      "npm test",
+      "npm run acceptance"
+    ]
+  },
+  "capabilitiesVerified": [
+    "household domain unit tests",
+    "task points and focus bonus accounting",
+    "reward debit semantics",
+    "expense balance and settlement calculation",
+    "streak calculation",
+    "repository acceptance suite"
+  ],
+  "notYetCertified": [
+    "hosted browser UAT",
+    "authenticated household tenancy",
+    "server realtime convergence",
+    "multiple homes",
+    "offline sync and conflict handling",
+    "push notifications",
+    "mobile iOS and Android builds",
+    "billing entitlements",
+    "production deployment"
+  ],
+  "decision": "Core reconstruction is verified on the recorded SHA. This receipt does not authorize a SHIPPED, LIKE_FOR_LIKE, PARITY_VERIFIED, or production-ready claim."
+}
