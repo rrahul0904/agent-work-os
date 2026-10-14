@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import pg from "pg";
 import { createCanonicalId, createWorkItem } from "../../../packages/domain/src/index.js";
+import { IdentityRepository } from "../src/identity-store.js";
 import { IdempotencyConflictError, OptimisticConcurrencyError, PostgresWorkItemRepository } from "../src/work-item-store.js";
 
 const { Pool } = pg;
@@ -23,8 +24,14 @@ test("Postgres repository is transactional, optimistic, idempotent, and restart 
   const createCommand = createCanonicalId("command");
 
   try {
+    await waitForDatabase(poolA);
     await repositoryA.initialize();
     await repositoryA.initialize();
+    await new IdentityRepository(poolA).initialize();
+    await poolA.query(
+      "INSERT INTO agent_work_os_organizations_v1 (id, name) VALUES ($1, 'WorkItem repository test') ON CONFLICT (id) DO NOTHING",
+      [item.organizationId]
+    );
     const created = await repositoryA.create(item, { commandId: createCommand, actorId });
     assert.equal(created.workItem.id, item.id);
     assert.equal((await repositoryB.create(item, { commandId: createCommand, actorId })).replayed, true);
@@ -64,8 +71,19 @@ test("Postgres repository is transactional, optimistic, idempotent, and restart 
     assert.equal((await repositoryAfterRestart.listByOrganization(item.organizationId)).length, 1);
     await poolAfterRestart.query("DELETE FROM agent_work_os_work_item_events_v1 WHERE work_item_id = $1", [item.id]);
     await poolAfterRestart.query("DELETE FROM agent_work_os_work_items_v1 WHERE id = $1", [item.id]);
+    await poolAfterRestart.query("DELETE FROM agent_work_os_organizations_v1 WHERE id = $1 AND created_by IS NULL", [item.organizationId]);
     await poolAfterRestart.end();
   } finally {
     await Promise.allSettled([poolA.end(), poolB.end()]);
   }
 });
+
+async function waitForDatabase(pool) {
+  const started = Date.now();
+  let lastError;
+  while (Date.now() - started < 15_000) {
+    try { await pool.query("SELECT 1"); return; } catch (error) { lastError = error; }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`PostgreSQL did not become ready: ${lastError?.message ?? "timeout"}`);
+}
