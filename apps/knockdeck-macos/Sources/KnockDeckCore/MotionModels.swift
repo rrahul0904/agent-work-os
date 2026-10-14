@@ -48,7 +48,7 @@ public struct DetectedImpact: Equatable, Sendable {
     }
 }
 
-public enum TapSide: String, Codable, CaseIterable, Sendable {
+public enum TapSide: String, Codable, CaseIterable, Hashable, Sendable {
     case left
     case right
     case unknown
@@ -109,6 +109,7 @@ public enum KnockAction: String, Codable, CaseIterable, Identifiable, Sendable {
 public struct KnockDeckSettings: Codable, Equatable, Sendable {
     public var threshold: Double
     public var maxTapGap: TimeInterval
+    public var triggerTapCount: Int
     public var leftAction: KnockAction
     public var rightAction: KnockAction
     public var unknownAction: KnockAction
@@ -118,6 +119,7 @@ public struct KnockDeckSettings: Codable, Equatable, Sendable {
     public init(
         threshold: Double = 0.16,
         maxTapGap: TimeInterval = 0.42,
+        triggerTapCount: Int = 2,
         leftAction: KnockAction = .toggleSpeakerMute,
         rightAction: KnockAction = .toggleMicrophoneMute,
         unknownAction: KnockAction = .none,
@@ -126,6 +128,7 @@ public struct KnockDeckSettings: Codable, Equatable, Sendable {
     ) {
         self.threshold = threshold
         self.maxTapGap = maxTapGap
+        self.triggerTapCount = min(3, max(1, triggerTapCount))
         self.leftAction = leftAction
         self.rightAction = rightAction
         self.unknownAction = unknownAction
