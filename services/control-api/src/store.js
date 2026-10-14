@@ -8,6 +8,7 @@ import { IdempotencyConflictError, OptimisticConcurrencyError } from "./work-ite
 const { Pool } = pg;
 const STATE_KEY = "global";
 const MIGRATION_URL = new URL("../../../migrations/001_durable_state.sql", import.meta.url);
+const MACHINE_SESSION_MIGRATION_URL = new URL("../../../migrations/005_tenant_machines_sessions.sql", import.meta.url);
 
 export class JsonStore {
   constructor(filePath) {
@@ -15,6 +16,7 @@ export class JsonStore {
     this.state = { machines: {}, sessions: {}, shippingRuns: {}, workItems: {}, workItemEvents: [] };
     this.writeChain = Promise.resolve();
     this.workItemWriteChain = Promise.resolve();
+    this.shippingRunWriteChains = new Map();
     this.pool = process.env.DATABASE_URL
       ? new Pool({
           connectionString: process.env.DATABASE_URL,
@@ -47,18 +49,72 @@ export class JsonStore {
     if (result.rows[0]?.payload) {
       this.state = normalizeState(result.rows[0].payload);
       for (const machine of Object.values(this.state.machines)) machine.status = "offline";
-      await this.#persist();
       return;
     }
 
     await this.#persist();
   }
 
-  listMachines() { return Object.values(this.state.machines).sort((a, b) => a.name.localeCompare(b.name)); }
-  listSessions() { return Object.values(this.state.sessions).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)); }
+  async initializeMachineSessionStore() {
+    if (!this.pool) return;
+    await this.pool.query(await readFile(MACHINE_SESSION_MIGRATION_URL, "utf8"));
+    await this.pool.query(
+      `UPDATE agent_work_os_machines_v1
+       SET status = 'offline',
+           record = jsonb_set(jsonb_set(record, '{status}', '"offline"'::jsonb), '{lastSeenAt}', to_jsonb(CURRENT_TIMESTAMP::text), true),
+           updated_at = CURRENT_TIMESTAMP`
+    );
+  }
+
+  listMachines() {
+    if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_machines_v1 ORDER BY record->>'name', machine_id").then((result) => {
+      const machines = result.rows.map((row) => row.record);
+      const normalizedIds = new Set(machines.map((machine) => machine.id));
+      const legacyMachines = Object.values(this.state.machines).filter((machine) => !machine.organizationId && !normalizedIds.has(machine.id));
+      return [...machines, ...legacyMachines].sort((a, b) => a.name.localeCompare(b.name));
+    });
+    return Object.values(this.state.machines).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  listMachinesByOrganization(organizationId) {
+    if (this.pool) return this.pool.query(
+      "SELECT record FROM agent_work_os_machines_v1 WHERE organization_id = $1 ORDER BY record->>'name', machine_id",
+      [organizationId]
+    ).then((result) => result.rows.map((row) => row.record));
+    return Object.values(this.state.machines).filter((machine) => machine.organizationId === organizationId).sort((a, b) => a.name.localeCompare(b.name));
+  }
+  listSessions() {
+    if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_sessions_v1 ORDER BY updated_at DESC, session_id").then((result) => {
+      const sessions = result.rows.map((row) => row.record);
+      const normalizedIds = new Set(sessions.map((session) => session.id));
+      const legacySessions = Object.values(this.state.sessions).filter((session) => !session.organizationId && !normalizedIds.has(session.id));
+      return [...sessions, ...legacySessions].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    });
+    return Object.values(this.state.sessions).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
+  listSessionsByOrganization(organizationId) {
+    if (this.pool) return this.pool.query(
+      "SELECT record FROM agent_work_os_sessions_v1 WHERE organization_id = $1 ORDER BY updated_at DESC, session_id",
+      [organizationId]
+    ).then((result) => result.rows.map((row) => row.record));
+    return Object.values(this.state.sessions).filter((session) => session.organizationId === organizationId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }
   listShippingRuns() { return Object.values(this.state.shippingRuns).sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? ""))); }
-  getMachine(id) { return this.state.machines[id]; }
-  getSession(id) { return this.state.sessions[id]; }
+  getMachine(id) {
+    if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_machines_v1 WHERE machine_id = $1", [id]).then((result) => {
+      const normalized = result.rows[0]?.record;
+      const legacy = this.state.machines[id];
+      return normalized ?? (!legacy?.organizationId ? legacy ?? null : null);
+    });
+    return this.state.machines[id];
+  }
+  getSession(id) {
+    if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_sessions_v1 WHERE session_id = $1", [id]).then((result) => {
+      const normalized = result.rows[0]?.record;
+      const legacy = this.state.sessions[id];
+      return normalized ?? (!legacy?.organizationId ? legacy ?? null : null);
+    });
+    return this.state.sessions[id];
+  }
   getShippingRun(id) { return this.state.shippingRuns[id]; }
   getWorkItem(id, organizationId) {
     const item = this.state.workItems[id];
@@ -128,33 +184,218 @@ export class JsonStore {
     });
   }
 
-  async upsertMachine(machine) { this.state.machines[machine.id] = machine; await this.#persist(); return machine; }
+  async upsertMachine(machine) {
+    if (this.pool && machine.organizationId) {
+      const result = await this.pool.query(
+        `INSERT INTO agent_work_os_machines_v1 (machine_id, organization_id, status, record)
+         VALUES ($1, $2, $3, $4::jsonb)
+         ON CONFLICT (machine_id) DO UPDATE
+           SET status = EXCLUDED.status, record = EXCLUDED.record, updated_at = CURRENT_TIMESTAMP
+           WHERE agent_work_os_machines_v1.organization_id = EXCLUDED.organization_id
+         RETURNING record`,
+        [machine.id, machine.organizationId, machine.status ?? "offline", JSON.stringify(machine)]
+      );
+      if (!result.rowCount) throw Object.assign(new Error("machine_organization_mismatch"), { code: "machine_organization_mismatch" });
+      return result.rows[0].record;
+    }
+    this.state.machines[machine.id] = machine;
+    if (this.pool) await this.#persistLegacyRecord(null, "machines", machine.id, machine);
+    else await this.#persist();
+    return machine;
+  }
   async touchMachine(id) {
-    const machine = this.getMachine(id); if (!machine) return;
+    if (this.pool) {
+      const normalized = await this.#updateMachine(id, (machine) => ({ ...machine, status: "online", lastSeenAt: new Date().toISOString() }));
+      if (normalized) return normalized;
+      if (!this.state.machines[id] || this.state.machines[id].organizationId) return null;
+    }
+    const machine = this.state.machines[id]; if (!machine) return;
     machine.status = "online"; machine.lastSeenAt = new Date().toISOString(); await this.#persist(); return machine;
   }
   async markMachineOffline(id) {
-    const machine = this.getMachine(id); if (!machine) return;
+    if (this.pool) {
+      const normalized = await this.#updateMachine(id, (machine) => ({ ...machine, status: "offline", lastSeenAt: new Date().toISOString() }));
+      if (normalized) return normalized;
+      if (!this.state.machines[id] || this.state.machines[id].organizationId) return null;
+    }
+    const machine = this.state.machines[id]; if (!machine) return;
     machine.status = "offline"; machine.lastSeenAt = new Date().toISOString(); await this.#persist(); return machine;
   }
-  async createSession(session) { this.state.sessions[session.id] = session; await this.#persist(); return session; }
-  async addMessage(id, message) { const s = this.#session(id); s.messages.push(message); s.updatedAt = new Date().toISOString(); await this.#persist(); return s; }
+  async createSession(session) {
+    if (this.pool && session.organizationId) {
+      const result = await this.pool.query(
+        `INSERT INTO agent_work_os_sessions_v1
+           (session_id, organization_id, machine_id, created_by, status, record, created_at, updated_at)
+         SELECT $1, $2, $3, $4, $5, $6::jsonb, $7, $8
+         FROM agent_work_os_machines_v1 AS machine
+         WHERE machine.machine_id = $3 AND machine.organization_id = $2 AND machine.status = 'online'
+         RETURNING record`,
+        [session.id, session.organizationId, session.machineId, session.createdBy ?? null, session.status,
+          JSON.stringify(session), session.createdAt, session.updatedAt]
+      );
+      if (!result.rowCount) throw Object.assign(new Error("machine_not_available_in_organization"), { code: "machine_not_available_in_organization" });
+      return result.rows[0].record;
+    }
+    this.state.sessions[session.id] = session;
+    if (this.pool) await this.#persistLegacyRecord(null, "sessions", session.id, session);
+    else await this.#persist();
+    return session;
+  }
+  async addMessage(id, message) {
+    if (this.pool) {
+      const normalized = await this.#updateSession(id, (session) => {
+      session.messages ??= [];
+      session.messages.push(message);
+      session.updatedAt = new Date().toISOString();
+      return session;
+      });
+      if (normalized) return normalized;
+      if (!this.state.sessions[id] || this.state.sessions[id].organizationId) return null;
+    }
+    const s = this.#session(id); s.messages.push(message); s.updatedAt = new Date().toISOString(); await this.#persist(); return s;
+  }
   async addEvent(id, event) {
+    if (this.pool) {
+      const normalized = await this.#updateSession(id, (session) => {
+        session.events ??= [];
+        session.events.push(event);
+        session.updatedAt = new Date().toISOString();
+        if (event.kind === "status") session.status = event.status;
+        if (event.kind === "thread") session.nativeSessionId = event.nativeSessionId;
+        if (event.kind === "text" && event.text?.trim()) {
+          session.messages ??= [];
+          session.messages.push({ id: crypto.randomUUID(), role: "assistant", text: event.text, createdAt: event.at });
+        }
+        return session;
+      });
+      if (normalized) return normalized;
+      if (!this.state.sessions[id] || this.state.sessions[id].organizationId) return null;
+    }
     const s = this.#session(id); s.events.push(event); s.updatedAt = new Date().toISOString();
     if (event.kind === "status") s.status = event.status;
     if (event.kind === "thread") s.nativeSessionId = event.nativeSessionId;
     if (event.kind === "text" && event.text?.trim()) s.messages.push({ id: crypto.randomUUID(), role: "assistant", text: event.text, createdAt: event.at });
     await this.#persist(); return s;
   }
-  async setSessionStatus(id, status) { const s = this.#session(id); s.status = status; s.updatedAt = new Date().toISOString(); await this.#persist(); return s; }
+  async setSessionStatus(id, status) {
+    if (this.pool) {
+      const normalized = await this.#updateSession(id, (session) => ({ ...session, status, updatedAt: new Date().toISOString() }));
+      if (normalized) return normalized;
+      if (!this.state.sessions[id] || this.state.sessions[id].organizationId) return null;
+    }
+    const s = this.#session(id); s.status = status; s.updatedAt = new Date().toISOString(); await this.#persist(); return s;
+  }
   async upsertShippingRun(run) {
     if (!run?.runId) throw new Error("shipping_run_id_required");
-    this.state.shippingRuns[run.runId] = structuredClone(run);
-    await this.#persist();
-    return this.state.shippingRuns[run.runId];
+    if (!this.pool) {
+      this.state.shippingRuns[run.runId] = structuredClone(run);
+      await this.#persist();
+      return this.state.shippingRuns[run.runId];
+    }
+    const priorWrite = this.shippingRunWriteChains.get(run.runId) ?? Promise.resolve();
+    const pending = priorWrite.catch(() => {}).then(() => this.#writeShippingRun(run));
+    this.shippingRunWriteChains.set(run.runId, pending);
+    try {
+      return await pending;
+    } finally {
+      if (this.shippingRunWriteChains.get(run.runId) === pending) this.shippingRunWriteChains.delete(run.runId);
+    }
   }
 
-  #session(id) { const s = this.getSession(id); if (!s) throw new Error(`Unknown session: ${id}`); return s; }
+  async #writeShippingRun(run) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const lockedState = await client.query(
+        "SELECT payload FROM agent_work_os_state_v1 WHERE state_key = $1 FOR UPDATE",
+        [STATE_KEY]
+      );
+      if (!lockedState.rows[0]) throw new Error("global_state_row_missing");
+      const previousServerTimestamp = Date.parse(lockedState.rows[0].payload?._shippingRunUpdatedAt?.[run.runId] ?? "");
+      const databaseClock = await client.query("SELECT clock_timestamp() AS now");
+      const now = Date.parse(databaseClock.rows[0].now);
+      // Legacy snapshots can contain client supplied future timestamps. Reset those to
+      // database time. Track server ordering separately so that timestamp increments
+      // cannot later be mistaken for untrusted client values.
+      const updatedAtMs = Number.isFinite(previousServerTimestamp)
+        ? Math.max(now, previousServerTimestamp + 1)
+        : now;
+      const updatedAt = new Date(updatedAtMs).toISOString();
+      const persistedRun = { ...run, updatedAt };
+      await this.#persistLegacyRecord(client, "shippingRuns", run.runId, persistedRun);
+      await this.#persistLegacyRecord(client, "_shippingRunUpdatedAt", run.runId, updatedAt);
+      await client.query("COMMIT");
+      this.state.shippingRuns[run.runId] = structuredClone(persistedRun);
+      return this.state.shippingRuns[run.runId];
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
+
+  #session(id) { const s = this.state.sessions[id]; if (!s) throw new Error(`Unknown session: ${id}`); return s; }
+  async #updateMachine(id, update) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query("SELECT record FROM agent_work_os_machines_v1 WHERE machine_id = $1 FOR UPDATE", [id]);
+      if (!selected.rows[0]) {
+        const legacyRow = await client.query(
+          "SELECT payload #> ARRAY['machines', $1] AS record FROM agent_work_os_state_v1 WHERE state_key = $2 FOR UPDATE",
+          [id, STATE_KEY]
+        );
+        const legacy = legacyRow.rows[0]?.record ?? this.state.machines[id];
+        if (!legacy || legacy.organizationId) { await client.query("COMMIT"); return null; }
+        const updated = update(legacy);
+        this.state.machines[id] = updated;
+        await this.#persistLegacyRecord(client, "machines", id, updated);
+        await client.query("COMMIT");
+        return updated;
+      }
+      const machine = update(selected.rows[0].record);
+      const saved = await client.query(
+        "UPDATE agent_work_os_machines_v1 SET status = $1, record = $2::jsonb, updated_at = CURRENT_TIMESTAMP WHERE machine_id = $3 RETURNING record",
+        [machine.status, JSON.stringify(machine), id]
+      );
+      await client.query("COMMIT");
+      return saved.rows[0].record;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
+  async #updateSession(id, update) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query("SELECT record FROM agent_work_os_sessions_v1 WHERE session_id = $1 FOR UPDATE", [id]);
+      if (!selected.rows[0]) {
+        const legacyRow = await client.query(
+          "SELECT payload #> ARRAY['sessions', $1] AS record FROM agent_work_os_state_v1 WHERE state_key = $2 FOR UPDATE",
+          [id, STATE_KEY]
+        );
+        const legacy = legacyRow.rows[0]?.record ?? this.state.sessions[id];
+        if (!legacy || legacy.organizationId) { await client.query("COMMIT"); return null; }
+        const updated = update(structuredClone(legacy));
+        this.state.sessions[id] = updated;
+        await this.#persistLegacyRecord(client, "sessions", id, updated);
+        await client.query("COMMIT");
+        return updated;
+      }
+      const session = update(structuredClone(selected.rows[0].record));
+      const saved = await client.query(
+        `UPDATE agent_work_os_sessions_v1
+         SET status = $1, record = $2::jsonb, updated_at = $3
+         WHERE session_id = $4 RETURNING record`,
+        [session.status, JSON.stringify(session), session.updatedAt, id]
+      );
+      await client.query("COMMIT");
+      return saved.rows[0].record;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
   #mutateWorkItems(operation) {
     const pending = this.workItemWriteChain.catch(() => {}).then(async () => {
       const result = operation();
@@ -184,6 +425,18 @@ export class JsonStore {
       await rename(temp, this.filePath);
     });
     return this.writeChain;
+  }
+
+  async #persistLegacyRecord(client, collection, id, record) {
+    await (client ?? this.pool).query(
+      `UPDATE agent_work_os_state_v1
+       SET payload = jsonb_set(
+         jsonb_set(payload, ARRAY[$1]::text[], COALESCE(payload -> $1, '{}'::jsonb), true),
+         ARRAY[$1, $2]::text[], $3::jsonb, true
+       ), updated_at = CURRENT_TIMESTAMP
+       WHERE state_key = $4`,
+      [collection, id, JSON.stringify(record), STATE_KEY]
+    );
   }
 }
 

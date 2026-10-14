@@ -75,7 +75,7 @@ Authentication endpoints:
 - `POST /api/auth/accept-invitation` — `{ token }`; email must match the invitation.
 - `POST /api/auth/logout` — revokes the active server-side session.
 
-This is an incremental identity foundation, not a production SaaS launch claim. Email verification, password recovery, external IdP integration, invitation delivery, and normalized durable storage for Sessions/Machines/Shipping Runs remain open. Sessions and Machines now carry organization IDs in the current global state snapshot; user access is scoped by membership. Shared snapshot storage still lacks safe multi-instance write coordination, so run one API instance until normalized storage and concurrency controls land. Public registration still needs email verification and deployment-level bot/abuse controls before opening signups broadly.
+This is an incremental identity foundation, not a production SaaS launch claim. Email verification, password recovery, external IdP integration, invitation delivery, tenant-scoped Shipping Run APIs, and multi-instance event routing remain open. PostgreSQL stores tenant-owned Machines and Sessions in separate rows; session updates lock only the affected session row. Shipping Runs and compatibility data remain in the global state snapshot, which still lacks safe multi-instance write coordination. Run one API instance. Public registration still needs email verification and deployment-level bot/abuse controls before opening signups broadly.
 
 ## Canonical work items
 
@@ -89,7 +89,7 @@ Authenticated routes:
 - `POST /api/work-items/:id/transitions` — body includes `organizationId`, `commandId`, `expectedVersion`, and `to`.
 - `GET /api/work-items/:id/events?organizationId=...` — read ordered transition evidence.
 
-Local development uses the existing JSON state file as a compatibility adapter and retains the legacy bearer mode. Production requires PostgreSQL and first-party account sessions; the shared `AGENT_WORK_OS_TOKEN` is reserved for the current daemon connection and does not authenticate customer REST requests. PostgreSQL stores normalized WorkItem rows/events and the initial identity, organizations, memberships, invitations, and sessions. Sessions/Machines/Shipping Runs still use the global state snapshot and are not exposed to user sessions until they gain tenant ownership.
+Local development uses the existing JSON state file as a compatibility adapter and retains the legacy bearer mode. Production requires PostgreSQL and first-party account sessions; the shared `AGENT_WORK_OS_TOKEN` is reserved for local daemon connections and does not authenticate customer REST requests. PostgreSQL stores normalized WorkItem rows/events, identity, organizations, memberships, invitations, auth sessions, tenant-owned Machines, and tenant-owned Agent Sessions. Shipping Runs and compatibility data remain in the global state snapshot.
 
 ## Repository map
 

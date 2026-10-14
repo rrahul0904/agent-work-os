@@ -39,6 +39,7 @@ export async function createControlPlane() {
   if (isProduction && !store.pool) throw new Error("DATABASE_URL_required_in_production");
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
+  await store.initializeMachineSessionStore();
   const daemonSockets = new Map();
   const clientSockets = new Map();
 
@@ -157,7 +158,7 @@ export async function createControlPlane() {
         return json(res, 200, { membership });
       }
 
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions(), shippingRuns: store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: store.listShippingRuns() });
       if (req.method === "GET" && url.pathname === "/api/work-items") {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
@@ -226,8 +227,9 @@ export async function createControlPlane() {
       }
       if (req.method === "GET" && url.pathname === "/api/product") {
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
-        const runReceipts = store.listShippingRuns().filter((run) => run.releaseReceipt).map((run) => ({ ...run.releaseReceipt, runId: run.runId, projectId: run.projectId, releaseVersion: run.releaseVersion, path: null, source: "runtime" }));
-        return json(res, 200, buildProductSummary({ portfolio, runs: store.listShippingRuns(), receipts: [...committedReceipts, ...runReceipts], machines: store.listMachines(), sessions: store.listSessions() }));
+        const [runs, machines, sessions] = await Promise.all([Promise.resolve(store.listShippingRuns()), store.listMachines(), store.listSessions()]);
+        const runReceipts = runs.filter((run) => run.releaseReceipt).map((run) => ({ ...run.releaseReceipt, runId: run.runId, projectId: run.projectId, releaseVersion: run.releaseVersion, path: null, source: "runtime" }));
+        return json(res, 200, buildProductSummary({ portfolio, runs, receipts: [...committedReceipts, ...runReceipts], machines, sessions }));
       }
       if (req.method === "GET" && url.pathname === "/api/portfolio") return json(res, 200, { projects: rankPortfolio(await loadPortfolio(portfolioPath)) });
       if (req.method === "GET" && url.pathname === "/api/receipts") return json(res, 200, { receipts: await listReceipts(receiptsRoot) });
@@ -245,7 +247,7 @@ export async function createControlPlane() {
       }
       if (req.method === "POST" && url.pathname === "/api/shipping/runs" && principal.kind === "legacy") {
         const body = await readJson(req);
-        const machine = store.getMachine(body.machineId);
+        const machine = await store.getMachine(body.machineId);
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
         if (!machine.shipping?.enabled) return json(res, 409, { error: "shipping_not_enabled_on_machine" });
         const validation = validateShippingContract(body.contract);
@@ -281,13 +283,13 @@ export async function createControlPlane() {
 
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (req.method === "GET" && sessionMatch && principal.kind === "legacy") {
-        const session = store.getSession(decodeURIComponent(sessionMatch[1]));
+        const session = await store.getSession(decodeURIComponent(sessionMatch[1]));
         return session ? json(res, 200, session) : json(res, 404, { error: "session_not_found" });
       }
       if (req.method === "POST" && url.pathname === "/api/sessions" && principal.kind === "legacy") {
         const body = await readJson(req);
         if (!body.machineId || !body.cwd || !body.agent || !body.prompt?.trim()) return json(res, 400, { error: "machineId, cwd, agent and prompt are required" });
-        const machine = store.getMachine(body.machineId);
+        const machine = await store.getMachine(body.machineId);
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
         if (!machine.capabilities.some((c) => c.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
         const now = new Date().toISOString();
@@ -299,7 +301,7 @@ export async function createControlPlane() {
       }
       const messageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
       if (req.method === "POST" && messageMatch && principal.kind === "legacy") {
-        const session = store.getSession(decodeURIComponent(messageMatch[1]));
+        const session = await store.getSession(decodeURIComponent(messageMatch[1]));
         if (!session) return json(res, 404, { error: "session_not_found" });
         const body = await readJson(req); const text = body.text?.trim();
         if (!text) return json(res, 400, { error: "text is required" });
@@ -310,7 +312,7 @@ export async function createControlPlane() {
       }
       const interruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);
       if (req.method === "POST" && interruptMatch && principal.kind === "legacy") {
-        const session = store.getSession(decodeURIComponent(interruptMatch[1])); if (!session) return json(res, 404, { error: "session_not_found" });
+        const session = await store.getSession(decodeURIComponent(interruptMatch[1])); if (!session) return json(res, 404, { error: "session_not_found" });
         try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, { ok: true });
@@ -321,13 +323,13 @@ export async function createControlPlane() {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
         if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
-        return json(res, 200, { machines: store.listMachines().filter((machine) => machine.organizationId === organizationId) });
+        return json(res, 200, { machines: await store.listMachinesByOrganization(organizationId) });
       }
       if (req.method === "GET" && url.pathname === "/api/sessions" && principal.kind === "user") {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
         if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
-        return json(res, 200, { sessions: store.listSessions().filter((session) => session.organizationId === organizationId) });
+        return json(res, 200, { sessions: await store.listSessionsByOrganization(organizationId) });
       }
       if (req.method === "POST" && url.pathname === "/api/sessions" && principal.kind === "user") {
         const body = await readJson(req);
@@ -335,7 +337,7 @@ export async function createControlPlane() {
         const membership = await identities.getMembership(principal.userId, body.organizationId);
         if (!membership) return json(res, 404, { error: "organization_not_found" });
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
-        const machine = store.getMachine(body.machineId);
+        const machine = await store.getMachine(body.machineId);
         if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
         if (!machine.capabilities.some((capability) => capability.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
         const now = new Date().toISOString();
@@ -353,7 +355,7 @@ export async function createControlPlane() {
       }
       const scopedSessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (req.method === "GET" && scopedSessionMatch) {
-        const session = store.getSession(decodeURIComponent(scopedSessionMatch[1]));
+        const session = await store.getSession(decodeURIComponent(scopedSessionMatch[1]));
         if (principal.kind === "machine") {
           if (!session || session.machineId !== principal.machineId || session.organizationId !== principal.organizationId) return json(res, 404, { error: "session_not_found" });
           return json(res, 200, session);
@@ -366,11 +368,11 @@ export async function createControlPlane() {
       }
       const sessionMessageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
       if (req.method === "POST" && sessionMessageMatch && principal.kind === "user") {
-        const session = store.getSession(decodeURIComponent(sessionMessageMatch[1]));
+        const session = await store.getSession(decodeURIComponent(sessionMessageMatch[1]));
         if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
         const membership = await identities.getMembership(principal.userId, session.organizationId);
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
-        const machine = store.getMachine(session.machineId);
+        const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
         const body = await readJson(req); const message = body.text?.trim();
         if (!message) return json(res, 400, { error: "text is required" });
@@ -382,11 +384,11 @@ export async function createControlPlane() {
       }
       const sessionInterruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);
       if (req.method === "POST" && sessionInterruptMatch && principal.kind === "user") {
-        const session = store.getSession(decodeURIComponent(sessionInterruptMatch[1]));
+        const session = await store.getSession(decodeURIComponent(sessionInterruptMatch[1]));
         if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
         const membership = await identities.getMembership(principal.userId, session.organizationId);
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
-        const machine = store.getMachine(session.machineId);
+        const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
         try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
         catch (error) { return json(res, 409, { error: error.message }); }
@@ -443,12 +445,12 @@ export async function createControlPlane() {
         }
         const state = clientPrincipal.kind === "user"
           ? {
-              machines: store.listMachines().filter((machine) => clientPrincipal.organizationIds.includes(machine.organizationId)),
-              sessions: store.listSessions().filter((session) => clientPrincipal.organizationIds.includes(session.organizationId)),
+              machines: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
+              sessions: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
               shippingRuns: store.listShippingRuns().filter((run) => clientPrincipal.organizationIds.includes(run.organizationId)),
               workItems: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
             }
-          : { machines: store.listMachines(), sessions: store.listSessions(), shippingRuns: store.listShippingRuns() };
+          : { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: store.listShippingRuns() };
         peer.send(encodeMessage({ type: "state.snapshot", ...state }));
         peer.on("close", () => clientSockets.delete(peer));
         return;
@@ -484,7 +486,7 @@ export async function createControlPlane() {
           if (!daemonPrincipal || !machineId || msg.machineId !== machineId) return peer.close(1008, "machine_authentication_required");
           if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
           if (msg.type === "daemon.session.event") {
-            const current = store.getSession(msg.sessionId);
+            const current = await store.getSession(msg.sessionId);
             if (!current || current.machineId !== machineId || (daemonPrincipal.kind === "machine" && current.organizationId !== daemonPrincipal.organizationId)) return;
             const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return;
           }
