@@ -5,6 +5,7 @@ import { createCanonicalId } from "../../../packages/domain/src/index.js";
 
 const scrypt = promisify(crypto.scrypt);
 const MIGRATION_URL = new URL("../../../migrations/003_identity_organizations.sql", import.meta.url);
+const MACHINE_MIGRATION_URL = new URL("../../../migrations/004_machine_credentials.sql", import.meta.url);
 const PASSWORD_PARAMS = { N: 32_768, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000;
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -27,6 +28,7 @@ export class IdentityRepository {
 
   async initialize() {
     await this.pool.query(await readFile(MIGRATION_URL, "utf8"));
+    await this.pool.query(await readFile(MACHINE_MIGRATION_URL, "utf8"));
   }
 
   async register({ email, password, organizationName }) {
@@ -123,6 +125,70 @@ export class IdentityRepository {
     const row = result.rows[0];
     const retryAfterSeconds = Math.max(1, Math.ceil((new Date(row.window_started_at).getTime() + windowMs - Date.now()) / 1000));
     if (Number(row.attempt_count) > limit) throw new IdentityError("auth_rate_limit_exceeded", 429, retryAfterSeconds);
+  }
+
+  async createMachineCredential({ organizationId, actorId, machineId, name }) {
+    const membership = await this.getMembership(actorId, organizationId);
+    if (!membership) throw new IdentityError("organization_not_found", 404);
+    if (!["owner", "admin"].includes(membership.role)) throw new IdentityError("organization_permission_denied", 403);
+    if (typeof machineId !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(machineId)) throw new IdentityError("machine_id_invalid");
+    if (typeof name !== "string" || !name.trim() || name.trim().length > 120) throw new IdentityError("machine_name_invalid");
+    const token = crypto.randomBytes(32).toString("hex");
+    const id = createCanonicalId("credential");
+    try {
+      await this.pool.query(
+        `INSERT INTO agent_work_os_machine_credentials_v1
+           (id, token_hash, organization_id, machine_id, name, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [id, digestToken(token), organizationId, machineId.trim(), name.trim(), actorId]
+      );
+    } catch (error) {
+      if (error.code === "23505") throw new IdentityError("machine_id_already_registered", 409);
+      throw error;
+    }
+    return { id, token, organizationId, machineId: machineId.trim(), name: name.trim() };
+  }
+
+  async rotateMachineCredential({ organizationId, actorId, credentialId }) {
+    const membership = await this.getMembership(actorId, organizationId);
+    if (!membership) throw new IdentityError("organization_not_found", 404);
+    if (!["owner", "admin"].includes(membership.role)) throw new IdentityError("organization_permission_denied", 403);
+    const token = crypto.randomBytes(32).toString("hex");
+    const result = await this.pool.query(
+      `UPDATE agent_work_os_machine_credentials_v1
+       SET token_hash = $1, last_used_at = NULL
+       WHERE id = $2 AND organization_id = $3 AND revoked_at IS NULL
+       RETURNING machine_id`,
+      [digestToken(token), credentialId, organizationId]
+    );
+    if (!result.rowCount) throw new IdentityError("machine_credential_not_found", 404);
+    return { id: credentialId, token, machineId: result.rows[0].machine_id };
+  }
+
+  async authenticateMachine(token) {
+    if (!/^[0-9a-f]{64}$/.test(token ?? "")) return null;
+    const result = await this.pool.query(
+      `UPDATE agent_work_os_machine_credentials_v1 SET last_used_at = CURRENT_TIMESTAMP
+       WHERE token_hash = $1 AND revoked_at IS NULL
+       RETURNING id, organization_id, machine_id, name`,
+      [digestToken(token)]
+    );
+    const row = result.rows[0];
+    return row ? { kind: "machine", credentialId: row.id, organizationId: row.organization_id, machineId: row.machine_id, name: row.name } : null;
+  }
+
+  async revokeMachineCredential({ organizationId, actorId, credentialId }) {
+    const membership = await this.getMembership(actorId, organizationId);
+    if (!membership) throw new IdentityError("organization_not_found", 404);
+    if (!["owner", "admin"].includes(membership.role)) throw new IdentityError("organization_permission_denied", 403);
+    const result = await this.pool.query(
+      `UPDATE agent_work_os_machine_credentials_v1 SET revoked_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND organization_id = $2 AND revoked_at IS NULL`,
+      [credentialId, organizationId]
+    );
+    if (!result.rowCount) throw new IdentityError("machine_credential_not_found", 404);
+    const credential = await this.pool.query("SELECT machine_id FROM agent_work_os_machine_credentials_v1 WHERE id = $1", [credentialId]);
+    return { id: credentialId, machineId: credential.rows[0]?.machine_id, revoked: true };
   }
 
   async authenticate(rawToken) {

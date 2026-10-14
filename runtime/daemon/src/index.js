@@ -8,7 +8,8 @@ import { CodexAdapter, EchoAdapter } from "./adapters.js";
 import { loadMachineId } from "./identity.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
-const token = process.env.AGENT_WORK_OS_TOKEN ?? "dev-token";
+const machineCredential = process.env.AGENT_WORK_OS_MACHINE_TOKEN ?? "";
+const token = process.env.AGENT_WORK_OS_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "dev-token");
 const machineName = process.env.AGENT_WORK_OS_MACHINE_NAME || os.hostname();
 const heartbeatMs = Number(process.env.AGENT_WORK_OS_HEARTBEAT_MS ?? 15000);
 const shippingStateRoot = path.resolve(process.env.AGENT_WORK_OS_SHIPPING_STATE ?? ".agent-work-os/shipping-state");
@@ -20,21 +21,27 @@ if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new 
 const codex = new CodexAdapter(); if (codex.capability()) adapters.set("codex", codex);
 
 let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
+console.log(`[daemon] machine id ${machineId}`);
 function connect() {
   if (shuttingDown) return;
-  const url = new URL(serverUrl); url.searchParams.set("role", "daemon"); url.searchParams.set("token", token);
+  const url = new URL(serverUrl); url.searchParams.set("role", "daemon");
+  if (!machineCredential && token) url.searchParams.set("token", token);
   ws = new WebSocket(url);
   ws.addEventListener("open", () => {
     reconnectAttempt = 0;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = undefined; }
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
-    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
+    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, ...(machineCredential ? { machineCredential } : {}), machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
-    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")} shipping=enabled`);
   });
   ws.addEventListener("message", async (event) => {
     try {
-      const command = decodeMessage(String(event.data)); if (command.type !== "server.command") return;
+      const command = decodeMessage(String(event.data));
+      if (command.type === "server.machine.authenticated") {
+        console.log(`[daemon] authenticated as ${machineName} (${machineId}) org=${command.organizationId ?? "local"} agents=${[...adapters.keys()].join(",")} shipping=enabled`);
+        return;
+      }
+      if (command.type !== "server.command") return;
       const ack = (ok, error) => ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ok, error }));
       const emit = (agentEvent) => { if (agentEvent.kind === "thread") nativeSessions.set(command.sessionId, agentEvent.nativeSessionId); ws.send(encodeMessage({ type: "daemon.session.event", machineId, sessionId: command.sessionId, event: agentEvent })); };
       if (command.action === "shipping.start") {
@@ -93,7 +100,7 @@ async function runShipping(runId, contract) {
   }
 }
 function fail(emit, error) { emit({ kind: "error", message: error.message, at: new Date().toISOString() }); emit({ kind: "status", status: "failed", at: new Date().toISOString() }); }
-async function fetchSession(id) { const u = new URL(serverUrl); u.protocol = u.protocol === "wss:" ? "https:" : "http:"; u.pathname = `/api/sessions/${encodeURIComponent(id)}`; u.search = ""; const r = await fetch(u, { headers: { authorization: `Bearer ${token}` } }); if (!r.ok) throw new Error(`Unable to load session ${id}`); return r.json(); }
+async function fetchSession(id) { const u = new URL(serverUrl); u.protocol = u.protocol === "wss:" ? "https:" : "http:"; u.pathname = `/api/sessions/${encodeURIComponent(id)}`; u.search = ""; const credential = machineCredential || token; const r = await fetch(u, { headers: { authorization: `Bearer ${credential}` } }); if (!r.ok) throw new Error(`Unable to load session ${id}`); return r.json(); }
 async function shutdown() {
   shuttingDown = true;
   if (heartbeat) clearInterval(heartbeat);
