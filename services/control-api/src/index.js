@@ -129,6 +129,16 @@ export async function createControlPlane() {
         });
         return json(res, 201, { credential });
       }
+      const machineCredentialRotateMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/machine-credentials\/([^/]+)\/rotate$/);
+      if (machineCredentialRotateMatch && req.method === "POST" && principal.kind === "user") {
+        const credential = await identities.rotateMachineCredential({
+          organizationId: decodeURIComponent(machineCredentialRotateMatch[1]),
+          credentialId: decodeURIComponent(machineCredentialRotateMatch[2]),
+          actorId: principal.userId
+        });
+        daemonSockets.get(credential.machineId)?.close(1008, "machine_credential_rotated");
+        return json(res, 200, { credential });
+      }
       const machineCredentialRevokeMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/machine-credentials\/([^/]+)$/);
       if (machineCredentialRevokeMatch && req.method === "POST" && principal.kind === "user") {
         const result = await identities.revokeMachineCredential({
@@ -360,6 +370,8 @@ export async function createControlPlane() {
         if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
         const membership = await identities.getMembership(principal.userId, session.organizationId);
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const machine = store.getMachine(session.machineId);
+        if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
         const body = await readJson(req); const message = body.text?.trim();
         if (!message) return json(res, 400, { error: "text is required" });
         const updated = await store.addMessage(session.id, { id: crypto.randomUUID(), role: "user", text: message, createdAt: new Date().toISOString() });
@@ -374,6 +386,8 @@ export async function createControlPlane() {
         if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
         const membership = await identities.getMembership(principal.userId, session.organizationId);
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const machine = store.getMachine(session.machineId);
+        if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
         try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, { ok: true });
@@ -442,6 +456,7 @@ export async function createControlPlane() {
       let machineId;
       peer.on("message", async (raw) => {
         try {
+          if (peer.closed) return;
           const msg = decodeMessage(raw);
           if (msg.type === "daemon.hello") {
             if (msg.protocolVersion !== PROTOCOL_VERSION) return peer.close(1002, "protocol_version_mismatch");
@@ -459,6 +474,8 @@ export async function createControlPlane() {
               status: "online", lastSeenAt: new Date().toISOString()
             };
             delete machine.machineCredential;
+            const priorPeer = daemonSockets.get(machineId);
+            if (priorPeer && priorPeer !== peer) priorPeer.close(1008, "machine_connection_replaced");
             daemonSockets.set(machineId, peer);
             await store.upsertMachine(machine);
             peer.send(encodeMessage({ type: "server.machine.authenticated", machineId, organizationId: machine.organizationId ?? null }));
@@ -512,7 +529,7 @@ function isPublicAuthRoute(pathname) {
 function isUserScopedRoute(pathname) {
   return pathname === "/api/auth/me" || pathname === "/api/auth/logout" || pathname === "/api/auth/accept-invitation"
     || pathname === "/api/organizations" || /^\/api\/organizations\/[^/]+\/invitations$/.test(pathname)
-    || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+)?$/.test(pathname)
+    || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
     || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
 }

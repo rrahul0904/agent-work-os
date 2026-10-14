@@ -143,10 +143,26 @@ export class IdentityRepository {
         [id, digestToken(token), organizationId, machineId.trim(), name.trim(), actorId]
       );
     } catch (error) {
-      if (error.code === "23505") throw new IdentityError("active_machine_credential_exists", 409);
+      if (error.code === "23505") throw new IdentityError("machine_id_already_registered", 409);
       throw error;
     }
     return { id, token, organizationId, machineId: machineId.trim(), name: name.trim() };
+  }
+
+  async rotateMachineCredential({ organizationId, actorId, credentialId }) {
+    const membership = await this.getMembership(actorId, organizationId);
+    if (!membership) throw new IdentityError("organization_not_found", 404);
+    if (!["owner", "admin"].includes(membership.role)) throw new IdentityError("organization_permission_denied", 403);
+    const token = crypto.randomBytes(32).toString("hex");
+    const result = await this.pool.query(
+      `UPDATE agent_work_os_machine_credentials_v1
+       SET token_hash = $1, last_used_at = NULL
+       WHERE id = $2 AND organization_id = $3 AND revoked_at IS NULL
+       RETURNING machine_id`,
+      [digestToken(token), credentialId, organizationId]
+    );
+    if (!result.rowCount) throw new IdentityError("machine_credential_not_found", 404);
+    return { id: credentialId, token, machineId: result.rows[0].machine_id };
   }
 
   async authenticateMachine(token) {

@@ -10,8 +10,10 @@ CREATE TABLE IF NOT EXISTS agent_work_os_machine_credentials_v1 (
   revoked_at TIMESTAMPTZ
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS agent_work_os_machine_credentials_active_machine_v1
-  ON agent_work_os_machine_credentials_v1 (machine_id) WHERE revoked_at IS NULL;
+DROP INDEX IF EXISTS agent_work_os_machine_credentials_active_machine_v1;
+
+CREATE UNIQUE INDEX IF NOT EXISTS agent_work_os_machine_credentials_machine_v1
+  ON agent_work_os_machine_credentials_v1 (machine_id);
 
 CREATE INDEX IF NOT EXISTS agent_work_os_machine_credentials_org_v1
   ON agent_work_os_machine_credentials_v1 (organization_id, created_at DESC);

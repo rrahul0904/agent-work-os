@@ -146,7 +146,9 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     const machineCredential = credentialBody.credential;
     assert.match(machineCredential.token, /^[0-9a-f]{64}$/);
     const machineSocket = await openMachineSocket(port, machineCredential.token, machineId);
+    let replacementMachineSocket;
     let alphaSessionId;
+    let rotatedMachineToken;
     try {
       await waitFor(async () => {
         const response = await api(owner.cookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
@@ -163,6 +165,12 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       alphaSessionId = createdSession.id;
       const machineCommand = await machineSocket.readMessage();
       assert.equal(machineCommand.action, "session.start");
+      const sessionMessage = await api(owner.cookies, owner.body.csrfToken, `/api/sessions/${encodeURIComponent(createdSession.id)}/messages`, {
+        method: "POST", body: { text: "continue the tenant-scoped task" }
+      });
+      assert.equal(sessionMessage.status, 202);
+      const messageCommand = await machineSocket.readMessage();
+      assert.equal(messageCommand.action, "session.message");
       const machineSessionResponse = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
         headers: { authorization: `Bearer ${machineCredential.token}` }
       });
@@ -171,17 +179,31 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         headers: { authorization: "Bearer daemon-only-test-secret" }
       });
       assert.equal(crossMachineRead.status, 401, "the shared daemon token cannot authenticate production REST");
-      const revokedCredential = await api(owner.cookies, owner.body.csrfToken, `/api/organizations/${alphaId}/machine-credentials/${machineCredential.id}`, {
+      replacementMachineSocket = await openMachineSocket(port, machineCredential.token, machineId);
+      assert.equal(await machineSocket.closed, true, "a new daemon socket replaces the old connection");
+      await waitFor(async () => {
+        const response = await api(owner.cookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
+        const body = await response.json();
+        return response.ok && body.machines.some((machine) => machine.id === machineId && machine.status === "online");
+      }, 3_000, "replacement machine socket remains online");
+      const rotationResponse = await api(owner.cookies, owner.body.csrfToken, `/api/organizations/${alphaId}/machine-credentials/${machineCredential.id}/rotate`, {
         method: "POST", body: {}
       });
-      assert.equal(revokedCredential.status, 200);
-      assert.equal(await machineSocket.closed, true, "revocation closes the active machine WebSocket");
-      const revokedMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
+      const rotationBody = await rotationResponse.json();
+      assert.equal(rotationResponse.status, 200, JSON.stringify(rotationBody));
+      assert.equal(await replacementMachineSocket.closed, true, "credential rotation closes the active machine WebSocket");
+      rotatedMachineToken = rotationBody.credential.token;
+      const oldMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
         headers: { authorization: `Bearer ${machineCredential.token}` }
       });
-      assert.equal(revokedMachineRead.status, 401, "revoked machine credentials stop authenticating REST");
+      assert.equal(oldMachineRead.status, 401, "rotated machine credentials stop authenticating REST");
+      const rotatedMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
+        headers: { authorization: `Bearer ${rotatedMachineToken}` }
+      });
+      assert.equal(rotatedMachineRead.status, 200, "rotated credential retains the same machine and organization binding");
     } finally {
       machineSocket.close();
+      replacementMachineSocket?.close();
     }
 
     const viewerResult = await register(viewerEmail, "Beta Org");
@@ -193,10 +215,22 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     });
     const betaCredentialBody = await betaCredentialResponse.json();
     assert.equal(betaCredentialResponse.status, 201, JSON.stringify(betaCredentialBody));
+    const machineReassignment = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/organizations/${betaId}/machine-credentials`, {
+      method: "POST", body: { machineId, name: "Attempted reassignment" }
+    });
+    assert.equal(machineReassignment.status, 409, "a machine ID with existing sessions cannot be reassigned to another org");
     const foreignMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(alphaSessionId)}`, {
       headers: { authorization: `Bearer ${betaCredentialBody.credential.token}` }
     });
     assert.equal(foreignMachineRead.status, 404, "a valid machine cannot read sessions owned by another organization");
+    const revokedCredential = await api(owner.cookies, owner.body.csrfToken, `/api/organizations/${alphaId}/machine-credentials/${machineCredential.id}`, {
+      method: "POST", body: {}
+    });
+    assert.equal(revokedCredential.status, 200);
+    const revokedMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(alphaSessionId)}`, {
+      headers: { authorization: `Bearer ${rotatedMachineToken}` }
+    });
+    assert.equal(revokedMachineRead.status, 401, "revoked machine credentials stop authenticating REST");
     const guestResult = await register(guestEmail, "Gamma Org");
     assert.equal(guestResult.response.status, 201, JSON.stringify(guestResult.body));
 
