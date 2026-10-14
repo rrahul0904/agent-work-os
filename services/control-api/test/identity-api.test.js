@@ -26,6 +26,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
   const ownerEmail = `owner-${emailTag}@example.test`;
   const viewerEmail = `viewer-${emailTag}@example.test`;
   const guestEmail = `guest-${emailTag}@example.test`;
+  const databaseInspector = new Pool({ connectionString: databaseUrl, max: 1 });
   const serverEnv = {
     ...process.env,
     NODE_ENV: "production",
@@ -165,12 +166,30 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       alphaSessionId = createdSession.id;
       const machineCommand = await machineSocket.readMessage();
       assert.equal(machineCommand.action, "session.start");
+      const globalSnapshotBeforeSessionUpdates = await databaseInspector.query(
+        "SELECT payload FROM agent_work_os_state_v1 WHERE state_key = 'global'"
+      );
       const sessionMessage = await api(owner.cookies, owner.body.csrfToken, `/api/sessions/${encodeURIComponent(createdSession.id)}/messages`, {
         method: "POST", body: { text: "continue the tenant-scoped task" }
       });
       assert.equal(sessionMessage.status, 202);
       const messageCommand = await machineSocket.readMessage();
       assert.equal(messageCommand.action, "session.message");
+      const concurrentMessages = await Promise.all(["parallel update A", "parallel update B"].map((text) => api(owner.cookies, owner.body.csrfToken, `/api/sessions/${encodeURIComponent(createdSession.id)}/messages`, {
+        method: "POST", body: { text }
+      })));
+      assert.ok(concurrentMessages.every((response) => response.status === 202), "concurrent session updates are accepted");
+      await machineSocket.readMessage();
+      await machineSocket.readMessage();
+      const listedSessions = await api(owner.cookies, null, `/api/sessions?organizationId=${encodeURIComponent(alphaId)}`);
+      const listedSessionBody = await listedSessions.json();
+      assert.equal(listedSessionBody.sessions.find((session) => session.id === createdSession.id).messages.length, 4,
+        "concurrent session messages persist without overwriting one another");
+      const globalSnapshotAfterSessionUpdates = await databaseInspector.query(
+        "SELECT payload FROM agent_work_os_state_v1 WHERE state_key = 'global'"
+      );
+      assert.deepEqual(globalSnapshotAfterSessionUpdates.rows[0]?.payload, globalSnapshotBeforeSessionUpdates.rows[0]?.payload,
+        "machine and session mutations do not replace the shared legacy JSONB snapshot");
       const machineSessionResponse = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
         headers: { authorization: `Bearer ${machineCredential.token}` }
       });
@@ -335,6 +354,14 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     await startServer();
     const afterRestart = await api(loginCookies, null, `/api/work-items/${workItemId}?organizationId=${encodeURIComponent(alphaId)}`);
     assert.equal(afterRestart.status, 200, "database session and WorkItem survive control-plane restart");
+    const sessionAfterRestart = await api(loginCookies, null, `/api/sessions/${encodeURIComponent(alphaSessionId)}?organizationId=${encodeURIComponent(alphaId)}`);
+    const persistedSession = await sessionAfterRestart.json();
+    assert.equal(sessionAfterRestart.status, 200, "normalized session rows survive control-plane restart");
+    assert.equal(persistedSession.messages.length, 4, "all concurrent message updates survive restart");
+    const machinesAfterRestart = await api(loginCookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
+    const persistedMachineList = await machinesAfterRestart.json();
+    assert.ok(persistedMachineList.machines.some((machine) => machine.id === machineId && machine.status === "offline"),
+      "normalized machine inventory survives restart and marks disconnected machines offline");
 
     const logout = await api(loginCookies, loginBody.csrfToken, "/api/auth/logout", { method: "POST", body: {} });
     assert.equal(logout.status, 200);
@@ -344,6 +371,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     throw error;
   } finally {
     await stopServer();
+    await databaseInspector.end();
   }
 });
 
