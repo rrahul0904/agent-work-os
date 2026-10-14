@@ -13,3 +13,4 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run acceptance
+      - run: node scripts/founder-control-room-smoke.mjs
