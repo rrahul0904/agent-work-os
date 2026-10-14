@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f7f4ee" />
+  <title>HomeQuest — Household teamwork prototype</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">HQ</span><div><strong>HomeQuest</strong><small>clean-room prototype</small></div></div>
+      <div class="top-actions"><span class="sync-badge">Local demo sync</span><select id="member-switch" aria-label="Acting member"></select><span class="points-pill" id="points-pill"></span></div>
+    </header>
+    <main>
+      <div class="title-row"><div><span class="eyebrow">HOUSEHOLD</span><h1 id="household-name">Maple House</h1></div><p>Chores feel lighter when the whole home can see progress.</p></div>
+      <section id="home-panel" data-panel="home"></section>
+      <section id="tasks-panel" data-panel="tasks" hidden></section>
+      <section id="rewards-panel" data-panel="rewards" hidden></section>
+      <section id="money-panel" data-panel="money" hidden></section>
+      <section id="lists-panel" data-panel="lists" hidden></section>
+      <section id="more-panel" data-panel="more" hidden></section>
+    </main>
+    <nav class="bottom-nav" aria-label="Primary navigation">
+      <button data-tab="home" class="active"><span>⌂</span>Home</button>
+      <button data-tab="tasks"><span>✓</span>Tasks</button>
+      <button data-tab="rewards"><span>★</span>Rewards</button>
+      <button data-tab="money"><span>$</span>Money</button>
+      <button data-tab="lists"><span>☷</span>Lists</button>
+      <button data-tab="more"><span>•••</span>More</button>
+    </nav>
+  </div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
