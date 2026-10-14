@@ -19,6 +19,21 @@
       "updatedAt": "2026-10-08T15:39:46Z"
     },
     {
+      "id": "learn-anything",
+      "name": "Learn Anything Studio",
+      "repository": "rrahul0904/agent-work-os",
+      "category": "product",
+      "status": "BUILDING",
+      "readiness": 78,
+      "value": 5,
+      "effort": 2,
+      "risk": 2,
+      "blockers": [],
+      "nextAction": "Pass repository CI, verify the hosted /learn-anything/ route against an exact SHA, then run one full evidence-backed course through a connected Agent Work OS runtime.",
+      "evidence": ["Claudemy target/source investigation captured", "provider-neutral Learn Anything skill implemented", "course evidence validator and CI tests added", "Learning Studio web surface implemented", "REA comparison dossier recorded"],
+      "updatedAt": "2026-10-14T05:25:00Z"
+    },
+    {
       "id": "provenance-cleaner",
       "name": "Provenance Cleaner",
       "repository": "rrahul0904/provenance-cleaner",
