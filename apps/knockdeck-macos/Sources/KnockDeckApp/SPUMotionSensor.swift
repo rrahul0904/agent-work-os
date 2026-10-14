@@ -42,6 +42,7 @@ final class SPUMotionSensor {
     private let reportDataOffset = 6
     private let reportScale = 65_536.0
     private let reportBufferSize = 4_096
+    private let runLoopMode = RunLoop.Mode.common.rawValue as CFString
 
     private var accelerometer: IOHIDDevice?
     private var gyroscope: IOHIDDevice?
@@ -87,9 +88,9 @@ final class SPUMotionSensor {
             registerCallback(for: gyroscope, kind: .gyroscope)
         }
 
-        IOHIDDeviceScheduleWithRunLoop(accel, CFRunLoopGetMain(), kCFRunLoopCommonModes)
+        IOHIDDeviceScheduleWithRunLoop(accel, CFRunLoopGetMain(), runLoopMode)
         if let gyroscope {
-            IOHIDDeviceScheduleWithRunLoop(gyroscope, CFRunLoopGetMain(), kCFRunLoopCommonModes)
+            IOHIDDeviceScheduleWithRunLoop(gyroscope, CFRunLoopGetMain(), runLoopMode)
         }
         isRunning = true
     }
@@ -98,11 +99,11 @@ final class SPUMotionSensor {
         guard isRunning || accelerometer != nil || gyroscope != nil else { return }
 
         if let accelerometer {
-            IOHIDDeviceUnscheduleFromRunLoop(accelerometer, CFRunLoopGetMain(), kCFRunLoopCommonModes)
+            IOHIDDeviceUnscheduleFromRunLoop(accelerometer, CFRunLoopGetMain(), runLoopMode)
             IOHIDDeviceClose(accelerometer, IOOptionBits(kIOHIDOptionsTypeNone))
         }
         if let gyroscope {
-            IOHIDDeviceUnscheduleFromRunLoop(gyroscope, CFRunLoopGetMain(), kCFRunLoopCommonModes)
+            IOHIDDeviceUnscheduleFromRunLoop(gyroscope, CFRunLoopGetMain(), runLoopMode)
             IOHIDDeviceClose(gyroscope, IOOptionBits(kIOHIDOptionsTypeNone))
         }
 
@@ -197,7 +198,7 @@ final class SPUMotionSensor {
             service,
             key as CFString,
             kCFAllocatorDefault,
-            IOOptionBits(kNilOptions)
+            IOOptionBits(0)
         ) else { return nil }
         let value = unmanaged.takeRetainedValue()
         return (value as? NSNumber)?.uint32Value
