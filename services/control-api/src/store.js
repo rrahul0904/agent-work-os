@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import pg from "pg";
+import { DomainValidationError, assertCanonicalId, assertNewWorkItem, canonicalDigest, createCanonicalId, transitionWorkItem, workItemCreateDigest } from "../../../packages/domain/src/index.js";
+import { IdempotencyConflictError, OptimisticConcurrencyError } from "./work-item-store.js";
 
 const { Pool } = pg;
 const STATE_KEY = "global";
@@ -10,8 +12,9 @@ const MIGRATION_URL = new URL("../../../migrations/001_durable_state.sql", impor
 export class JsonStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.state = { machines: {}, sessions: {}, shippingRuns: {} };
+    this.state = { machines: {}, sessions: {}, shippingRuns: {}, workItems: {}, workItemEvents: [] };
     this.writeChain = Promise.resolve();
+    this.workItemWriteChain = Promise.resolve();
     this.pool = process.env.DATABASE_URL
       ? new Pool({
           connectionString: process.env.DATABASE_URL,
@@ -57,6 +60,73 @@ export class JsonStore {
   getMachine(id) { return this.state.machines[id]; }
   getSession(id) { return this.state.sessions[id]; }
   getShippingRun(id) { return this.state.shippingRuns[id]; }
+  getWorkItem(id, organizationId) {
+    const item = this.state.workItems[id];
+    return item?.organizationId === organizationId ? structuredClone(item) : null;
+  }
+  listWorkItemsByOrganization(organizationId) {
+    return Object.values(this.state.workItems)
+      .filter((item) => item.organizationId === organizationId)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .map((item) => structuredClone(item));
+  }
+  listWorkItemEvents(id, organizationId) {
+    if (this.state.workItems[id]?.organizationId !== organizationId) return [];
+    return this.state.workItemEvents.filter((event) => event.workItemId === id).sort((a, b) => a.version - b.version).map((event) => structuredClone(event));
+  }
+  persistWorkItemState() { return this.#persist(); }
+
+  createWorkItem(itemInput, { commandId, actorId, at = new Date().toISOString() } = {}) {
+    const item = assertNewWorkItem(itemInput);
+    const command = validateWorkItemCommand(commandId, actorId, at);
+    const requestDigest = workItemCreateDigest(item, command.actorId);
+    return this.#mutateWorkItems(() => {
+      const replay = findWorkItemCommand(this.state, command.commandId, requestDigest);
+      if (replay) return replay;
+      if (this.state.workItems[item.id]) {
+        const error = new Error(`work_item_already_exists:${item.id}`);
+        error.code = "work_item_already_exists";
+        throw error;
+      }
+      this.state.workItems[item.id] = structuredClone(item);
+      this.state.workItemEvents.push({
+        eventId: createCanonicalId("event"), workItemId: item.id, commandId: command.commandId,
+        actorId: command.actorId, version: 1, fromStatus: null, toStatus: "backlog", requestDigest,
+        reason: null, result: structuredClone(item), occurredAt: command.at
+      });
+      return { workItem: item, replayed: false };
+    });
+  }
+
+  transitionWorkItem(id, { organizationId, commandId, actorId, expectedVersion, to, reason = null, at = new Date().toISOString() } = {}) {
+    assertCanonicalId("work", id, "id");
+    assertCanonicalId("org", organizationId, "organizationId");
+    validateWorkItemReason(reason);
+    const command = validateWorkItemCommand(commandId, actorId, at);
+    const requestDigest = canonicalDigest({ operation: "transition", id, organizationId, actorId: command.actorId, expectedVersion, to, reason });
+    return this.#mutateWorkItems(() => {
+      const replay = findWorkItemCommand(this.state, command.commandId, requestDigest);
+      if (replay) return replay;
+      const current = this.state.workItems[id]?.organizationId === organizationId ? this.state.workItems[id] : null;
+      if (!current) return null;
+      let updated;
+      try {
+        updated = transitionWorkItem(current, { to, expectedVersion, at: command.at });
+      } catch (error) {
+        if (error.code === "work_item_version_conflict") {
+          throw new OptimisticConcurrencyError({ workItemId: id, expectedVersion, actualVersion: current.version });
+        }
+        throw error;
+      }
+      this.state.workItems[id] = updated;
+      this.state.workItemEvents.push({
+        eventId: createCanonicalId("event"), workItemId: id, commandId: command.commandId,
+        actorId: command.actorId, version: updated.version, fromStatus: current.status, toStatus: updated.status,
+        requestDigest, reason, result: structuredClone(updated), occurredAt: command.at
+      });
+      return { workItem: updated, replayed: false };
+    });
+  }
 
   async upsertMachine(machine) { this.state.machines[machine.id] = machine; await this.#persist(); return machine; }
   async touchMachine(id) {
@@ -85,6 +155,15 @@ export class JsonStore {
   }
 
   #session(id) { const s = this.getSession(id); if (!s) throw new Error(`Unknown session: ${id}`); return s; }
+  #mutateWorkItems(operation) {
+    const pending = this.workItemWriteChain.catch(() => {}).then(async () => {
+      const result = operation();
+      await this.#persist();
+      return structuredClone(result);
+    });
+    this.workItemWriteChain = pending.then(() => undefined, () => undefined);
+    return pending;
+  }
   #persist() {
     const snapshot = JSON.stringify(this.state);
     this.writeChain = this.writeChain.catch(() => {}).then(async () => {
@@ -112,6 +191,30 @@ function normalizeState(parsed = {}) {
   return {
     machines: parsed.machines ?? {},
     sessions: parsed.sessions ?? {},
-    shippingRuns: parsed.shippingRuns ?? {}
+    shippingRuns: parsed.shippingRuns ?? {},
+    workItems: parsed.workItems ?? {},
+    workItemEvents: parsed.workItemEvents ?? []
   };
+}
+
+function validateWorkItemCommand(commandId, actorId, at) {
+  assertCanonicalId("command", commandId, "commandId");
+  const actorKind = ["user", "agent", "service"].find((kind) => actorId?.startsWith(`${kind}_`));
+  if (!actorKind) throw new Error("work_item_actor_id_invalid");
+  assertCanonicalId(actorKind, actorId, "actorId");
+  if (!Number.isFinite(Date.parse(at))) throw new Error("work_item_timestamp_invalid");
+  return { commandId, actorId, at };
+}
+
+function validateWorkItemReason(reason) {
+  if (reason !== null && (typeof reason !== "string" || reason.length > 2_000)) {
+    throw new DomainValidationError("work_item_reason_invalid");
+  }
+}
+
+function findWorkItemCommand(state, commandId, requestDigest) {
+  const event = state.workItemEvents.find((candidate) => candidate.commandId === commandId);
+  if (!event) return null;
+  if (event.requestDigest !== requestDigest) throw new IdempotencyConflictError(commandId);
+  return { workItem: structuredClone(event.result), replayed: true };
 }

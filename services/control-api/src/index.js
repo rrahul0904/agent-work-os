@@ -8,6 +8,8 @@ import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
 import { digestShippingContract, validateShippingContract } from "./shipping-contract.js";
 import { buildProductSummary, listReceipts, loadPortfolio, rankPortfolio } from "./product-state.js";
 import { JsonStore } from "./store.js";
+import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
+import { createWorkItemRepository } from "./work-item-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -19,10 +21,13 @@ const statePath = path.resolve(process.env.AGENT_WORK_OS_STATE_PATH ?? ".data/st
 const portfolioPath = path.resolve(process.env.AGENT_WORK_OS_PORTFOLIO_PATH ?? path.join(projectRoot, "config/portfolio.json"));
 const receiptsRoot = path.resolve(process.env.AGENT_WORK_OS_RECEIPTS_ROOT ?? path.join(projectRoot, "receipts"));
 const exampleContractPath = path.join(projectRoot, "contracts/shipping-os-selftest.example.json");
+const CONTROL_PLANE_ACTOR_ID = "service_00000000-0000-4000-8000-000000000001";
 
 export async function createControlPlane() {
   const store = new JsonStore(statePath);
   await store.load();
+  const workItems = createWorkItemRepository(store);
+  if (typeof workItems.initialize === "function") await workItems.initialize();
   const daemonSockets = new Map();
   const clientSockets = new Set();
 
@@ -45,6 +50,61 @@ export async function createControlPlane() {
       if (url.pathname.startsWith("/api/") && !isAuthorized(req)) return json(res, 401, { error: "unauthorized" });
 
       if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions(), shippingRuns: store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/work-items") {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        return json(res, 200, { workItems: await workItems.listByOrganization(organizationId) });
+      }
+      if (req.method === "POST" && url.pathname === "/api/work-items") {
+        const body = await readJson(req);
+        if (!body.id || !body.commandId || !body.organizationId || !body.title) {
+          return json(res, 400, { error: "id, commandId, organizationId and title are required" });
+        }
+        const item = createWorkItem({
+          id: body.id,
+          organizationId: body.organizationId,
+          projectId: body.projectId ?? null,
+          title: body.title,
+          description: body.description ?? "",
+          createdBy: CONTROL_PLANE_ACTOR_ID
+        });
+        const result = await workItems.create(item, { commandId: body.commandId, actorId: CONTROL_PLANE_ACTOR_ID });
+        broadcast({ type: "work.item.updated", workItem: result.workItem });
+        return json(res, result.replayed ? 200 : 201, result);
+      }
+      const workItemEventsMatch = url.pathname.match(/^\/api\/work-items\/([^/]+)\/events$/);
+      if (req.method === "GET" && workItemEventsMatch) {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        const events = await workItems.listEvents(decodeURIComponent(workItemEventsMatch[1]), organizationId);
+        if (events.length === 0 && !(await workItems.get(decodeURIComponent(workItemEventsMatch[1]), organizationId))) return json(res, 404, { error: "work_item_not_found" });
+        return json(res, 200, { events });
+      }
+      const workItemTransitionMatch = url.pathname.match(/^\/api\/work-items\/([^/]+)\/transitions$/);
+      if (req.method === "POST" && workItemTransitionMatch) {
+        const body = await readJson(req);
+        if (!body.organizationId || !body.commandId || !Number.isSafeInteger(body.expectedVersion) || !body.to) {
+          return json(res, 400, { error: "organizationId, commandId, expectedVersion and to are required" });
+        }
+        const result = await workItems.transition(decodeURIComponent(workItemTransitionMatch[1]), {
+          organizationId: body.organizationId,
+          commandId: body.commandId,
+          actorId: CONTROL_PLANE_ACTOR_ID,
+          expectedVersion: body.expectedVersion,
+          to: body.to,
+          reason: body.reason ?? null
+        });
+        if (!result) return json(res, 404, { error: "work_item_not_found" });
+        broadcast({ type: "work.item.updated", workItem: result.workItem });
+        return json(res, 200, result);
+      }
+      const workItemMatch = url.pathname.match(/^\/api\/work-items\/([^/]+)$/);
+      if (req.method === "GET" && workItemMatch) {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        const item = await workItems.get(decodeURIComponent(workItemMatch[1]), organizationId);
+        return item ? json(res, 200, item) : json(res, 404, { error: "work_item_not_found" });
+      }
       if (req.method === "GET" && url.pathname === "/api/product") {
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
         const runReceipts = store.listShippingRuns().filter((run) => run.releaseReceipt).map((run) => ({ ...run.releaseReceipt, runId: run.runId, projectId: run.projectId, releaseVersion: run.releaseVersion, path: null, source: "runtime" }));
@@ -139,7 +199,11 @@ export async function createControlPlane() {
       if (req.method === "GET" && !url.pathname.startsWith("/api/")) return serveStatic(url.pathname, res);
       return json(res, 404, { error: "not_found" });
     } catch (error) {
-      console.error("[api] request error", error); return json(res, 500, { error: "internal_error", message: error.message });
+      const status = error.code === "work_item_version_conflict" || error.code === "idempotency_key_conflict" || error.code === "work_item_already_exists" ? 409
+        : error instanceof DomainValidationError ? 400
+          : 500;
+      if (status === 500) console.error("[api] request error", error);
+      return json(res, status, { error: status === 500 ? "internal_error" : error.code, message: status === 500 ? "Request could not be completed" : error.message });
     }
   });
 

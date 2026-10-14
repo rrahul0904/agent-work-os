@@ -57,6 +57,20 @@ AGENT_WORK_OS_CODEX_ARGS='["--ephemeral"]'
 
 Use CLI permission/sandbox settings appropriate for your environment. The control plane never receives your Codex credentials.
 
+## Canonical work items (initial domain slice)
+
+The control API exposes a versioned WorkItem lifecycle backed by append-only transition events. IDs use a type prefix plus UUID. Every transition requires an expected version and a unique command ID; stale writes return `409`, and exact retries return the original result.
+
+Authenticated routes:
+
+- `POST /api/work-items` — create using `id`, `commandId`, `organizationId`, `title`, and optional `projectId` / `description`.
+- `GET /api/work-items?organizationId=...` — list within one organization.
+- `GET /api/work-items/:id?organizationId=...` — read within one organization.
+- `POST /api/work-items/:id/transitions` — body includes `organizationId`, `commandId`, `expectedVersion`, and `to`.
+- `GET /api/work-items/:id/events?organizationId=...` — read ordered transition evidence.
+
+Local development uses the existing JSON state file as a compatibility adapter. With `DATABASE_URL`, the API applies idempotent migrations and stores WorkItems and transition events in PostgreSQL rows. The existing session and Shipping Run persistence path is unchanged. Set `AGENT_WORK_OS_TEST_DATABASE_URL` to run the real PostgreSQL concurrency/restart test. The shared control token currently records a service actor; organization filtering is not a substitute for user membership/RBAC, so this slice is not a multi-tenant authorization boundary.
+
 ## Repository map
 
 ```text

@@ -4,6 +4,7 @@ import { mkdtemp } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
+import { createCanonicalId } from '../packages/domain/src/index.js';
 
 const root = path.resolve(new URL('..', import.meta.url).pathname);
 const temp = await mkdtemp(path.join(os.tmpdir(), 'agent-work-os-acceptance-'));
@@ -42,6 +43,39 @@ try {
   const product = await productResponse.json();
   assert.ok(product.counts.projects >= 1, 'product portfolio should be populated');
 
+  const organizationId = createCanonicalId('org');
+  const workItem = {
+    id: createCanonicalId('work'),
+    commandId: createCanonicalId('command'),
+    organizationId,
+    title: 'Canonical work item acceptance'
+  };
+  const workItemResponse = await fetch(`http://127.0.0.1:${port}/api/work-items`, {
+    method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(workItem)
+  });
+  assert.equal(workItemResponse.status, 201);
+  assert.equal((await workItemResponse.json()).workItem.status, 'backlog');
+  const workItemReplay = await fetch(`http://127.0.0.1:${port}/api/work-items`, {
+    method: 'POST', headers: { ...headers, 'content-type': 'application/json' }, body: JSON.stringify(workItem)
+  });
+  assert.equal(workItemReplay.status, 200);
+  assert.equal((await workItemReplay.json()).replayed, true);
+  const workItemList = await fetch(`http://127.0.0.1:${port}/api/work-items?organizationId=${encodeURIComponent(organizationId)}`, { headers });
+  assert.equal((await workItemList.json()).workItems.length, 1);
+  const foreignOrgRead = await fetch(`http://127.0.0.1:${port}/api/work-items/${workItem.id}?organizationId=${encodeURIComponent(createCanonicalId('org'))}`, { headers });
+  assert.equal(foreignOrgRead.status, 404);
+  const ready = await fetch(`http://127.0.0.1:${port}/api/work-items/${workItem.id}/transitions`, {
+    method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ organizationId, commandId: createCanonicalId('command'), expectedVersion: 1, to: 'ready' })
+  });
+  assert.equal(ready.status, 200);
+  assert.equal((await ready.json()).workItem.version, 2);
+  const stale = await fetch(`http://127.0.0.1:${port}/api/work-items/${workItem.id}/transitions`, {
+    method: 'POST', headers: { ...headers, 'content-type': 'application/json' },
+    body: JSON.stringify({ organizationId, commandId: createCanonicalId('command'), expectedVersion: 1, to: 'blocked' })
+  });
+  assert.equal(stale.status, 409);
+
   const create = await fetch(`http://127.0.0.1:${port}/api/sessions`,{method:'POST',headers:{...headers,'content-type':'application/json'},body:JSON.stringify({machineId:machine.id,cwd:root,agent:'echo',prompt:'acceptance'})});
   assert.equal(create.status,201);const session=await create.json();
   let completed = await waitFor(async()=>{const s=await (await fetch(`http://127.0.0.1:${port}/api/sessions/${session.id}`,{headers})).json();return s.status==='completed'?s:null;},8000,'first echo turn');
@@ -75,7 +109,7 @@ try {
   assert.ok(shipped.testedSha);
   assert.equal(shipped.testedSha,shipped.deployedSha);
   assert.equal(shipped.releaseReceipt.goldenPath[0].status,'PASS');
-  console.log('[acceptance] PASS: one-command product -> authenticated console API -> local agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
+  console.log('[acceptance] PASS: canonical WorkItem API + one-command product -> local agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
 } finally {
   for(const child of children.reverse()) child.kill('SIGTERM');
   await new Promise(r=>setTimeout(r,220));
