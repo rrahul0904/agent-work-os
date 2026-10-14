@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
+import { FairTurnScheduler, projectAttention, reparentAgent, validateOrganization } from "./coordination.js";
 import { JsonStore } from "./store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,7 +37,66 @@ export async function createControlPlane() {
       if (req.method === "OPTIONS") return end(res, 204);
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, protocolVersion: PROTOCOL_VERSION });
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: store.listMachines(), sessions: store.listSessions() });
+      if (req.method === "GET" && url.pathname === "/api/state") {
+        return json(res, 200, {
+          machines: store.listMachines(),
+          sessions: store.listSessions(),
+          organizations: store.listOrganizations()
+        });
+      }
+
+      if (req.method === "GET" && url.pathname === "/api/organizations") {
+        return json(res, 200, { organizations: store.listOrganizations() });
+      }
+      if (req.method === "POST" && url.pathname === "/api/organizations") {
+        const body = await readJson(req);
+        try {
+          const organization = validateOrganization(body);
+          const existed = Boolean(store.getOrganization(organization.id));
+          await store.upsertOrganization(organization);
+          broadcast({ type: "organization.updated", organization });
+          return json(res, existed ? 200 : 201, organization);
+        } catch (error) {
+          return json(res, 400, { error: "invalid_organization", message: error.message });
+        }
+      }
+      const organizationMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)$/);
+      if (req.method === "GET" && organizationMatch) {
+        const organization = store.getOrganization(decodeURIComponent(organizationMatch[1]));
+        return organization ? json(res, 200, organization) : json(res, 404, { error: "organization_not_found" });
+      }
+      const reparentMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/reparent$/);
+      if (req.method === "POST" && reparentMatch) {
+        const organization = store.getOrganization(decodeURIComponent(reparentMatch[1]));
+        if (!organization) return json(res, 404, { error: "organization_not_found" });
+        const body = await readJson(req);
+        try {
+          const updated = reparentAgent(organization, body.agentId, body.parentId ?? null);
+          await store.upsertOrganization(updated);
+          broadcast({ type: "organization.updated", organization: updated });
+          return json(res, 200, updated);
+        } catch (error) {
+          return json(res, 400, { error: "invalid_reparent", message: error.message });
+        }
+      }
+      if (req.method === "POST" && url.pathname === "/api/attention/preview") {
+        const body = await readJson(req);
+        const items = projectAttention(body, { resolvedIds: Array.isArray(body.resolvedIds) ? body.resolvedIds : [] });
+        return json(res, 200, { items });
+      }
+      if (req.method === "POST" && url.pathname === "/api/scheduler/preview") {
+        const body = await readJson(req);
+        try {
+          const scheduler = new FairTurnScheduler({ maxConcurrent: body.maxConcurrent ?? 16 });
+          if (!Array.isArray(body.turns)) return json(res, 400, { error: "turns must be an array" });
+          for (const turn of body.turns) scheduler.enqueue(turn);
+          const dispatched = scheduler.dispatch(body.dispatchLimit ?? scheduler.maxConcurrent);
+          return json(res, 200, { dispatched, snapshot: scheduler.snapshot() });
+        } catch (error) {
+          return json(res, 400, { error: "invalid_schedule_preview", message: error.message });
+        }
+      }
+
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
       if (req.method === "GET" && sessionMatch) {
         const session = store.getSession(decodeURIComponent(sessionMatch[1]));
@@ -94,7 +154,14 @@ export async function createControlPlane() {
     if (role !== "daemon" && role !== "client") return socket.destroy();
     const peer = acceptWebSocket(req, socket); if (!peer) return;
     if (role === "client") {
-      clientSockets.add(peer); peer.send(encodeMessage({ type: "state.snapshot", machines: store.listMachines(), sessions: store.listSessions() })); peer.on("close", () => clientSockets.delete(peer)); return;
+      clientSockets.add(peer);
+      peer.send(encodeMessage({
+        type: "state.snapshot",
+        machines: store.listMachines(),
+        sessions: store.listSessions(),
+        organizations: store.listOrganizations()
+      }));
+      peer.on("close", () => clientSockets.delete(peer)); return;
     }
     let machineId;
     peer.on("message", async (raw) => {
