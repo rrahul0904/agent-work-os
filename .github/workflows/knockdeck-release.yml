@@ -1,0 +1,135 @@
+name: knockdeck-production-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (for example 0.1.0)
+        required: true
+        default: 0.1.0
+      hardware_receipt:
+        description: URL or identifier for the approved physical MacBook hardware-test receipt
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-15
+    environment: production
+    defaults:
+      run:
+        working-directory: apps/knockdeck-macos
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+      HARDWARE_RECEIPT: ${{ inputs.hardware_receipt }}
+      DEVELOPER_ID_APPLICATION: ${{ secrets.KNOCKDECK_DEVELOPER_ID_APPLICATION }}
+      APPLE_TEAM_ID: ${{ secrets.KNOCKDECK_APPLE_TEAM_ID }}
+      APPLE_ID: ${{ secrets.KNOCKDECK_APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.KNOCKDECK_APPLE_APP_PASSWORD }}
+      CERTIFICATE_P12_BASE64: ${{ secrets.KNOCKDECK_CERTIFICATE_P12_BASE64 }}
+      CERTIFICATE_PASSWORD: ${{ secrets.KNOCKDECK_CERTIFICATE_PASSWORD }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KNOCKDECK_KEYCHAIN_PASSWORD }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enforce credential and hardware gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$HARDWARE_RECEIPT"
+          for value in \
+            DEVELOPER_ID_APPLICATION APPLE_TEAM_ID APPLE_ID APPLE_APP_PASSWORD \
+            CERTIFICATE_P12_BASE64 CERTIFICATE_PASSWORD KEYCHAIN_PASSWORD; do
+            if [[ -z "${!value:-}" ]]; then
+              echo "Missing required protected release secret: $value" >&2
+              exit 1
+            fi
+          done
+
+      - name: Unit tests
+        run: swift test
+
+      - name: Build development bundle
+        run: bash scripts/build-app.sh
+
+      - name: Import Developer ID certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/knockdeck-signing.keychain-db"
+          CERT_P12="$RUNNER_TEMP/knockdeck-signing.p12"
+          echo "$CERTIFICATE_P12_BASE64" | base64 --decode > "$CERT_P12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT_P12" -k "$KEYCHAIN" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Sign with Developer ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="dist/KnockDeck.app"
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$DEVELOPER_ID_APPLICATION" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --display --verbose=4 "$APP"
+
+      - name: Submit to Apple notarization
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUBMISSION="$RUNNER_TEMP/KnockDeck-${RELEASE_VERSION}-notary.zip"
+          ditto -c -k --keepParent "dist/KnockDeck.app" "$SUBMISSION"
+          xcrun notarytool submit "$SUBMISSION" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+      - name: Staple and Gatekeeper-verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="dist/KnockDeck.app"
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          spctl --assess --type execute --verbose=4 "$APP"
+
+      - name: Create notarized release archive and receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          FINAL="dist/KnockDeck-${RELEASE_VERSION}-notarized.zip"
+          rm -f "$FINAL"
+          ditto -c -k --sequesterRsrc --keepParent "dist/KnockDeck.app" "$FINAL"
+          SHA256="$(shasum -a 256 "$FINAL" | awk '{print $1}')"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          cat > "dist/release-receipt.json" <<JSON
+          {
+            "product": "KnockDeck",
+            "version": "$RELEASE_VERSION",
+            "source_sha": "$SOURCE_SHA",
+            "artifact": "$(basename "$FINAL")",
+            "sha256": "$SHA256",
+            "hardware_receipt": "$HARDWARE_RECEIPT",
+            "developer_id": "$DEVELOPER_ID_APPLICATION",
+            "notarization": "accepted_and_stapled",
+            "gatekeeper": "accepted"
+          }
+          JSON
+          cat "dist/release-receipt.json"
+
+      - name: Upload production artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnockDeck-macos-notarized-${{ inputs.version }}
+          path: |
+            apps/knockdeck-macos/dist/KnockDeck-${{ inputs.version }}-notarized.zip
+            apps/knockdeck-macos/dist/release-receipt.json
+          if-no-files-found: error
