@@ -1,0 +1,34 @@
+{
+  "version": "auth-assurance-target/v1",
+  "target": {
+    "id": "fixture-local-login",
+    "origin": "http://127.0.0.1:4173",
+    "environment": "local-fixture",
+    "allowedPaths": ["/login", "/mfa"],
+    "ownershipVerification": {
+      "method": "local-fixture",
+      "verified": true
+    }
+  },
+  "authorization": {
+    "id": "authz_fixture_local_login",
+    "scope": "login-qa",
+    "expiresAt": "2099-01-01T00:00:00Z",
+    "requiresHumanApprovalForNonLocalTarget": true
+  },
+  "limits": {
+    "maxCredentialFixturesPerRun": 3,
+    "maxAttemptsPerAccountPerRun": 2,
+    "maxConcurrentBrowserContexts": 2,
+    "allowProxy": false,
+    "allowUserAgentRotation": false,
+    "allowCredentialEnumeration": false
+  },
+  "dataPolicy": {
+    "persistCredentials": false,
+    "redactPasswordFields": true,
+    "redactSessionTokens": true,
+    "screenshotRetentionDays": 7,
+    "domRetentionDays": 7
+  }
+}
