@@ -5,14 +5,18 @@ import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../package
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
 import { CodexAdapter, EchoAdapter } from "./adapters.js";
+import { prepareContextInjection } from "./context-injection.js";
 import { loadMachineId } from "./identity.js";
+import { ProjectContextStore } from "./project-context-store.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const token = process.env.AGENT_WORK_OS_TOKEN ?? "dev-token";
 const machineName = process.env.AGENT_WORK_OS_MACHINE_NAME || os.hostname();
 const heartbeatMs = Number(process.env.AGENT_WORK_OS_HEARTBEAT_MS ?? 15000);
 const shippingStateRoot = path.resolve(process.env.AGENT_WORK_OS_SHIPPING_STATE ?? ".agent-work-os/shipping-state");
+const contextRoot = path.resolve(process.env.AGENT_WORK_OS_CONTEXT_ROOT ?? path.join(os.homedir(), ".agent-work-os", "project-context"));
 const machineId = await loadMachineId();
+const projectContextStore = new ProjectContextStore(contextRoot);
 const adapters = new Map();
 const nativeSessions = new Map();
 const shippingRuns = new Set();
@@ -28,9 +32,9 @@ function connect() {
     reconnectAttempt = 0;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = undefined; }
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
-    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
+    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true }, projectContext: { enabled: true } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
-    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")} shipping=enabled`);
+    console.log(`[daemon] connected as ${machineName} (${machineId}) agents=${capabilities.map((c) => c.name).join(",")} shipping=enabled context=enabled`);
   });
   ws.addEventListener("message", async (event) => {
     try {
@@ -46,8 +50,11 @@ function connect() {
         return;
       }
       if (command.action === "session.start") {
-        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`); ack(true);
-        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
+        const prepared = await prepareContextInjection({ store: projectContextStore, request: p.context, prompt: p.prompt, defaultRunId: command.sessionId });
+        ack(true);
+        if (prepared.receipt) emit({ kind: "context", receipt: prepared.receipt, at: prepared.receipt.at });
+        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: prepared.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
       if (command.action === "session.message") {
