@@ -65,7 +65,9 @@ final class SPUMotionSensor {
         }
         defer { IOObjectRelease(accelerometerService) }
 
-        let accel = IOHIDDeviceCreate(kCFAllocatorDefault, accelerometerService)
+        guard let accel = IOHIDDeviceCreate(kCFAllocatorDefault, accelerometerService) else {
+            throw SensorError.accelerometerUnavailable
+        }
         let result = IOHIDDeviceOpen(accel, IOOptionBits(kIOHIDOptionsTypeNone))
         guard result == kIOReturnSuccess else {
             throw SensorError.accelerometerOpenFailed(result)
@@ -74,8 +76,8 @@ final class SPUMotionSensor {
 
         if let gyroService = findDevice(usage: gyroscopeUsage) {
             defer { IOObjectRelease(gyroService) }
-            let gyro = IOHIDDeviceCreate(kCFAllocatorDefault, gyroService)
-            if IOHIDDeviceOpen(gyro, IOOptionBits(kIOHIDOptionsTypeNone)) == kIOReturnSuccess {
+            if let gyro = IOHIDDeviceCreate(kCFAllocatorDefault, gyroService),
+               IOHIDDeviceOpen(gyro, IOOptionBits(kIOHIDOptionsTypeNone)) == kIOReturnSuccess {
                 gyroscope = gyro
             }
         }
