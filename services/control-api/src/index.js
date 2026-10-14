@@ -29,7 +29,7 @@ const exampleContractPath = path.join(projectRoot, "contracts/shipping-os-selfte
 const CONTROL_PLANE_ACTOR_ID = "service_00000000-0000-4000-8000-000000000001";
 
 export async function createControlPlane() {
-  if (isProduction && !process.env.AGENT_WORK_OS_TOKEN) throw new Error("AGENT_WORK_OS_TOKEN_required_for_daemon_authentication");
+  if (isProduction && !process.env.DATABASE_URL) throw new Error("DATABASE_URL_required_in_production");
   if (!["Strict", "Lax", "None"].includes(cookieSameSite)) throw new Error("AGENT_WORK_OS_COOKIE_SAME_SITE_must_be_Strict_Lax_or_None");
   if (cookieSameSite === "None" && !isProduction) throw new Error("cross_site_auth_cookies_require_production_secure_transport");
   const store = new JsonStore(statePath);
@@ -45,7 +45,7 @@ export async function createControlPlane() {
   const broadcast = (event) => {
     const encoded = encodeMessage(event);
     for (const [peer, principal] of clientSockets) {
-      const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId;
+      const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
       if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) peer.send(encoded);
     }
   };
@@ -69,11 +69,14 @@ export async function createControlPlane() {
       let principal = null;
       if (url.pathname.startsWith("/api/") && !isPublicAuthRoute) {
         principal = identities ? await authenticateSession(req, identities) : null;
+        if (!principal && identities) principal = await authenticateMachineRequest(req, identities);
         if (!principal && !isProduction && isAuthorized(req)) principal = { kind: "legacy", actorId: CONTROL_PLANE_ACTOR_ID };
         if (!principal) return json(res, 401, { error: "unauthorized" });
         if (principal.kind === "user") {
           if (!isUserScopedRoute(url.pathname)) return json(res, 403, { error: "resource_tenant_scope_unavailable" });
           if (isMutation(req.method) && !isValidCsrf(req)) return json(res, 403, { error: "csrf_validation_failed" });
+        } else if (principal.kind === "machine" && !isMachineScopedRoute(req.method, url.pathname)) {
+          return json(res, 403, { error: "machine_resource_scope_denied" });
         }
       }
 
@@ -114,6 +117,27 @@ export async function createControlPlane() {
         const body = await readJson(req);
         const invitation = await identities.createInvitation({ organizationId, actorId: principal.userId, email: body.email, role: body.role });
         return json(res, 201, { invitation });
+      }
+      const machineCredentialsMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/machine-credentials$/);
+      if (machineCredentialsMatch && req.method === "POST" && principal.kind === "user") {
+        const body = await readJson(req);
+        const credential = await identities.createMachineCredential({
+          organizationId: decodeURIComponent(machineCredentialsMatch[1]),
+          actorId: principal.userId,
+          machineId: body.machineId,
+          name: body.name
+        });
+        return json(res, 201, { credential });
+      }
+      const machineCredentialRevokeMatch = url.pathname.match(/^\/api\/organizations\/([^/]+)\/machine-credentials\/([^/]+)$/);
+      if (machineCredentialRevokeMatch && req.method === "POST" && principal.kind === "user") {
+        const result = await identities.revokeMachineCredential({
+          organizationId: decodeURIComponent(machineCredentialRevokeMatch[1]),
+          credentialId: decodeURIComponent(machineCredentialRevokeMatch[2]),
+          actorId: principal.userId
+        });
+        daemonSockets.get(result.machineId)?.close(1008, "machine_credential_revoked");
+        return json(res, 200, result);
       }
       if (req.method === "POST" && url.pathname === "/api/auth/accept-invitation" && principal.kind === "user") {
         const body = await readJson(req);
@@ -198,7 +222,7 @@ export async function createControlPlane() {
       if (req.method === "GET" && url.pathname === "/api/portfolio") return json(res, 200, { projects: rankPortfolio(await loadPortfolio(portfolioPath)) });
       if (req.method === "GET" && url.pathname === "/api/receipts") return json(res, 200, { receipts: await listReceipts(receiptsRoot) });
       if (req.method === "GET" && url.pathname === "/api/shipping/example") return json(res, 200, JSON.parse(await readFile(exampleContractPath, "utf8")));
-      if (req.method === "GET" && url.pathname === "/api/shipping/runs") return json(res, 200, { runs: store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/shipping/runs" && principal.kind === "legacy") return json(res, 200, { runs: store.listShippingRuns() });
       const shippingRunMatch = url.pathname.match(/^\/api\/shipping\/runs\/([^/]+)$/);
       if (req.method === "GET" && shippingRunMatch) {
         const run = store.getShippingRun(decodeURIComponent(shippingRunMatch[1]));
@@ -209,7 +233,7 @@ export async function createControlPlane() {
         const result = validateShippingContract(body.contract ?? body);
         return json(res, result.valid ? 200 : 400, result);
       }
-      if (req.method === "POST" && url.pathname === "/api/shipping/runs") {
+      if (req.method === "POST" && url.pathname === "/api/shipping/runs" && principal.kind === "legacy") {
         const body = await readJson(req);
         const machine = store.getMachine(body.machineId);
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
@@ -246,11 +270,11 @@ export async function createControlPlane() {
       }
 
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
-      if (req.method === "GET" && sessionMatch) {
+      if (req.method === "GET" && sessionMatch && principal.kind === "legacy") {
         const session = store.getSession(decodeURIComponent(sessionMatch[1]));
         return session ? json(res, 200, session) : json(res, 404, { error: "session_not_found" });
       }
-      if (req.method === "POST" && url.pathname === "/api/sessions") {
+      if (req.method === "POST" && url.pathname === "/api/sessions" && principal.kind === "legacy") {
         const body = await readJson(req);
         if (!body.machineId || !body.cwd || !body.agent || !body.prompt?.trim()) return json(res, 400, { error: "machineId, cwd, agent and prompt are required" });
         const machine = store.getMachine(body.machineId);
@@ -264,7 +288,7 @@ export async function createControlPlane() {
         return json(res, 201, session);
       }
       const messageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
-      if (req.method === "POST" && messageMatch) {
+      if (req.method === "POST" && messageMatch && principal.kind === "legacy") {
         const session = store.getSession(decodeURIComponent(messageMatch[1]));
         if (!session) return json(res, 404, { error: "session_not_found" });
         const body = await readJson(req); const text = body.text?.trim();
@@ -275,13 +299,85 @@ export async function createControlPlane() {
         return json(res, 202, updated);
       }
       const interruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);
-      if (req.method === "POST" && interruptMatch) {
+      if (req.method === "POST" && interruptMatch && principal.kind === "legacy") {
         const session = store.getSession(decodeURIComponent(interruptMatch[1])); if (!session) return json(res, 404, { error: "session_not_found" });
         try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, { ok: true });
       }
       if (req.method === "GET" && !url.pathname.startsWith("/api/")) return serveStatic(url.pathname, res);
+
+      if (req.method === "GET" && url.pathname === "/api/machines" && principal.kind === "user") {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        return json(res, 200, { machines: store.listMachines().filter((machine) => machine.organizationId === organizationId) });
+      }
+      if (req.method === "GET" && url.pathname === "/api/sessions" && principal.kind === "user") {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        return json(res, 200, { sessions: store.listSessions().filter((session) => session.organizationId === organizationId) });
+      }
+      if (req.method === "POST" && url.pathname === "/api/sessions" && principal.kind === "user") {
+        const body = await readJson(req);
+        if (!body.organizationId || !body.machineId || !body.cwd || !body.agent || !body.prompt?.trim()) return json(res, 400, { error: "organizationId, machineId, cwd, agent and prompt are required" });
+        const membership = await identities.getMembership(principal.userId, body.organizationId);
+        if (!membership) return json(res, 404, { error: "organization_not_found" });
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const machine = store.getMachine(body.machineId);
+        if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
+        if (!machine.capabilities.some((capability) => capability.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
+        const now = new Date().toISOString();
+        const session = {
+          id: crypto.randomUUID(), organizationId: body.organizationId, createdBy: principal.userId, machineId: body.machineId,
+          cwd: body.cwd, agent: body.agent, model: body.model || undefined,
+          status: "queued", createdAt: now, updatedAt: now,
+          messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: []
+        };
+        await store.createSession(session);
+        broadcast({ type: "session.updated", session });
+        try { sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
+        catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
+        return json(res, 201, session);
+      }
+      const scopedSessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
+      if (req.method === "GET" && scopedSessionMatch) {
+        const session = store.getSession(decodeURIComponent(scopedSessionMatch[1]));
+        if (principal.kind === "machine") {
+          if (!session || session.machineId !== principal.machineId || session.organizationId !== principal.organizationId) return json(res, 404, { error: "session_not_found" });
+          return json(res, 200, session);
+        }
+        if (principal.kind === "user") {
+          const organizationId = url.searchParams.get("organizationId");
+          if (!organizationId || !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "session_not_found" });
+          return session?.organizationId === organizationId ? json(res, 200, session) : json(res, 404, { error: "session_not_found" });
+        }
+      }
+      const sessionMessageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
+      if (req.method === "POST" && sessionMessageMatch && principal.kind === "user") {
+        const session = store.getSession(decodeURIComponent(sessionMessageMatch[1]));
+        if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
+        const membership = await identities.getMembership(principal.userId, session.organizationId);
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const body = await readJson(req); const message = body.text?.trim();
+        if (!message) return json(res, 400, { error: "text is required" });
+        const updated = await store.addMessage(session.id, { id: crypto.randomUUID(), role: "user", text: message, createdAt: new Date().toISOString() });
+        broadcast({ type: "session.updated", session: updated });
+        try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: message } }); }
+        catch (error) { return json(res, 409, { error: error.message }); }
+        return json(res, 202, updated);
+      }
+      const sessionInterruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);
+      if (req.method === "POST" && sessionInterruptMatch && principal.kind === "user") {
+        const session = store.getSession(decodeURIComponent(sessionInterruptMatch[1]));
+        if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
+        const membership = await identities.getMembership(principal.userId, session.organizationId);
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
+        catch (error) { return json(res, 409, { error: error.message }); }
+        return json(res, 202, { ok: true });
+      }
       return json(res, 404, { error: "not_found" });
     } catch (error) {
       const status = error instanceof IdentityError ? error.status
@@ -305,9 +401,11 @@ export async function createControlPlane() {
       const role = url.searchParams.get("role");
       if (role !== "daemon" && role !== "client") return socket.destroy();
       let clientPrincipal = null;
-      if (role === "daemon") {
-        if (!token || !constantTimeEqual(url.searchParams.get("token") ?? "", token)) return socket.destroy();
-      } else {
+      let daemonPrincipal = null;
+      let daemonAuthTimeout = null;
+      if (role === "daemon" && !isProduction && token && constantTimeEqual(url.searchParams.get("token") ?? "", token)) {
+        daemonPrincipal = { kind: "legacy" };
+      } else if (role === "client") {
         clientPrincipal = identities ? await authenticateSession(req, identities) : null;
         if (!clientPrincipal && !isProduction && constantTimeEqual(url.searchParams.get("token") ?? "", token)) clientPrincipal = { kind: "legacy" };
         if (!clientPrincipal) return socket.destroy();
@@ -316,6 +414,11 @@ export async function createControlPlane() {
         }
       }
       const peer = acceptWebSocket(req, socket); if (!peer) return;
+      if (role === "daemon" && !daemonPrincipal) {
+        daemonAuthTimeout = setTimeout(() => peer.close(1008, "machine_authentication_required"), 5_000);
+        daemonAuthTimeout.unref?.();
+        peer.on("close", () => clearTimeout(daemonAuthTimeout));
+      }
       if (role === "client") {
         clientSockets.set(peer, clientPrincipal);
         if (clientPrincipal.kind === "user") {
@@ -325,7 +428,12 @@ export async function createControlPlane() {
           peer.on("close", () => clearTimeout(expiry));
         }
         const state = clientPrincipal.kind === "user"
-          ? { machines: [], sessions: [], shippingRuns: [], workItems: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat() }
+          ? {
+              machines: store.listMachines().filter((machine) => clientPrincipal.organizationIds.includes(machine.organizationId)),
+              sessions: store.listSessions().filter((session) => clientPrincipal.organizationIds.includes(session.organizationId)),
+              shippingRuns: store.listShippingRuns().filter((run) => clientPrincipal.organizationIds.includes(run.organizationId)),
+              workItems: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
+            }
           : { machines: store.listMachines(), sessions: store.listSessions(), shippingRuns: store.listShippingRuns() };
         peer.send(encodeMessage({ type: "state.snapshot", ...state }));
         peer.on("close", () => clientSockets.delete(peer));
@@ -337,20 +445,41 @@ export async function createControlPlane() {
           const msg = decodeMessage(raw);
           if (msg.type === "daemon.hello") {
             if (msg.protocolVersion !== PROTOCOL_VERSION) return peer.close(1002, "protocol_version_mismatch");
+            if (machineId) return peer.close(1008, "machine_already_authenticated");
+            if (!daemonPrincipal) {
+              daemonPrincipal = await identities.authenticateMachine(msg.machineCredential);
+              if (!daemonPrincipal || daemonPrincipal.machineId !== msg.machine?.id) return peer.close(1008, "machine_authentication_failed");
+              clearTimeout(daemonAuthTimeout);
+              daemonAuthTimeout = null;
+            }
             machineId = msg.machine.id;
-            const machine = { ...msg.machine, status: "online", lastSeenAt: new Date().toISOString() };
-            daemonSockets.set(machineId, peer); await store.upsertMachine(machine); broadcast({ type: "machine.updated", machine }); return;
+            const machine = {
+              ...msg.machine,
+              ...(daemonPrincipal.kind === "machine" ? { organizationId: daemonPrincipal.organizationId } : {}),
+              status: "online", lastSeenAt: new Date().toISOString()
+            };
+            delete machine.machineCredential;
+            daemonSockets.set(machineId, peer);
+            await store.upsertMachine(machine);
+            peer.send(encodeMessage({ type: "server.machine.authenticated", machineId, organizationId: machine.organizationId ?? null }));
+            broadcast({ type: "machine.updated", machine }); return;
           }
-          if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(msg.machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
-          if (msg.type === "daemon.session.event") { const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return; }
+          if (!daemonPrincipal || !machineId || msg.machineId !== machineId) return peer.close(1008, "machine_authentication_required");
+          if (msg.type === "daemon.heartbeat") { const machine = await store.touchMachine(machineId); if (machine) broadcast({ type: "machine.updated", machine }); return; }
+          if (msg.type === "daemon.session.event") {
+            const current = store.getSession(msg.sessionId);
+            if (!current || current.machineId !== machineId || (daemonPrincipal.kind === "machine" && current.organizationId !== daemonPrincipal.organizationId)) return;
+            const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return;
+          }
           if (msg.type === "daemon.shipping.run") {
-            const run = { ...msg.run, machineId: msg.machineId ?? msg.run.machineId };
+            const run = { ...msg.run, machineId, ...(daemonPrincipal.kind === "machine" ? { organizationId: daemonPrincipal.organizationId } : {}) };
             await store.upsertShippingRun(run); broadcast({ type: "shipping.run.updated", run }); return;
           }
         } catch (error) { console.warn("[api] invalid daemon message", error.message); }
       });
       peer.on("close", async () => {
-        if (!machineId) return; if (daemonSockets.get(machineId) === peer) daemonSockets.delete(machineId);
+        if (!machineId || daemonSockets.get(machineId) !== peer) return;
+        daemonSockets.delete(machineId);
         const machine = await store.markMachineOffline(machineId); if (machine) broadcast({ type: "machine.updated", machine });
       });
       peer.on("error", (error) => console.warn("[api] websocket peer error", error.message));
@@ -383,9 +512,19 @@ function isPublicAuthRoute(pathname) {
 function isUserScopedRoute(pathname) {
   return pathname === "/api/auth/me" || pathname === "/api/auth/logout" || pathname === "/api/auth/accept-invitation"
     || pathname === "/api/organizations" || /^\/api\/organizations\/[^/]+\/invitations$/.test(pathname)
+    || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+)?$/.test(pathname)
+    || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
     || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
 }
+function isMachineScopedRoute(method, pathname) {
+  return method === "GET" && /^\/api\/sessions\/[^/]+$/.test(pathname);
+}
 function isMutation(method) { return !["GET", "HEAD", "OPTIONS"].includes(method); }
+async function authenticateMachineRequest(req, identities) {
+  const raw = req.headers.authorization ?? "";
+  const supplied = String(raw).startsWith("Bearer ") ? String(raw).slice(7) : "";
+  return identities.authenticateMachine(supplied);
+}
 function readCookie(req, name) {
   const entry = String(req.headers.cookie ?? "").split(";").map((value) => value.trim()).find((value) => value.startsWith(`${name}=`));
   return entry ? entry.slice(name.length + 1) : null;

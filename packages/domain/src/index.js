@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 export const CANONICAL_ID_KINDS = Object.freeze([
   "org", "user", "project", "repo", "work", "task", "run", "agent", "machine", "session",
   "worktree", "sandbox", "process", "tool", "mcp", "rea", "browser", "model", "memory", "context",
-  "artifact", "evidence", "event", "approval", "policy", "grant", "receipt", "deployment", "capability", "service", "command"
+  "artifact", "evidence", "event", "approval", "policy", "grant", "receipt", "deployment", "capability", "service", "command", "credential"
 ]);
 
 const ID_KIND_SET = new Set(CANONICAL_ID_KINDS);

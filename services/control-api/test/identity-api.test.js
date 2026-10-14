@@ -9,12 +9,13 @@ import process from "node:process";
 import test from "node:test";
 import pg from "pg";
 import { createCanonicalId } from "../../../packages/domain/src/index.js";
+import { PROTOCOL_VERSION, encodeMessage } from "../../../packages/protocol/src/index.js";
 
 const { Pool } = pg;
 const databaseUrl = process.env.AGENT_WORK_OS_TEST_DATABASE_URL;
 const root = path.resolve(new URL("../../..", import.meta.url).pathname);
 
-test("production identity, invitations, WorkItem tenancy, CSRF, and WebSocket scope", { skip: !databaseUrl }, async () => {
+test("production identity, machine credentials, scoped sessions, WorkItem tenancy, CSRF, and WebSocket scope", { skip: !databaseUrl }, async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "agent-work-os-identity-"));
   const port = 21500 + Math.floor(Math.random() * 10000);
   const origin = `http://127.0.0.1:${port}`;
@@ -30,7 +31,7 @@ test("production identity, invitations, WorkItem tenancy, CSRF, and WebSocket sc
     NODE_ENV: "production",
     PORT: String(port),
     AGENT_WORK_OS_HOST: "127.0.0.1",
-    AGENT_WORK_OS_TOKEN: "daemon-only-test-secret",
+    AGENT_WORK_OS_TOKEN: "",
     AGENT_WORK_OS_TRUST_PROXY: "true",
     DATABASE_URL: databaseUrl,
     AGENT_WORK_OS_STATE_PATH: path.join(temp, "state.json")
@@ -136,9 +137,66 @@ test("production identity, invitations, WorkItem tenancy, CSRF, and WebSocket sc
     assert.equal(created.status, 201, JSON.stringify(createdBody));
     assert.equal(createdBody.workItem.createdBy, owner.body.user.id);
 
+    const machineId = crypto.randomUUID();
+    const credentialResponse = await api(owner.cookies, owner.body.csrfToken, `/api/organizations/${alphaId}/machine-credentials`, {
+      method: "POST", body: { machineId, name: "Alpha executor" }
+    });
+    const credentialBody = await credentialResponse.json();
+    assert.equal(credentialResponse.status, 201, JSON.stringify(credentialBody));
+    const machineCredential = credentialBody.credential;
+    assert.match(machineCredential.token, /^[0-9a-f]{64}$/);
+    const machineSocket = await openMachineSocket(port, machineCredential.token, machineId);
+    let alphaSessionId;
+    try {
+      await waitFor(async () => {
+        const response = await api(owner.cookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
+        const body = await response.json();
+        return response.ok && body.machines.some((machine) => machine.id === machineId && machine.organizationId === alphaId);
+      }, 3_000, "organization-bound machine authentication");
+      const createdSessionResponse = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
+        method: "POST", body: { organizationId: alphaId, machineId, cwd: "/tmp", agent: "echo", prompt: "tenant-scoped session" }
+      });
+      const createdSession = await createdSessionResponse.json();
+      assert.equal(createdSessionResponse.status, 201, JSON.stringify(createdSession));
+      assert.equal(createdSession.organizationId, alphaId);
+      assert.equal(createdSession.createdBy, owner.body.user.id);
+      alphaSessionId = createdSession.id;
+      const machineCommand = await machineSocket.readMessage();
+      assert.equal(machineCommand.action, "session.start");
+      const machineSessionResponse = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
+        headers: { authorization: `Bearer ${machineCredential.token}` }
+      });
+      assert.equal(machineSessionResponse.status, 200, "machine credential reads sessions bound to its machine and organization");
+      const crossMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
+        headers: { authorization: "Bearer daemon-only-test-secret" }
+      });
+      assert.equal(crossMachineRead.status, 401, "the shared daemon token cannot authenticate production REST");
+      const revokedCredential = await api(owner.cookies, owner.body.csrfToken, `/api/organizations/${alphaId}/machine-credentials/${machineCredential.id}`, {
+        method: "POST", body: {}
+      });
+      assert.equal(revokedCredential.status, 200);
+      assert.equal(await machineSocket.closed, true, "revocation closes the active machine WebSocket");
+      const revokedMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
+        headers: { authorization: `Bearer ${machineCredential.token}` }
+      });
+      assert.equal(revokedMachineRead.status, 401, "revoked machine credentials stop authenticating REST");
+    } finally {
+      machineSocket.close();
+    }
+
     const viewerResult = await register(viewerEmail, "Beta Org");
     assert.equal(viewerResult.response.status, 201, JSON.stringify(viewerResult.body));
     const betaId = viewerResult.body.organization.id;
+    const betaMachineId = crypto.randomUUID();
+    const betaCredentialResponse = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/organizations/${betaId}/machine-credentials`, {
+      method: "POST", body: { machineId: betaMachineId, name: "Beta executor" }
+    });
+    const betaCredentialBody = await betaCredentialResponse.json();
+    assert.equal(betaCredentialResponse.status, 201, JSON.stringify(betaCredentialBody));
+    const foreignMachineRead = await fetch(`${origin}/api/sessions/${encodeURIComponent(alphaSessionId)}`, {
+      headers: { authorization: `Bearer ${betaCredentialBody.credential.token}` }
+    });
+    assert.equal(foreignMachineRead.status, 404, "a valid machine cannot read sessions owned by another organization");
     const guestResult = await register(guestEmail, "Gamma Org");
     assert.equal(guestResult.response.status, 201, JSON.stringify(guestResult.body));
 
@@ -184,8 +242,12 @@ test("production identity, invitations, WorkItem tenancy, CSRF, and WebSocket sc
       const viewerSnapshot = await wsViewer.readMessage();
       assert.equal(ownerSnapshot.type, "state.snapshot");
       assert.ok(ownerSnapshot.workItems.some((item) => item.id === workItemId));
+      assert.ok(ownerSnapshot.machines.some((machine) => machine.id === machineId));
+      assert.ok(ownerSnapshot.sessions.some((session) => session.id === alphaSessionId));
       assert.equal(guestSnapshot.workItems.length, 0, "WebSocket snapshot cannot expose another organization's WorkItems");
       assert.equal(viewerSnapshot.workItems.length, 0, "WebSocket snapshot cannot expose another organization's WorkItems");
+      assert.equal(guestSnapshot.sessions.length, 0, "WebSocket snapshot cannot expose another organization's sessions");
+      assert.equal(guestSnapshot.machines.length, 0, "WebSocket snapshot cannot expose another organization's machines");
 
       const memberInvite = await api(viewerResult.cookies, viewerResult.body.csrfToken, "/api/auth/accept-invitation", {
         method: "POST", body: { token: invitationToken }
@@ -193,6 +255,12 @@ test("production identity, invitations, WorkItem tenancy, CSRF, and WebSocket sc
       assert.equal(memberInvite.status, 200);
       const sharedRead = await api(viewerResult.cookies, null, `/api/work-items/${workItemId}?organizationId=${encodeURIComponent(alphaId)}`);
       assert.equal(sharedRead.status, 200, "accepted invitation grants membership");
+      const viewerSessionRead = await api(viewerResult.cookies, null, `/api/sessions/${encodeURIComponent(alphaSessionId)}?organizationId=${encodeURIComponent(alphaId)}`);
+      assert.equal(viewerSessionRead.status, 200, "viewer membership permits reading organization sessions");
+      const viewerSessionWrite = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/sessions/${encodeURIComponent(alphaSessionId)}/messages`, {
+        method: "POST", body: { text: "viewer cannot control session" }
+      });
+      assert.equal(viewerSessionWrite.status, 403);
       const viewerWrite = await api(viewerResult.cookies, viewerResult.body.csrfToken, "/api/work-items", {
         method: "POST", body: { id: createCanonicalId("work"), commandId: createCanonicalId("command"), organizationId: alphaId, title: "Viewer cannot write" }
       });
@@ -247,6 +315,49 @@ test("production identity, invitations, WorkItem tenancy, CSRF, and WebSocket sc
 
 function getCookies(response) {
   return response.headers.getSetCookie().map((cookie) => cookie.split(";", 1)[0]).join("; ");
+}
+
+async function openMachineSocket(port, machineCredential, machineId) {
+  const socket = new WebSocket(`ws://127.0.0.1:${port}/ws?role=daemon`);
+  const queue = [];
+  const waiters = [];
+  let failure;
+  let resolveClosed;
+  const closed = new Promise((resolve) => { resolveClosed = resolve; });
+  socket.addEventListener("close", () => resolveClosed(true), { once: true });
+  socket.addEventListener("message", (event) => {
+    const message = JSON.parse(String(event.data));
+    if (message.type === "server.machine.authenticated") return;
+    const waiter = waiters.shift();
+    if (waiter) { clearTimeout(waiter.timer); waiter.resolve(message); }
+    else queue.push(message);
+  });
+  socket.addEventListener("error", () => { failure = new Error("machine WebSocket failed"); for (const waiter of waiters.splice(0)) waiter.reject(failure); });
+  await new Promise((resolve, reject) => {
+    socket.addEventListener("open", resolve, { once: true });
+    socket.addEventListener("error", reject, { once: true });
+  });
+  socket.send(encodeMessage({
+    type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machineCredential,
+    machine: { id: machineId, name: "Test executor", capabilities: [{ name: "echo" }], shipping: { enabled: false } }
+  }));
+  return {
+    readMessage(timeoutMs = 2_000) {
+      if (failure) return Promise.reject(failure);
+      if (queue.length) return Promise.resolve(queue.shift());
+      return new Promise((resolve, reject) => {
+        const waiter = { resolve, reject, timer: undefined };
+        waiter.timer = setTimeout(() => {
+          const index = waiters.indexOf(waiter);
+          if (index >= 0) waiters.splice(index, 1);
+          reject(new Error("machine WebSocket message timed out"));
+        }, timeoutMs);
+        waiters.push(waiter);
+      });
+    },
+    closed,
+    close() { if (socket.readyState < WebSocket.CLOSING) socket.close(); }
+  };
 }
 
 function openClientSocket(port, cookies) {

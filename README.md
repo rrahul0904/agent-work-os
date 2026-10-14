@@ -59,7 +59,7 @@ Use CLI permission/sandbox settings appropriate for your environment. The contro
 
 ## Identity and organizations (initial production-hardening slice)
 
-When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production startup requires an explicit `DATABASE_URL` and daemon credential; the shared bearer credential is rejected for customer REST access.
+When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles and issue revocable, machine-bound daemon credentials. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production requires PostgreSQL; machine credentials authenticate daemons and the shared bearer credential is rejected for production daemon and customer REST access.
 
 Set `AGENT_WORK_OS_ALLOWED_ORIGINS` to a comma-separated exact origin list when the browser UI is served from another origin. If the UI and API are on separate sites, also set `AGENT_WORK_OS_COOKIE_SAME_SITE=None` (production HTTPS is required); otherwise keep the default `Strict`. Set `AGENT_WORK_OS_TRUST_PROXY=true` only behind a trusted proxy that overwrites `X-Forwarded-For` and `X-Forwarded-Proto`.
 
@@ -69,10 +69,13 @@ Authentication endpoints:
 - `POST /api/auth/login` — `{ email, password }`.
 - `GET /api/auth/me` and `GET /api/organizations` — current account and memberships.
 - `POST /api/organizations/:id/invitations` — `{ email, role }`; returns a one-time invitation token for out-of-band delivery.
+- `POST /api/organizations/:id/machine-credentials` — `{ machineId, name }`; returns a one-time machine token. Store it as `AGENT_WORK_OS_MACHINE_TOKEN` on that daemon.
+- `POST /api/organizations/:id/machine-credentials/:credentialId` — revoke a machine credential and disconnect its active daemon.
+- The daemon prints its stable machine ID at startup. Use that ID when issuing its credential; production daemon WebSockets authenticate in the first protocol message, not in the URL.
 - `POST /api/auth/accept-invitation` — `{ token }`; email must match the invitation.
 - `POST /api/auth/logout` — revokes the active server-side session.
 
-This is an incremental identity foundation, not a production SaaS launch claim. Email verification, password recovery, external IdP integration, invitation delivery, full resource ownership for Sessions/Machines/Shipping Runs, and per-machine credential rotation remain open. Until those resources are tenant-scoped, account sessions receive `403` for legacy global endpoints. User WebSocket snapshots/events are scoped to current WorkItem organization memberships. Public registration still needs email verification and deployment-level bot/abuse controls before opening signups broadly.
+This is an incremental identity foundation, not a production SaaS launch claim. Email verification, password recovery, external IdP integration, invitation delivery, and normalized durable storage for Sessions/Machines/Shipping Runs remain open. Sessions and Machines now carry organization IDs in the current global state snapshot; user access is scoped by membership. Shared snapshot storage still lacks safe multi-instance write coordination, so run one API instance until normalized storage and concurrency controls land. Public registration still needs email verification and deployment-level bot/abuse controls before opening signups broadly.
 
 ## Canonical work items
 
