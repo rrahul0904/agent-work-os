@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CAD Agent Studio — P1 Workbench</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <main class="shell">
+    <header><div><span class="eyebrow">Agent Work OS · REA P1</span><h1>CAD Agent Studio</h1></div><span class="badge">deterministic preview</span></header>
+    <section class="grid">
+      <aside class="panel controls">
+        <h2>Parametric model</h2>
+        <label>Name <input id="name" value="Board enclosure" /></label>
+        <label>Width <input id="width" type="range" min="20" max="180" value="100" /><output id="widthValue"></output></label>
+        <label>Depth <input id="depth" type="range" min="20" max="140" value="60" /><output id="depthValue"></output></label>
+        <label>Height <input id="height" type="range" min="5" max="100" value="25" /><output id="heightValue"></output></label>
+        <button id="build">Build + verify</button>
+        <h3>Agent handoff</h3>
+        <textarea id="prompt" rows="7">Add 2 mm wall thickness, four M3 mounting bosses, and ventilation slots. Keep the outside envelope unchanged.</textarea>
+        <button class="secondary" id="feedback">Create feedback packet</button>
+      </aside>
+      <section class="viewer panel">
+        <div class="toolbar"><span>Preview</span><span id="status">Ready</span></div>
+        <canvas id="canvas" width="900" height="600"></canvas>
+        <div class="measurements" id="measurements"></div>
+      </section>
+      <aside class="panel receipt"><h2>Verification receipt</h2><pre id="receipt"></pre></aside>
+    </section>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
