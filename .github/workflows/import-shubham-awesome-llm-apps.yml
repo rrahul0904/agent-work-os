@@ -1,0 +1,65 @@
+name: Import Shubham Saboo awesome-llm-apps snapshot
+
+on:
+  push:
+    branches:
+      - research/import-shubham-awesome-llm-apps
+    paths:
+      - .github/workflows/import-shubham-awesome-llm-apps.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Agent Work OS research branch
+        uses: actions/checkout@v4
+        with:
+          ref: research/import-shubham-awesome-llm-apps
+          fetch-depth: 1
+
+      - name: Clone pinned upstream snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/awesome-llm-apps
+          git clone https://github.com/Shubhamsaboo/awesome-llm-apps.git /tmp/awesome-llm-apps
+          git -C /tmp/awesome-llm-apps checkout 4bf51ab704fb2c5b3803cd5191b30d7dcdb51dc2
+
+      - name: Vendor complete upstream tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEST="third_party/shubhamsaboo-awesome-llm-apps"
+          mkdir -p "$DEST"
+          rsync -a --delete --exclude='.git/' /tmp/awesome-llm-apps/ "$DEST/"
+          cat > "$DEST/UPSTREAM_IMPORT.md" <<'EOF'
+          # Upstream import provenance
+
+          - Upstream repository: `Shubhamsaboo/awesome-llm-apps`
+          - Upstream URL: https://github.com/Shubhamsaboo/awesome-llm-apps
+          - Pinned upstream commit: `4bf51ab704fb2c5b3803cd5191b30d7dcdb51dc2`
+          - Upstream license: Apache License 2.0 (original `LICENSE` retained in this directory)
+          - Import destination: `rrahul0904/agent-work-os`
+          - Import branch: `research/import-shubham-awesome-llm-apps`
+          - Boundary: third-party donor/reference snapshot; not part of Agent Work OS production runtime unless separately reviewed and integrated through the project gates.
+
+          This directory intentionally preserves the upstream snapshot for research, comparison, REA analysis, capability extraction, and clean-room implementation work.
+          EOF
+
+      - name: Commit imported snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agent-work-os-importer"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add third_party/shubhamsaboo-awesome-llm-apps
+          if git diff --cached --quiet; then
+            echo "Pinned upstream snapshot is already present; nothing to commit."
+            exit 0
+          fi
+          git commit -m "research: import Shubhamsaboo awesome-llm-apps snapshot"
+          git push origin HEAD:research/import-shubham-awesome-llm-apps
