@@ -26,23 +26,27 @@ final class AppModel: ObservableObject {
 
     init() {
         let defaults = UserDefaults.standard
-        if let data = defaults.data(forKey: settingsKey),
+        let loadedSettings: KnockDeckSettings
+        if let data = defaults.data(forKey: "knockdeck.settings.v1"),
            let decoded = try? JSONDecoder().decode(KnockDeckSettings.self, from: data) {
-            settings = decoded
+            loadedSettings = decoded
         } else {
-            settings = KnockDeckSettings()
+            loadedSettings = KnockDeckSettings()
         }
 
-        if let data = defaults.data(forKey: classifierKey),
+        let loadedClassifier: SideClassifier
+        if let data = defaults.data(forKey: "knockdeck.classifier.v1"),
            let decoded = try? JSONDecoder().decode(SideClassifier.self, from: data) {
-            classifier = decoded
+            loadedClassifier = decoded
         } else {
-            classifier = SideClassifier()
+            loadedClassifier = SideClassifier()
         }
 
-        impactDetector = ImpactDetector(threshold: settings.threshold)
-        recognizer = TapSequenceRecognizer(maxTapGap: settings.maxTapGap)
-        isCalibrated = classifier.isCalibrated
+        settings = loadedSettings
+        classifier = loadedClassifier
+        impactDetector = ImpactDetector(threshold: loadedSettings.threshold)
+        recognizer = TapSequenceRecognizer(maxTapGap: loadedSettings.maxTapGap)
+        isCalibrated = loadedClassifier.isCalibrated
 
         sensor.onSample = { [weak self] sample in
             Task { @MainActor in
@@ -56,7 +60,7 @@ final class AppModel: ObservableObject {
             }
         }
 
-        if settings.launchListening {
+        if loadedSettings.launchListening {
             startListening()
         }
     }
