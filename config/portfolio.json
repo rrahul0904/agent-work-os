@@ -37,6 +37,21 @@
       "updatedAt": "2026-10-14T05:30:00Z"
     },
     {
+      "id": "homequest",
+      "name": "HomeQuest",
+      "repository": "rrahul0904/agent-work-os",
+      "category": "product",
+      "status": "BUILDING",
+      "readiness": 58,
+      "value": 5,
+      "effort": 3,
+      "risk": 2,
+      "blockers": [],
+      "nextAction": "Pass exact-head repository CI and browser UAT, then implement durable household identity/tenancy and server realtime before any production parity claim.",
+      "evidence": ["Mushom public target evidence captured", "governed clean-room REA dossier recorded", "household domain core and unit tests implemented", "interactive /homequest/ browser preview implemented"],
+      "updatedAt": "2026-10-14T15:31:00Z"
+    },
+    {
       "id": "provenance-cleaner",
       "name": "Provenance Cleaner",
       "repository": "rrahul0904/provenance-cleaner",
