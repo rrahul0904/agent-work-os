@@ -23,15 +23,18 @@
       "name": "Learn Anything Studio",
       "repository": "rrahul0904/agent-work-os",
       "category": "product",
-      "status": "BUILDING",
-      "readiness": 78,
+      "status": "BLOCKED",
+      "readiness": 90,
       "value": 5,
       "effort": 2,
       "risk": 2,
-      "blockers": [],
-      "nextAction": "Pass repository CI, verify the hosted /learn-anything/ route against an exact SHA, then run one full evidence-backed course through a connected Agent Work OS runtime.",
-      "evidence": ["Claudemy target/source investigation captured", "provider-neutral Learn Anything skill implemented", "course evidence validator and CI tests added", "Learning Studio web surface implemented", "REA comparison dossier recorded"],
-      "updatedAt": "2026-10-14T05:25:00Z"
+      "blockers": [
+        { "code": "BLOCKED_HOSTING_QUOTA", "message": "Vercel rejected the fresh deployment because the Hobby API deployment allowance exceeded 100 deployments for the day; the isolated learn-anything-studio project exists but has no deployment yet." },
+        { "code": "BLOCKED_PAYMENT", "message": "Railway fallback provisioning is unavailable because the workspace trial has expired." }
+      ],
+      "nextAction": "After the Vercel deployment allowance resets (or plan capacity is restored), deploy current main to project prj_F2i0nKsFH0n3cjlZhjd1Omwyb0Rn, verify /learn-anything/ over HTTPS against the exact SHA, run browser UAT, then execute one full evidence-backed course through a connected Agent Work OS runtime.",
+      "evidence": ["Claudemy target/source investigation captured", "provider-neutral Learn Anything skill implemented", "course evidence validator and CI tests added", "Learning Studio web surface implemented", "REA comparison dossier recorded", "PR #176 CI PASS at 014e0f367c265368fba9d366081589b8fc6b5633", "product merged to main as 1a2c9458748d031c27c298034e68d291741dd58d", "Vercel and Railway deployment blockers recorded in deployment receipt"],
+      "updatedAt": "2026-10-14T05:30:00Z"
     },
     {
       "id": "provenance-cleaner",
