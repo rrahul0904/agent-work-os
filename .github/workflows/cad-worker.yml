@@ -1,0 +1,26 @@
+name: cad-worker
+on:
+  push:
+    paths:
+      - 'workers/cadquery/**'
+      - '.github/workflows/cad-worker.yml'
+  pull_request:
+    paths:
+      - 'workers/cadquery/**'
+      - '.github/workflows/cad-worker.yml'
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: workers/cadquery/requirements.lock.txt
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r workers/cadquery/requirements.lock.txt
+      - name: Kernel smoke + export + semantic replay
+        working-directory: workers/cadquery
+        run: python -m unittest discover -s test -v
