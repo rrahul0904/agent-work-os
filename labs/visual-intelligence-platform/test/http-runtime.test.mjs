@@ -9,20 +9,12 @@ async function withServer(fn) {
   await once(server, 'listening');
   const address = server.address();
   const base = `http://127.0.0.1:${address.port}`;
-  try {
-    await fn(base);
-  } finally {
-    server.close();
-    await once(server, 'close');
-  }
+  try { await fn(base); }
+  finally { server.close(); await once(server, 'close'); }
 }
 
 async function post(base, path, body) {
-  return fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body)
-  });
+  return fetch(`${base}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 }
 
 test('HTTP runtime serves health and Prompt Studio', async () => {
@@ -32,12 +24,7 @@ test('HTTP runtime serves health and Prompt Studio', async () => {
     const healthBody = await health.json();
     assert.equal(healthBody.ok, true);
     assert.equal(healthBody.capabilities.includes('native-pptx'), true);
-
-    const prompt = await post(base, '/api/prompt', {
-      artifactType: 'architecture-diagram',
-      objective: 'Show a governed RAG platform',
-      plan: 'community'
-    });
+    const prompt = await post(base, '/api/prompt', { artifactType: 'architecture-diagram', objective: 'Show a governed RAG platform', plan: 'community' });
     assert.equal(prompt.status, 200);
     const promptBody = await prompt.json();
     assert.equal(promptBody.promptSpec.artifactType, 'architecture-diagram');
@@ -48,8 +35,7 @@ test('HTTP runtime serves health and Prompt Studio', async () => {
 test('HTTP runtime serves Diagram Studio', async () => {
   await withServer(async base => {
     const response = await post(base, '/api/diagram', {
-      kind: 'rag',
-      title: 'RAG Runtime',
+      kind: 'rag', title: 'RAG Runtime',
       nodes: [
         { id: 'user', type: 'actor', label: 'User', evidence: 'requirements' },
         { id: 'idp', type: 'identity', label: 'IdP', evidence: 'security' },
@@ -73,10 +59,16 @@ test('HTTP runtime serves Diagram Studio', async () => {
   });
 });
 
-test('HTTP runtime serves native editable PPTX', async () => {
+test('HTTP runtime gates native PPTX to Pro and Enterprise', async () => {
   await withServer(async base => {
+    const community = await post(base, '/api/presentation?mode=receipt', {
+      plan: 'community', title: 'Community Deck', slides: [{ title: 'Community Deck', layout: 'title' }]
+    });
+    assert.equal(community.status, 403);
+    assert.equal((await community.json()).error, 'plan-capability-denied');
+
     const deck = {
-      title: 'Runtime Deck',
+      plan: 'pro', title: 'Runtime Deck',
       slides: [
         { title: 'Runtime Deck', subtitle: 'Native editable PowerPoint', layout: 'title' },
         { title: 'Proof', bullets: ['Native text boxes', 'Owned OOXML compiler'] }
@@ -85,11 +77,12 @@ test('HTTP runtime serves native editable PPTX', async () => {
     const receiptResponse = await post(base, '/api/presentation?mode=receipt', deck);
     assert.equal(receiptResponse.status, 200);
     const receiptBody = await receiptResponse.json();
+    assert.equal(receiptBody.plan, 'pro');
     assert.equal(receiptBody.receipt.editable, true);
-
     const pptxResponse = await post(base, '/api/presentation', deck);
     assert.equal(pptxResponse.status, 200);
     assert.equal(pptxResponse.headers.get('x-visual-intelligence-editable'), 'true');
+    assert.equal(pptxResponse.headers.get('x-visual-intelligence-plan'), 'pro');
     const bytes = new Uint8Array(await pptxResponse.arrayBuffer());
     assert.equal(String.fromCharCode(bytes[0], bytes[1]), 'PK');
   });
@@ -97,12 +90,7 @@ test('HTTP runtime serves native editable PPTX', async () => {
 
 test('HTTP runtime serves layered creative SVG', async () => {
   await withServer(async base => {
-    const response = await post(base, '/api/creative', {
-      format: 'landscape',
-      headline: 'Architecture that stays editable',
-      body: 'Governed agents produce semantic assets.',
-      cta: 'Build now'
-    });
+    const response = await post(base, '/api/creative', { format: 'landscape', headline: 'Architecture that stays editable', body: 'Governed agents produce semantic assets.', cta: 'Build now' });
     assert.equal(response.status, 200);
     const body = await response.json();
     assert.equal(body.receipt.editable, true);
