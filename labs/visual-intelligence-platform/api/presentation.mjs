@@ -1,5 +1,4 @@
-import { compileDeckPlan } from '../deck-plan.mjs';
-import { generateNativePptx, nativePptxReceipt } from '../pptx-native.mjs';
+import { createNativePresentation } from '../presentation-service.mjs';
 
 export default async function handler(request, response) {
   if (request.method !== 'POST') {
@@ -8,14 +7,17 @@ export default async function handler(request, response) {
   }
   try {
     const input = typeof request.body === 'object' && request.body ? request.body : {};
-    const plan = compileDeckPlan(input);
-    const pptx = generateNativePptx(plan);
-    if (String(request.query?.mode || '') === 'receipt') return response.status(200).json({ deckPlan: plan, receipt: nativePptxReceipt(plan) });
+    const artifact = createNativePresentation(input, { includeBytes: String(request.query?.mode || '') !== 'receipt' });
+    if (String(request.query?.mode || '') === 'receipt') {
+      return response.status(200).json({ plan: artifact.plan, deckPlan: artifact.deckPlan, receipt: artifact.receipt });
+    }
     response.setHeader('content-type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
     response.setHeader('content-disposition', 'attachment; filename="visual-intelligence.pptx"');
     response.setHeader('x-visual-intelligence-editable', 'true');
-    return response.status(200).send(pptx);
+    response.setHeader('x-visual-intelligence-plan', artifact.plan);
+    return response.status(200).send(artifact.pptx);
   } catch (error) {
-    return response.status(400).json({ error: error?.message || 'presentation-generation-failed' });
+    const code = error?.message || 'presentation-generation-failed';
+    return response.status(code === 'plan-capability-denied' ? 403 : 400).json({ error: code });
   }
 }
