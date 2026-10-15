@@ -12,6 +12,10 @@ This file tracks concrete release branches, candidate SHAs, pull requests and bl
 | Lead-to-Proposal AI | `commercialize/release-ready` | `25f51d28d741f197905abc471111cd3f96ecbe7e` | `n8n-lead-scoring-and-automated-whatsapp-proposal-sender#1` | RIGHTS + PROVIDER_E2E + ACTIONS_RUNNER_REQUIRED |
 | HVAC Booking Agent | `commercialize/release-ready` | `5831237fd7f05172ffefa9514096890445c2a232` | `n8n-ai-automated-hvac-appointment-booking-n8n-workflow-json#1` | RIGHTS + PROVIDER_E2E + ACTIONS_RUNNER_REQUIRED |
 | Inventory Reorder + Vendor Notification | `commercialize/release-ready` | `8cef1b4b046aafbe72b4141f97ef7e9737921861` | `n8n-automated-inventory-reorder-vendor-notification-pipeline#1` | RIGHTS + PROVIDER_E2E + ACTIONS_RUNNER_REQUIRED |
+| Meeting Analyzer → CRM | `commercialize/release-ready` | `3a6c4b3e16aae59e92ef1142accfd6ae06970840` | `n8n-ai-meeting-analyzer-transcribe-extract-tasks-update-ghl#1` | RIGHTS + PROVIDER_E2E_REQUIRED |
+| Hotel Smart Lock Access | `commercialize/release-ready` | `9eb4052ea1d7deecd6d3b227abbbae65413acc8c` | `n8n-automate-hotel-smart-lock-access-with-n8n-json#1` | RIGHTS + PROVIDER_E2E_REQUIRED |
+| Pet Clinic Appointment Scheduler | `commercialize/release-ready` | `3ee53ae514ab3e5369c30a4704d4bdde1a4b467c` | `n8n-pet-clinic-appointment-scheduling-agent#1` | RIGHTS + PROVIDER_E2E_REQUIRED |
+| Multi-Carrier Shipping Quote Router | `commercialize/release-ready` | `f3fa229c799f3756d0c11f26cd8e6147b63d0629` | `n8n-automate-multi-carrier-shipping-quotes-with-ai#1` | RIGHTS + PROVIDER_E2E_REQUIRED |
 
 ## Release Factory
 
@@ -33,6 +37,18 @@ At commit `fddaec303c892919ae92b70716a18ae5a8af24b8`, both the `n8n REA gates` w
 ## GitHub Actions infrastructure blocker
 
 Issue `agent-work-os#207` tracks a separate runner-level blocker observed in multiple private workflow repositories. Affected jobs completed with `steps: []`, `runner_id: 0` and no runner name, which means the validation scripts never executed. These runs must not be treated as either passing or code-level failing evidence.
+
+## Product-specific boundaries encoded in the release packages
+
+- Hotel Concierge: cross-guest isolation, duplicate WhatsApp prevention, unauthorized-write prevention, prompt-injection handling and Redis/model/provider failure tests.
+- Lead-to-Proposal: human approval, scoring regression, duplicate-send prevention, WhatsApp failure/rate-limit/replay controls.
+- HVAC Booking: duplicate/concurrent slot prevention, calendar lifecycle and messaging recovery.
+- Inventory Reorder: threshold correctness, duplicate/concurrent reorder prevention and isolated notification retry.
+- Meeting Analyzer: transcript/structured-output regression, CRM idempotency, malformed AI output and downstream notification failures.
+- Hotel Smart Lock: room→lock mapping, access-code expiry/revocation, cancellation/room-change handling and duplicate grant prevention.
+- Pet Clinic Scheduler: booking/reschedule/cancel correctness, cross-user memory isolation, and a strict administrative-only/no-clinical-advice product boundary.
+- Shipping Quote Router: deterministic ranking/commission math, partial/no-rate handling, quote freshness, rate-limit recovery and duplicate message prevention.
+- Sentinel: existing MIT core remains open source; paid value is production engineering/support and separately authored enhancements.
 
 ## Shipping rule
 
