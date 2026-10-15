@@ -12,25 +12,22 @@ import { compileDeckPlan } from './deck-plan.mjs';
 import { generateNativePptx, nativePptxReceipt } from './pptx-native.mjs';
 import { compileCreativeSpec } from './creative-spec.mjs';
 import { renderCreativeSvg, creativeReceipt } from './creative-renderer.mjs';
+import { handleMcpRequest, MCP_PROTOCOL_VERSION } from './mcp-core.mjs';
 
 const defaultRoot = fileURLToPath(new URL('./dist/', import.meta.url));
 const types = {
-  '.html': 'text/html; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.css': 'text/css; charset=utf-8'
+  '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg', '.css': 'text/css; charset=utf-8'
 };
 
-function sendJson(response, status, body) {
+function sendJson(response, status, body, extraHeaders = {}) {
   response.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
-    'x-content-type-options': 'nosniff'
+    'x-content-type-options': 'nosniff',
+    ...extraHeaders
   });
   response.end(JSON.stringify(body));
 }
@@ -80,12 +77,28 @@ export function createVisualIntelligenceServer(options = {}) {
           service: 'visual-intelligence-platform',
           contractVersion: 'visual-intelligence-platform/v1alpha1',
           releaseState: 'BUILDING',
+          mcpProtocolVersion: MCP_PROTOCOL_VERSION,
           capabilities: [
             'prompt-studio', 'agent-run-plan', 'diagram-spec', 'diagram-svg',
             'mermaid', 'plantuml', 'drawio', 'deck-plan', 'native-pptx',
-            'creative-spec', 'creative-svg', 'visualbench'
+            'creative-spec', 'creative-svg', 'visualbench', 'mcp-tools'
           ]
         });
+      }
+
+      if (url.pathname === '/mcp') {
+        if (request.method !== 'POST') {
+          response.setHeader('allow', 'POST');
+          return sendJson(response, 405, { error: 'method-not-allowed' });
+        }
+        try {
+          const input = await bodyJson(request);
+          const result = await handleMcpRequest(input, request.headers);
+          const status = result?.error && [-32022, -32020].includes(result.error.code) ? 400 : 200;
+          return sendJson(response, status, result, { 'MCP-Protocol-Version': MCP_PROTOCOL_VERSION });
+        } catch (error) {
+          return sendJson(response, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { 'MCP-Protocol-Version': MCP_PROTOCOL_VERSION });
+        }
       }
 
       if (url.pathname === '/api/prompt') {
@@ -96,11 +109,7 @@ export function createVisualIntelligenceServer(options = {}) {
         try {
           const input = await bodyJson(request);
           const promptSpec = compilePromptSpec(input);
-          return sendJson(response, 200, {
-            promptSpec,
-            prompt: renderPrompt(promptSpec),
-            runPlan: createRunPlan(input)
-          });
+          return sendJson(response, 200, { promptSpec, prompt: renderPrompt(promptSpec), runPlan: createRunPlan(input) });
         } catch (error) {
           const code = error?.message || 'prompt-compilation-failed';
           return sendJson(response, code === 'plan-capability-denied' ? 403 : 400, { error: code });
@@ -139,9 +148,7 @@ export function createVisualIntelligenceServer(options = {}) {
         try {
           const input = await bodyJson(request);
           const plan = compileDeckPlan(input);
-          if (url.searchParams.get('mode') === 'receipt') {
-            return sendJson(response, 200, { deckPlan: plan, receipt: nativePptxReceipt(plan) });
-          }
+          if (url.searchParams.get('mode') === 'receipt') return sendJson(response, 200, { deckPlan: plan, receipt: nativePptxReceipt(plan) });
           const pptx = generateNativePptx(plan);
           response.writeHead(200, {
             'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
@@ -165,11 +172,7 @@ export function createVisualIntelligenceServer(options = {}) {
           const input = await bodyJson(request);
           const creativeSpec = compileCreativeSpec(input);
           const svg = renderCreativeSvg(creativeSpec);
-          return sendJson(response, 200, {
-            creativeSpec,
-            svg,
-            receipt: creativeReceipt(creativeSpec, svg)
-          });
+          return sendJson(response, 200, { creativeSpec, svg, receipt: creativeReceipt(creativeSpec, svg) });
         } catch (error) {
           return sendJson(response, 400, { error: error?.message || 'creative-generation-failed' });
         }
