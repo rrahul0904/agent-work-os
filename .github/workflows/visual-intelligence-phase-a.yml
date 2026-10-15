@@ -40,6 +40,10 @@ jobs:
           test -f dist/entitlements.mjs
           test -f dist/orchestrator.mjs
           test -f dist/visualbench.mjs
+          test -f dist/diagram-spec.mjs
+          test -f dist/diagram-renderer.mjs
+          test -f dist/diagram-critic.mjs
+          test -f dist/diagram-adapters.mjs
       - name: Smoke hosted runtime
         working-directory: labs/visual-intelligence-platform
         run: |
@@ -56,10 +60,21 @@ jobs:
           done
           test "$READY" = "1"
           grep -q '"ok":true' /tmp/health.json
-          curl -fsS http://127.0.0.1:4173/ | grep -q 'Visual Intelligence'
+          grep -q '"diagram-spec"' /tmp/health.json
+          curl -fsS http://127.0.0.1:4173/ | grep -q 'Diagram Studio'
           curl -fsS -X POST http://127.0.0.1:4173/api/prompt \
             -H 'content-type: application/json' \
             --data '{"artifactType":"architecture-diagram","objective":"Show a secure multi-region RAG platform","plan":"community"}' \
             >/tmp/prompt.json
           grep -q '"promptSpec"' /tmp/prompt.json
           grep -q '"runPlan"' /tmp/prompt.json
+          cat >/tmp/diagram.json <<'JSON'
+          {"kind":"rag","title":"Secure RAG","nodes":[{"id":"user","type":"actor","label":"User","evidence":"requirements"},{"id":"idp","type":"identity","label":"IdP","evidence":"security"},{"id":"svc","type":"service","label":"RAG Service","evidence":"repo"},{"id":"kb","type":"dataset","label":"Knowledge","boundary":"data","evidence":"model"},{"id":"llm","type":"model","label":"LLM","evidence":"provider"}],"edges":[{"from":"user","to":"idp","label":"auth","protocol":"OIDC","evidence":"security"},{"from":"idp","to":"svc","label":"token","protocol":"HTTPS","evidence":"security"},{"from":"svc","to":"kb","label":"retrieve","evidence":"model"},{"from":"svc","to":"llm","label":"generate","evidence":"provider"}]}
+          JSON
+          curl -fsS -X POST http://127.0.0.1:4173/api/diagram \
+            -H 'content-type: application/json' --data-binary @/tmp/diagram.json >/tmp/diagram-response.json
+          grep -q '"diagramSpec"' /tmp/diagram-response.json
+          grep -q '"svg"' /tmp/diagram-response.json
+          grep -q 'flowchart LR' /tmp/diagram-response.json
+          grep -q '@startuml' /tmp/diagram-response.json
+          grep -q '&lt;mxfile\|<mxfile' /tmp/diagram-response.json
