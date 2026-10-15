@@ -263,11 +263,14 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         `same-run updates keep database-assigned timestamps monotonic (${firstRunEvent.updatedAt} then ${secondRunEvent.updatedAt})`);
       assert.equal(replicaChild.exitCode, null, `replica API exited unexpectedly: ${logs.join("")}`);
       await waitFor(async () => (await fetch(`http://127.0.0.1:${replicaPort}/readyz`)).ok, 2_000, "replica still ready before fanout test");
-      const fanoutClient = await openClientSocket(replicaPort, owner.cookies);
+      let fanoutClient = await openClientSocket(replicaPort, owner.cookies);
       const otherOrgFanoutClient = await openClientSocket(replicaPort, otherTenant.cookies);
       try {
-        await readUntilMessage(fanoutClient, (message) => message.type === "state.snapshot");
-        await readUntilMessage(otherOrgFanoutClient, (message) => message.type === "state.snapshot");
+        const ownerSnapshot = await readUntilMessage(fanoutClient, (message) => message.type === "state.snapshot");
+        const otherOrgSnapshot = await readUntilMessage(otherOrgFanoutClient, (message) => message.type === "state.snapshot");
+        assert.match(ownerSnapshot.cursor, /^[A-Za-z0-9_-]{40,128}$/, "snapshots expose only opaque cursors");
+        assert.equal(Object.hasOwn(ownerSnapshot, "eventCursor"), false, "snapshots do not expose database sequence values");
+        assert.match(otherOrgSnapshot.cursor, /^[A-Za-z0-9_-]{40,128}$/);
         machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: { ...secondRunEvent, state: "RUNNING" } });
         const canonicalFanoutRun = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "RUNNING");
         const replicatedEvent = await readUntilMessage(fanoutClient, (message) =>
@@ -276,7 +279,22 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         assert.equal(replicatedEvent.type, "shipping.run.updated", "another API instance receives persisted live events");
         assert.equal(replicatedEvent.run.runId, alphaShippingRunId);
         assert.equal(replicatedEvent.run.organizationId, alphaId, "cross-instance fan-out retains tenant scope");
+        assert.match(replicatedEvent.eventId, /^[A-Za-z0-9_-]{43}$/, "live event IDs are opaque stable tags");
+        assert.match(replicatedEvent.cursor, /^[A-Za-z0-9_-]{40,128}$/, "live events include an opaque reconnect cursor");
         await assert.rejects(otherOrgFanoutClient.readMessage(250), /timed out/, "cross-instance fan-out does not disclose another organization's event");
+
+        fanoutClient.close();
+        machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: { ...canonicalFanoutRun, state: "SUCCEEDED" } });
+        const replayRun = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "SUCCEEDED");
+        fanoutClient = await openClientSocket(replicaPort, owner.cookies, replicatedEvent.cursor);
+        const replayedEvent = await fanoutClient.readMessage();
+        assert.equal(replayedEvent.type, "shipping.run.updated", "reconnect replays retained events instead of requiring an initial snapshot");
+        assert.equal(replayedEvent.run.updatedAt, replayRun.updatedAt);
+        assert.notEqual(replayedEvent.eventId, replicatedEvent.eventId);
+        const replayCursor = await fanoutClient.readMessage();
+        assert.equal(replayCursor.type, "realtime.cursor");
+        assert.match(replayCursor.cursor, /^[A-Za-z0-9_-]{40,128}$/);
+        await assert.rejects(fanoutClient.readMessage(250), /timed out/, "listener catch-up does not duplicate the replayed event");
 
         await databaseInspector.query("DELETE FROM agent_work_os_realtime_events_v1");
         await databaseInspector.query(
@@ -288,6 +306,14 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         const recoveredSnapshot = await readUntilMessage(fanoutClient, (message) => message.type === "state.snapshot");
         assert.ok(recoveredSnapshot.shippingRuns.some((run) => run.runId === alphaShippingRunId),
           "a listener catching up after retention removes every event receives a fresh tenant-scoped snapshot");
+        const expiredCursorClient = await openClientSocket(replicaPort, owner.cookies, replicatedEvent.cursor);
+        try {
+          const fallbackSnapshot = await expiredCursorClient.readMessage();
+          assert.equal(fallbackSnapshot.type, "state.snapshot", "a reconnect cursor outside retained history falls back to a full snapshot");
+          assert.ok(fallbackSnapshot.shippingRuns.some((run) => run.runId === alphaShippingRunId));
+        } finally {
+          expiredCursorClient.close();
+        }
       } finally {
         fanoutClient.close();
         otherOrgFanoutClient.close();
@@ -583,7 +609,7 @@ async function waitForShippingRun(api, account, organizationId, runId, expectedS
   return current;
 }
 
-function openClientSocket(port, cookies) {
+function openClientSocket(port, cookies, cursor = null) {
   const socket = net.connect(port, "127.0.0.1");
   const key = crypto.randomBytes(16).toString("base64");
   let buffer = Buffer.alloc(0);
@@ -594,7 +620,7 @@ function openClientSocket(port, cookies) {
   let handshakeReject;
   const handshake = new Promise((resolve, reject) => { handshakeResolve = resolve; handshakeReject = reject; });
   socket.on("connect", () => socket.write(
-    `GET /ws?role=client HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\nOrigin: http://127.0.0.1:${port}\r\nCookie: ${cookies}\r\n\r\n`
+    `GET /ws?role=client${typeof cursor === "string" ? `&cursor=${encodeURIComponent(cursor)}` : ""} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${key}\r\nSec-WebSocket-Version: 13\r\nOrigin: http://127.0.0.1:${port}\r\nCookie: ${cookies}\r\n\r\n`
   ));
   socket.on("error", (error) => { if (!handshakeDone) handshakeReject(error); for (const waiter of waiters.splice(0)) waiter.reject(error); });
   socket.on("data", (chunk) => {

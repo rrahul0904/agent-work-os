@@ -11,7 +11,7 @@ import { JsonStore } from "./store.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { IdentityError, IdentityRepository } from "./identity-store.js";
-import { PostgresEventFanout } from "./realtime-events.js";
+import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -48,21 +48,34 @@ export async function createControlPlane() {
   const pendingDaemonCloseTasks = new Set();
   const pendingDaemonMessageTasks = new Set();
   const snapshotForClient = async (principal) => {
+    const sequenceCursor = eventFanout ? await eventFanout.currentCursor() : null;
+    const cursor = sequenceCursor === null ? null : cursorCodec.encode(sequenceCursor);
     if (principal.kind === "user") {
       principal.organizationIds = (await identities.listMemberships(principal.userId)).map((membership) => membership.organizationId);
       return {
+        cursor,
+        sequenceCursor,
         machines: (await Promise.all(principal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
         sessions: (await Promise.all(principal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
         shippingRuns: (await Promise.all(principal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
         workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
       };
     }
-    return { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
+    return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
   };
   const finishClientResync = (peer, state, snapshot = null) => {
     try {
-      if (snapshot) peer.send(encodeMessage({ type: "state.snapshot", ...snapshot }));
-      while (state.pendingEvents.length) peer.send(state.pendingEvents.shift());
+      if (snapshot) {
+        const { sequenceCursor, ...wireSnapshot } = snapshot;
+        peer.send(encodeMessage({ type: "state.snapshot", ...wireSnapshot }));
+        state.lastSentEventId = sequenceCursor;
+      }
+      while (state.pendingEvents.length) {
+        const pending = state.pendingEvents.shift();
+        if (pending.eventId !== null && state.lastSentEventId !== null && pending.eventId <= state.lastSentEventId) continue;
+        peer.send(pending.encoded);
+        if (pending.eventId !== null) state.lastSentEventId = pending.eventId;
+      }
     } catch (error) {
       clientSockets.delete(peer);
       console.warn("[api] websocket resync send failed", error.message);
@@ -90,17 +103,25 @@ export async function createControlPlane() {
     }
   };
 
-  const broadcastLocal = (event) => {
-    const encoded = encodeMessage(event);
+  const broadcastLocal = (event, eventId = null) => {
+    const encoded = encodeMessage(eventId === null ? event : {
+      ...event,
+      eventId: cursorCodec.eventTag(eventId),
+      cursor: cursorCodec.encode(eventId)
+    });
     for (const [peer, state] of clientSockets) {
       const principal = state.principal;
       const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
       if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) {
+        if (eventId !== null && state.lastSentEventId !== null && eventId <= state.lastSentEventId) continue;
         if (state.resyncing) {
-          state.pendingEvents.push(encoded);
+          state.pendingEvents.push({ eventId, encoded });
           continue;
         }
-        try { peer.send(encoded); } catch (error) {
+        try {
+          peer.send(encoded);
+          if (eventId !== null) state.lastSentEventId = eventId;
+        } catch (error) {
           clientSockets.delete(peer);
           console.warn("[api] client websocket send failed", error.message);
         }
@@ -108,6 +129,43 @@ export async function createControlPlane() {
     }
   };
   const eventFanout = store.pool ? new PostgresEventFanout(store.pool, broadcastLocal, { onGap: resyncClients }) : null;
+  const cursorCodec = eventFanout
+    ? createOpaqueCursorCodec(process.env.AGENT_WORK_OS_EVENT_CURSOR_SECRET ?? process.env.DATABASE_URL)
+    : null;
+  const replayClient = async (peer, state, cursor) => {
+    try {
+      const history = await eventFanout.replayAfter(cursor);
+      if (clientSockets.get(peer) !== state) return;
+      if (history.gap) return void resyncClient(peer, state);
+      if (state.principal.kind === "user") {
+        state.principal.organizationIds = (await identities.listMemberships(state.principal.userId)).map((membership) => membership.organizationId);
+      }
+      for (const { eventId, event } of history.rows) {
+        const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
+        if (state.principal.kind === "legacy" || (organizationId && state.principal.organizationIds?.includes(organizationId))) {
+          if (eventId <= state.lastSentEventId) continue;
+          peer.send(encodeMessage({ ...event, eventId: cursorCodec.eventTag(eventId), cursor: cursorCodec.encode(eventId) }));
+          state.lastSentEventId = eventId;
+        }
+      }
+      peer.send(encodeMessage({ type: "realtime.cursor", cursor: cursorCodec.encode(history.cursor) }));
+      state.lastSentEventId = Math.max(state.lastSentEventId ?? 0, history.cursor);
+      const laterEvents = state.pendingEvents.filter((entry) => entry.eventId === null || entry.eventId > history.cursor);
+      state.pendingEvents.length = 0;
+      for (const entry of laterEvents) {
+        if (entry.eventId !== null && state.lastSentEventId !== null && entry.eventId <= state.lastSentEventId) continue;
+        peer.send(entry.encoded);
+        if (entry.eventId !== null) state.lastSentEventId = entry.eventId;
+      }
+      state.resyncing = false;
+    } catch (error) {
+      console.warn("[api] websocket replay failed", error.message);
+      if (clientSockets.get(peer) === state) {
+        clientSockets.delete(peer);
+        peer.close(1011, "event_replay_failed");
+      }
+    }
+  };
   await eventFanout?.start();
   const broadcast = (event) => {
     if (eventFanout) {
@@ -521,7 +579,9 @@ export async function createControlPlane() {
         peer.on("close", () => clearTimeout(daemonAuthTimeout));
       }
       if (role === "client") {
-        const clientState = { principal: clientPrincipal, resyncing: true, pendingEvents: [] };
+        const requestedCursor = url.searchParams.get("cursor");
+        const clientCursor = requestedCursor === null ? null : cursorCodec?.decode(requestedCursor) ?? null;
+        const clientState = { principal: clientPrincipal, resyncing: true, pendingEvents: [], lastSentEventId: clientCursor };
         clientSockets.set(peer, clientState);
         peer.on("error", (error) => {
           clientSockets.delete(peer);
@@ -534,7 +594,8 @@ export async function createControlPlane() {
           peer.on("close", () => clearTimeout(expiry));
         }
         peer.on("close", () => clientSockets.delete(peer));
-        void resyncClient(peer, clientState);
+        if (eventFanout && Number.isSafeInteger(clientCursor)) void replayClient(peer, clientState, clientCursor);
+        else void resyncClient(peer, clientState);
         return;
       }
       let machineId;

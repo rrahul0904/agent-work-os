@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PostgresEventFanout } from "../src/realtime-events.js";
+import { createOpaqueCursorCodec, PostgresEventFanout } from "../src/realtime-events.js";
 
 test("fan-out shutdown waits for in-flight event persistence and rejects later broadcasts", async () => {
   let eventId = 0;
@@ -105,4 +105,34 @@ test("fan-out bounds its queue and persists a marker that makes listeners refres
 
   assert.deepEqual(persisted, [{ type: "test.first" }, { type: "realtime.resync_required" }]);
   assert.ok(errors.some((message) => message.includes("realtime event queue limit exceeded")));
+});
+
+test("cursor replay requests a snapshot when retained history contains a resync marker", async () => {
+  const pool = {
+    async connect() {
+      return {
+        async query(sql) {
+          if (sql.includes("MIN(event_id)")) return { rows: [{ first_event_id: 5, last_event_id: 5 }] };
+          if (sql.includes("last_value")) return { rows: [{ last_value: 5, is_called: true }] };
+          if (sql.includes("SELECT event_id, event")) return { rows: [{ event_id: 5, event: { type: "realtime.resync_required" } }] };
+          return { rows: [] };
+        },
+        release() {}
+      };
+    }
+  };
+  const fanout = new PostgresEventFanout(pool, () => {});
+  assert.deepEqual(await fanout.replayAfter(4), { gap: true });
+});
+
+test("opaque event cursors are authenticated and do not reveal sequence values", () => {
+  const codec = createOpaqueCursorCodec("stable-multi-instance-secret");
+  for (const sequence of [0, 9]) assert.equal(codec.decode(codec.encode(sequence)), sequence);
+  const cursor = codec.encode(123456);
+  assert.notEqual(cursor, "123456");
+  assert.equal(codec.decode(cursor), 123456);
+  assert.equal(codec.decode(`${cursor[0] === "A" ? "B" : "A"}${cursor.slice(1)}`), null, "tampered cursors are rejected");
+  assert.notEqual(codec.eventTag(123456), "123456");
+  assert.equal(codec.eventTag(123456), codec.eventTag(123456), "event tags are stable for duplicate detection");
+  assert.notEqual(codec.decode(createOpaqueCursorCodec("another-secret").encode(123456)), 123456);
 });
