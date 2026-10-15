@@ -13,6 +13,23 @@ export const WORK_ITEM_STATES = Object.freeze([
   "backlog", "ready", "running", "blocked", "verifying", "complete", "failed", "interrupted"
 ]);
 
+export const TASK_STATES = Object.freeze(["READY", "ACTIVE", "SUCCEEDED", "FAILED", "CANCELLED"]);
+export const RUN_STATES = Object.freeze([
+  "QUEUED", "LEASED", "PREPARING", "RUNNING", "WAITING_FOR_APPROVAL", "VERIFYING",
+  "SUCCEEDED", "FAILED", "CANCELLED", "TIMED_OUT", "INTERRUPTED", "RECOVERING"
+]);
+
+const RUN_TRANSITIONS = Object.freeze({
+  QUEUED: new Set(["LEASED", "CANCELLED", "TIMED_OUT"]),
+  LEASED: new Set(["PREPARING", "RECOVERING", "FAILED", "CANCELLED", "TIMED_OUT", "INTERRUPTED"]),
+  PREPARING: new Set(["RUNNING", "RECOVERING", "FAILED", "CANCELLED", "TIMED_OUT", "INTERRUPTED"]),
+  RUNNING: new Set(["WAITING_FOR_APPROVAL", "VERIFYING", "RECOVERING", "FAILED", "CANCELLED", "TIMED_OUT", "INTERRUPTED"]),
+  WAITING_FOR_APPROVAL: new Set(["RUNNING", "CANCELLED", "TIMED_OUT", "INTERRUPTED"]),
+  VERIFYING: new Set(["SUCCEEDED", "FAILED", "RECOVERING", "TIMED_OUT", "INTERRUPTED"]),
+  RECOVERING: new Set(["LEASED", "FAILED", "CANCELLED", "TIMED_OUT", "INTERRUPTED"]),
+  SUCCEEDED: new Set(), FAILED: new Set(), CANCELLED: new Set(), TIMED_OUT: new Set(), INTERRUPTED: new Set()
+});
+
 const WORK_ITEM_TRANSITIONS = Object.freeze({
   backlog: new Set(["ready"]),
   ready: new Set(["running", "blocked"]),
@@ -64,8 +81,8 @@ export function createWorkItem(input, { now = () => new Date().toISOString() } =
   if (input.projectId !== undefined && input.projectId !== null) assertCanonicalId("project", input.projectId, "projectId");
   assertActorId(input.createdBy, "createdBy");
 
-  const title = requireText(input.title, "title", 200).trim();
-  const description = input.description === undefined ? "" : requireText(input.description, "description", 20_000, true);
+  const title = requireTaskText(input.title, "title", 200).trim();
+  const description = input.description === undefined ? "" : requireTaskText(input.description, "description", 20_000, true);
   const createdAt = input.createdAt ?? now();
   if (!Number.isFinite(Date.parse(createdAt))) throw new DomainValidationError("work_item_timestamp_invalid");
   return {
@@ -88,8 +105,8 @@ export function assertWorkItem(input) {
   assertCanonicalId("org", input.organizationId, "organizationId");
   if (input.projectId !== null) assertCanonicalId("project", input.projectId, "projectId");
   assertActorId(input.createdBy, "createdBy");
-  requireText(input.title, "title", 200);
-  requireText(input.description, "description", 20_000, true);
+  requireTaskText(input.title, "title", 200);
+  requireTaskText(input.description, "description", 20_000, true);
   if (!WORK_ITEM_STATES.includes(input.status)) throw new DomainValidationError("work_item_state_invalid");
   if (!Number.isSafeInteger(input.version) || input.version < 1) throw new DomainValidationError("work_item_version_invalid");
   if (!Number.isFinite(Date.parse(input.createdAt)) || !Number.isFinite(Date.parse(input.updatedAt))) {
@@ -119,6 +136,86 @@ export function transitionWorkItem(itemInput, { to, expectedVersion, at = new Da
   if (!WORK_ITEM_TRANSITIONS[item.status].has(to)) throw new InvalidWorkItemTransitionError(item.status, to);
   if (!Number.isFinite(Date.parse(at))) throw new DomainValidationError("work_item_timestamp_invalid");
   return { ...item, status: to, version: item.version + 1, updatedAt: at };
+}
+
+export function createTask(input, { now = () => new Date().toISOString() } = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new DomainValidationError("task_invalid");
+  const id = input.id ?? createCanonicalId("task");
+  assertCanonicalId("task", id, "id");
+  assertCanonicalId("org", input.organizationId, "organizationId");
+  assertCanonicalId("work", input.workItemId, "workItemId");
+  assertActorId(input.createdBy, "createdBy");
+  const title = requireText(input.title, "title", 200).trim();
+  const description = input.description === undefined ? "" : requireText(input.description, "description", 20_000, true);
+  const createdAt = input.createdAt ?? now();
+  if (!Number.isFinite(Date.parse(createdAt))) throw new DomainValidationError("task_timestamp_invalid");
+  return {
+    id, organizationId: input.organizationId, workItemId: input.workItemId, title, description,
+    status: "READY", version: 1, createdBy: input.createdBy, createdAt, updatedAt: createdAt
+  };
+}
+
+export function assertTask(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new DomainValidationError("task_invalid");
+  assertCanonicalId("task", input.id, "id");
+  assertCanonicalId("org", input.organizationId, "organizationId");
+  assertCanonicalId("work", input.workItemId, "workItemId");
+  assertActorId(input.createdBy, "createdBy");
+  requireText(input.title, "title", 200);
+  requireText(input.description, "description", 20_000, true);
+  if (!TASK_STATES.includes(input.status)) throw new DomainValidationError("task_state_invalid");
+  assertVersionAndTimes(input);
+  return input;
+}
+
+export function createTaskRun(input, { now = () => new Date().toISOString() } = {}) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new DomainValidationError("run_invalid");
+  const id = input.id ?? createCanonicalId("run");
+  assertCanonicalId("run", id, "id");
+  assertCanonicalId("org", input.organizationId, "organizationId");
+  assertCanonicalId("task", input.taskId, "taskId");
+  assertActorId(input.createdBy, "createdBy");
+  if (!Number.isSafeInteger(input.attempt) || input.attempt < 1) throw new DomainValidationError("run_attempt_invalid");
+  const createdAt = input.createdAt ?? now();
+  if (!Number.isFinite(Date.parse(createdAt))) throw new DomainValidationError("run_timestamp_invalid");
+  return {
+    id, organizationId: input.organizationId, taskId: input.taskId, attempt: input.attempt,
+    status: "QUEUED", version: 1, createdBy: input.createdBy, createdAt, updatedAt: createdAt
+  };
+}
+
+export function assertTaskRun(input) {
+  if (!input || typeof input !== "object" || Array.isArray(input)) throw new DomainValidationError("run_invalid");
+  assertCanonicalId("run", input.id, "id");
+  assertCanonicalId("org", input.organizationId, "organizationId");
+  assertCanonicalId("task", input.taskId, "taskId");
+  assertActorId(input.createdBy, "createdBy");
+  if (!Number.isSafeInteger(input.attempt) || input.attempt < 1) throw new DomainValidationError("run_attempt_invalid");
+  if (!RUN_STATES.includes(input.status)) throw new DomainValidationError("run_state_invalid");
+  assertVersionAndTimes(input);
+  return input;
+}
+
+export function transitionTaskRun(runInput, { to, expectedVersion, at = new Date().toISOString() }) {
+  const run = assertTaskRun(runInput);
+  if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) throw new DomainValidationError("expected_version_invalid");
+  if (expectedVersion !== run.version) {
+    const error = new DomainValidationError("run_version_conflict", `Expected version ${expectedVersion}, found ${run.version}`);
+    error.expectedVersion = expectedVersion;
+    error.actualVersion = run.version;
+    throw error;
+  }
+  if (!RUN_STATES.includes(to)) throw new DomainValidationError("run_state_invalid");
+  if (!RUN_TRANSITIONS[run.status].has(to)) throw new DomainValidationError("run_transition_invalid", `Run cannot transition from ${run.status} to ${to}`);
+  if (!Number.isFinite(Date.parse(at))) throw new DomainValidationError("run_timestamp_invalid");
+  return { ...run, status: to, version: run.version + 1, updatedAt: at };
+}
+
+function assertVersionAndTimes(input) {
+  if (!Number.isSafeInteger(input.version) || input.version < 1) throw new DomainValidationError("entity_version_invalid");
+  if (!Number.isFinite(Date.parse(input.createdAt)) || !Number.isFinite(Date.parse(input.updatedAt))) {
+    throw new DomainValidationError("entity_timestamp_invalid");
+  }
 }
 
 export function canonicalDigest(value) {
@@ -151,6 +248,13 @@ export class WorkItemRepository {
 function requireText(value, field, maxLength, allowEmpty = false) {
   if (typeof value !== "string" || (!allowEmpty && !value.trim()) || value.length > maxLength) {
     throw new DomainValidationError(`work_item_${field}_invalid`);
+  }
+  return value;
+}
+
+function requireTaskText(value, field, maxLength, allowEmpty = false) {
+  if (typeof value !== "string" || (!allowEmpty && !value.trim()) || value.length > maxLength) {
+    throw new DomainValidationError(`task_${field}_invalid`);
   }
   return value;
 }
