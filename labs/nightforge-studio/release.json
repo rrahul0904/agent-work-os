@@ -1,0 +1,17 @@
+{
+  "product": "nightforge-studio",
+  "version": "0.1.0",
+  "authority": "Agent Work OS",
+  "reverseEngineeringProvider": "REA",
+  "releaseGate": {
+    "qaThreshold": 85,
+    "receiptLanes": 8,
+    "requiresIndependentQa": true,
+    "requiresExactShaDeploymentEvidence": true
+  },
+  "deployment": {
+    "rootDirectory": "labs/nightforge-studio",
+    "hosting": "Vercel",
+    "status": "candidate"
+  }
+}
