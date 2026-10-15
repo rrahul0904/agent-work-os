@@ -21,11 +21,12 @@ for (const file of [
   "creative-renderer.mjs",
   "mcp-core.mjs",
   "studio-upgrade.mjs",
+  "agent-console.mjs",
   "platform-manifest.json",
   "plugin-manifest.json"
 ]) {
   await cp(file, `dist/${file}`);
 }
 const html = await readFile("dist/index.html", "utf8");
-await writeFile("dist/index.html", html.replace("</body>", '<script type="module" src="./studio-upgrade.mjs"></script></body>'));
+await writeFile("dist/index.html", html.replace("</body>", '<script type="module" src="./studio-upgrade.mjs"></script><script type="module" src="./agent-console.mjs"></script></body>'));
 console.log("Built Visual Intelligence Platform lab into dist/");
