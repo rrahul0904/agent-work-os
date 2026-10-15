@@ -57,7 +57,7 @@ test("Postgres Task and Run persistence enforces parent scope, idempotency, atte
     assert.equal(firstRun.task.status, "READY", "a queued run is not represented as active before a worker lease");
     assert.equal((await taskRuns.createRun(taskId, createRunInput)).replayed, true);
     await assert.rejects(
-      taskRuns.createRun(taskId, { ...createRunInput, runId: createCanonicalId("run") }),
+      taskRuns.createRun(taskId, { ...createRunInput, runId: createCanonicalId("run"), commandId: createCanonicalId("command") }),
       TaskRunConcurrencyError
     );
     for (const [index, to] of ["LEASED", "PREPARING", "RUNNING", "VERIFYING", "FAILED"].entries()) {
