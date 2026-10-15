@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "updated": "2026-10-14",
+  "targets": [
+    {
+      "share_token": "vVrgxzx1Yy",
+      "subreddit": "n8n_ai_agents",
+      "url": "https://www.reddit.com/r/n8n_ai_agents/s/vVrgxzx1Yy",
+      "state": "SOURCE_IDENTITY_BLOCKED"
+    },
+    {
+      "share_token": "u61W83l1EV",
+      "subreddit": "n8n_ai_agents",
+      "url": "https://www.reddit.com/r/n8n_ai_agents/s/u61W83l1EV",
+      "state": "SOURCE_IDENTITY_BLOCKED"
+    },
+    {
+      "share_token": "RUSzpJdXoe",
+      "subreddit": "n8n_ai_agents",
+      "url": "https://www.reddit.com/r/n8n_ai_agents/s/RUSzpJdXoe",
+      "state": "SOURCE_IDENTITY_BLOCKED"
+    },
+    {
+      "share_token": "SA3QAJnlZi",
+      "subreddit": "n8nforbeginners",
+      "url": "https://www.reddit.com/r/n8nforbeginners/s/SA3QAJnlZi",
+      "state": "SOURCE_IDENTITY_BLOCKED"
+    },
+    {
+      "share_token": "SBAjOtnoDI",
+      "subreddit": "n8n_ai_agents",
+      "url": "https://www.reddit.com/r/n8n_ai_agents/s/SBAjOtnoDI",
+      "state": "SOURCE_IDENTITY_BLOCKED"
+    },
+    {
+      "share_token": "d6S6COPAag",
+      "subreddit": "n8n_ai_agents",
+      "url": "https://www.reddit.com/r/n8n_ai_agents/s/d6S6COPAag",
+      "state": "SOURCE_IDENTITY_BLOCKED"
+    }
+  ]
+}
