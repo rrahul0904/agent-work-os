@@ -226,8 +226,14 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       );
       await databaseInspector.query(
         `UPDATE agent_work_os_daemon_commands_v1
-         SET ack_reconciliation_status = 'pending', ack_reconciliation_owner_instance_id = NULL,
+         SET status = 'dispatching', owner_instance_id = $2,
+             ack_reconciliation_status = 'complete', ack_reconciliation_owner_instance_id = NULL,
              ack_reconciliation_lease_expires_at = NULL
+         WHERE command_id = $1`, [routedCommand.commandId, crypto.randomUUID()]
+      );
+      await databaseInspector.query(
+        `UPDATE agent_work_os_daemon_commands_v1
+         SET status = 'failed', ack_error = 'agent_unavailable'
          WHERE command_id = $1`, [routedCommand.commandId]
       );
       await waitFor(async () => {
