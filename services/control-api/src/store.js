@@ -332,7 +332,17 @@ export class JsonStore {
     }
   }
 
-  async #upsertTenantShippingRun(run) {
+  async updateShippingRunFromMachine(run) {
+    if (!run?.runId || !run.organizationId || !run.machineId) return null;
+    if (!this.pool) {
+      const current = this.state.shippingRuns[run.runId];
+      if (!current || current.organizationId !== run.organizationId || current.machineId !== run.machineId) return null;
+      return this.upsertShippingRun(run);
+    }
+    return this.#upsertTenantShippingRun(run, { allowInsert: false });
+  }
+
+  async #upsertTenantShippingRun(run, { allowInsert = true } = {}) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -345,6 +355,10 @@ export class JsonStore {
       }
       if (selected.rows[0] && selected.rows[0].machine_id !== run.machineId) {
         throw Object.assign(new Error("shipping_run_machine_mismatch"), { code: "shipping_run_machine_mismatch", statusCode: 409 });
+      }
+      if (!selected.rows[0] && !allowInsert) {
+        await client.query("COMMIT");
+        return null;
       }
       const clock = await client.query("SELECT clock_timestamp() AS now");
       const now = Date.parse(clock.rows[0].now);

@@ -229,6 +229,13 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const secondRunEvent = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "SUCCEEDED");
       assert.ok(Date.parse(secondRunEvent.updatedAt) > Date.parse(firstRunEvent.updatedAt),
         `same-run updates keep database-assigned timestamps monotonic (${firstRunEvent.updatedAt} then ${secondRunEvent.updatedAt})`);
+      const forgedShippingRunId = `daemon-forged-${crypto.randomUUID()}`;
+      machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: {
+        runId: forgedShippingRunId, state: "SHIPPED", testedSha: "forged", deployedSha: "forged", events: [{ type: "release.succeeded" }]
+      } });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const forgedShippingRunRead = await api(owner.cookies, null, `/api/shipping/runs/${encodeURIComponent(forgedShippingRunId)}?organizationId=${encodeURIComponent(alphaId)}`);
+      assert.equal(forgedShippingRunRead.status, 404, "an authenticated daemon cannot create a ShippingRun outside the validated launch route");
       const machineSessionResponse = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
         headers: { authorization: `Bearer ${machineCredential.token}` }
       });

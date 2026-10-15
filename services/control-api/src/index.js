@@ -512,8 +512,10 @@ export async function createControlPlane() {
           }
           if (msg.type === "daemon.shipping.run") {
             const run = { ...msg.run, machineId, ...(daemonPrincipal.kind === "machine" ? { organizationId: daemonPrincipal.organizationId } : {}) };
-            const persistedRun = await store.upsertShippingRun(run);
-            broadcast({ type: "shipping.run.updated", run: persistedRun }); return;
+            const persistedRun = daemonPrincipal.kind === "machine"
+              ? await store.updateShippingRunFromMachine(run)
+              : await store.upsertShippingRun(run);
+            if (persistedRun) broadcast({ type: "shipping.run.updated", run: persistedRun }); return;
           }
         } catch (error) { console.warn("[api] invalid daemon message", error.message); }
       });
