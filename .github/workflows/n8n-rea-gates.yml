@@ -23,6 +23,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Run REA pipeline tests
+      - name: Run REA and release-factory tests
         working-directory: commercialization/n8n/tools
         run: python -m unittest discover -p 'test_*.py' -v
+      - name: Validate canonical 20-product release registry
+        working-directory: commercialization/n8n/tools
+        run: python release_factory.py validate-registry ../release_registry.json
