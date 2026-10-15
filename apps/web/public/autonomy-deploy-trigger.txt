@@ -1,4 +1,0 @@
-Agent Work OS autonomous maintainer preview
-PR: 212
-Source candidate before this trigger: 7a8819b918e8dd0a100eabbe10fd7f1733e6c826
-Purpose: trigger the newly linked Vercel preview project through Git integration after the API deployment quota was reached.

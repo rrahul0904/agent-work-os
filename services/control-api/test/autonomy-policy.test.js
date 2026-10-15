@@ -1,6 +1,6 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { evaluateAutonomyGate, validateAutonomyContract } from "../src/autonomy-policy.js";
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { validateAutonomyContract, evaluateAutonomyGate } from '../src/autonomy-policy.js';
 
 const contract = {
   version: "autonomy-contract/v1",
@@ -77,4 +77,13 @@ test("latest blocking reviewer record prevents merge", () => {
   ];
   const result = evaluateAutonomyGate(contract, { ...evidence, reviews });
   assert.ok(result.reasons.includes("review_needs_changes:correctness"));
+});
+
+test("a stale latest record from any reviewer keeps that lens blocked", () => {
+  const reviews = [
+    ...evidence.reviews,
+    { reviewerId: "r3", lens: "correctness", headSha: "9999999999999999", baseSha: base, verdict: "READY", sequence: 2 }
+  ];
+  const result = evaluateAutonomyGate(contract, { ...evidence, reviews });
+  assert.ok(result.reasons.includes("review_not_bound_to_head:correctness"));
 });

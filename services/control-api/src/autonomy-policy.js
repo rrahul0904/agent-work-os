@@ -143,7 +143,8 @@ function evaluateReviews(contract, reviewsInput, { headSha, baseSha, authorAgent
     }
     const latest = [...latestByReviewer.values()];
     const exact = latest.filter((review) => normalizeSha(review.headSha) === headSha && normalizeSha(review.baseSha) === baseSha);
-    if (exact.length === 0) { reasons.push(`review_not_bound_to_head:${lens.id}`); continue; }
+    if (exact.length !== latest.length) reasons.push(`review_not_bound_to_head:${lens.id}`);
+    if (exact.length === 0) continue;
     if (exact.some((review) => review.edited === true)) reasons.push(`review_edited:${lens.id}`);
     if (exact.some((review) => !VERDICTS.has(review.verdict))) reasons.push(`review_verdict_invalid:${lens.id}`);
     if (exact.some((review) => review.verdict === "NEEDS_CHANGES")) reasons.push(`review_needs_changes:${lens.id}`);
