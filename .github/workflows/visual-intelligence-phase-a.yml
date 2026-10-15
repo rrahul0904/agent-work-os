@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test Prompt Studio
+      - name: Test platform core
         working-directory: labs/visual-intelligence-platform
         run: npm test
       - name: Build hosted shell
@@ -37,3 +37,29 @@ jobs:
         run: |
           test -f dist/index.html
           test -f dist/prompt-core.mjs
+          test -f dist/entitlements.mjs
+          test -f dist/orchestrator.mjs
+          test -f dist/visualbench.mjs
+      - name: Smoke hosted runtime
+        working-directory: labs/visual-intelligence-platform
+        run: |
+          PORT=4173 node server.mjs >/tmp/visual-intelligence-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:4173/api/health >/tmp/health.json; then
+              READY=1
+              break
+            fi
+            sleep 0.25
+          done
+          test "$READY" = "1"
+          grep -q '"ok":true' /tmp/health.json
+          curl -fsS http://127.0.0.1:4173/ | grep -q 'Visual Intelligence'
+          curl -fsS -X POST http://127.0.0.1:4173/api/prompt \
+            -H 'content-type: application/json' \
+            --data '{"artifactType":"architecture-diagram","objective":"Show a secure multi-region RAG platform","plan":"community"}' \
+            >/tmp/prompt.json
+          grep -q '"promptSpec"' /tmp/prompt.json
+          grep -q '"runPlan"' /tmp/prompt.json
