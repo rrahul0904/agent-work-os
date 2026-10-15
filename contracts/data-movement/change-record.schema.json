@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/data-movement/change-record.schema.json",
+  "title": "ChangeRecord v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "id", "source", "operation", "position", "schemaVersion", "eventTime", "capturedAt", "integrity"],
+  "properties": {
+    "version": { "const": "change-record/v1" },
+    "id": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system", "namespace", "entity"],
+      "properties": {
+        "system": { "type": "string", "minLength": 1 },
+        "namespace": { "type": "string", "minLength": 1 },
+        "entity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "operation": { "enum": ["SNAPSHOT", "INSERT", "UPDATE", "DELETE", "DDL"] },
+    "key": { "type": ["object", "null"] },
+    "before": { "type": ["object", "null"] },
+    "after": { "type": ["object", "null"] },
+    "ddl": { "type": ["string", "null"] },
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "sequence"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "value": { "type": "string", "minLength": 1 },
+        "sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "transaction": {
+      "type": ["object", "null"],
+      "properties": { "id": { "type": "string", "minLength": 1 }, "sequence": { "type": "integer", "minimum": 0 } },
+      "required": ["id", "sequence"],
+      "additionalProperties": false
+    },
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "eventTime": { "type": "string", "minLength": 1 },
+    "capturedAt": { "type": "string", "minLength": 1 },
+    "integrity": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
