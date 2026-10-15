@@ -103,7 +103,7 @@ export function evaluateAutonomyGate(contractInput, evidenceInput) {
   for (const required of contract.merge.requiredChecks) {
     const matching = checks.filter((item) => plain(item) && item.name === required && normalizeSha(item.sha) === headSha);
     if (matching.length === 0) reasons.push(`ci_missing:${required}`);
-    else if (!matching.some((item) => item.status === "success")) reasons.push(`ci_not_green:${required}`);
+    else if (matching.some((item) => item.status !== "success")) reasons.push(`ci_not_green:${required}`);
   }
 
   const reviewResult = evaluateReviews(contract, evidenceInput.reviews, { headSha, baseSha, authorAgentId: evidenceInput.authorAgentId });

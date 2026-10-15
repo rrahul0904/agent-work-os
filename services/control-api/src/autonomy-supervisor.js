@@ -30,7 +30,7 @@ export function createAutonomyRun({ runId = `auto-${crypto.randomUUID()}`, contr
 export function nextAutonomyTask(runInput) {
   const run = assertRun(runInput);
   if (run.shippedCount >= run.contract.budgets.maxMergesPerRun) return { run, task: null, reason: "merge_budget_reached" };
-  const task = run.backlog.find((item) => item.status === "PENDING" || item.status === "RETRYABLE" || item.status === "AWAITING_APPROVAL");
+  const task = run.backlog.find((item) => item.status === "PENDING" || item.status === "RETRYABLE");
   return { run, task: task ? structuredClone(task) : null, reason: task ? null : "no_runnable_task" };
 }
 
@@ -43,7 +43,7 @@ export function recordAutonomyAttempt(runInput, { workItemId, evidence, costUsd 
   }
   const index = findTask(run, workItemId);
   const task = run.backlog[index];
-  if (["SHIPPED", "FAILED"].includes(task.status)) throw new Error(`autonomy_task_terminal:${task.status}`);
+  if (!["PENDING", "RETRYABLE", "AWAITING_APPROVAL"].includes(task.status)) throw new Error(`autonomy_task_not_attemptable:${task.status}`);
   const maxAttempts = run.contract.budgets.maxFixAttempts + 1;
   if (task.attempts >= maxAttempts) throw new Error("autonomy_task_attempt_budget_exhausted");
 

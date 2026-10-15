@@ -129,3 +129,17 @@ test("cost budget fails closed before an over-budget attempt runs", () => {
   assert.equal(run.spentCostUsd, 0);
   assert.equal(run.backlog[0].attempts, 0);
 });
+
+test("approval-waiting work is not automatically selected for another implementer attempt", () => {
+  let run = createAutonomyRun({ runId: "auto-7", contract, findings: [findings[0]] });
+  run = recordAutonomyAttempt(run, { workItemId: "rea-high", evidence: greenEvidence({ changedFiles: ["scripts/release.mjs"] }) });
+  assert.equal(run.backlog[0].status, "AWAITING_APPROVAL");
+  assert.equal(nextAutonomyTask(run).task, null);
+  assert.equal(nextAutonomyTask(run).reason, "no_runnable_task");
+});
+
+test("shipping-waiting work cannot be re-attempted by an implementer", () => {
+  let run = createAutonomyRun({ runId: "auto-8", contract, findings });
+  run = recordAutonomyAttempt(run, { workItemId: "rea-high", evidence: greenEvidence() });
+  assert.throws(() => recordAutonomyAttempt(run, { workItemId: "rea-high", evidence: greenEvidence() }), /autonomy_task_not_attemptable:AWAITING_SHIPPING/);
+});

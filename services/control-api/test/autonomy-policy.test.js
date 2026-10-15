@@ -87,3 +87,14 @@ test("a stale latest record from any reviewer keeps that lens blocked", () => {
   const result = evaluateAutonomyGate(contract, { ...evidence, reviews });
   assert.ok(result.reasons.includes("review_not_bound_to_head:correctness"));
 });
+
+test("duplicate exact-SHA CI records fail closed if any record is not green", () => {
+  const result = evaluateAutonomyGate(contract, {
+    ...evidence,
+    ciChecks: [
+      ...evidence.ciChecks,
+      { name: "test", sha: head, status: "failure" }
+    ]
+  });
+  assert.ok(result.reasons.includes("ci_not_green:test"));
+});
