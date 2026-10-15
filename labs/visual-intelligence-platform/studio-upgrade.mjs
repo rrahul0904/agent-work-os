@@ -18,7 +18,7 @@ tabs.append(presentationTab, creativeTab);
 const presentation = document.createElement('section');
 presentation.id = 'presentation-workspace';
 presentation.className = 'workspace';
-presentation.innerHTML = `<div class="studio"><div class="panel panel-body"><h2>Presentation Studio</h2><div class="sub">DeckPlan → owned OOXML compiler → native editable PowerPoint.</div><div class="field"><label>DeckPlan input</label><textarea id="deckInput" class="code"></textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="button" id="inspectDeck">Compile receipt</button><button class="button secondary" id="downloadDeck">Download editable PPTX</button></div><div class="meta-row"><span class="pill" id="deckSlides">Slides: —</span><span class="pill" id="deckBytes">Bytes: —</span><span class="pill" id="deckEditable">Editable: —</span></div></div><div class="panel panel-body"><h2>DeckPlan + artifact receipt</h2><div class="sub">The receipt is separate from the PPTX binary so editability and compiler identity are inspectable.</div><div class="codebox" id="deckReceipt"></div></div></div>`;
+presentation.innerHTML = `<div class="studio"><div class="panel panel-body"><h2>Presentation Studio</h2><div class="sub">DeckPlan → owned OOXML compiler → native editable PowerPoint. Native PPTX is a Pro/Enterprise capability.</div><div class="field"><label>DeckPlan input</label><textarea id="deckInput" class="code"></textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="button" id="inspectDeck">Compile receipt</button><button class="button secondary" id="downloadDeck">Download editable PPTX</button></div><div class="meta-row"><span class="pill" id="deckSlides">Slides: —</span><span class="pill" id="deckBytes">Bytes: —</span><span class="pill" id="deckEditable">Editable: —</span></div></div><div class="panel panel-body"><h2>DeckPlan + artifact receipt</h2><div class="sub">The receipt is separate from the PPTX binary so editability and compiler identity are inspectable.</div><div class="codebox" id="deckReceipt"></div></div></div>`;
 pricingTitle.before(presentation);
 
 const creative = document.createElement('section');
@@ -28,6 +28,7 @@ creative.innerHTML = `<div class="diagram-grid"><div class="panel panel-body"><h
 pricingTitle.before(creative);
 
 const deckSample = {
+  plan: 'pro',
   title: 'Visual Intelligence Platform',
   audience: 'enterprise architecture and product leadership',
   purpose: 'technical-presentation',
