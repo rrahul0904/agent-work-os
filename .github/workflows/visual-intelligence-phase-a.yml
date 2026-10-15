@@ -46,6 +46,10 @@ jobs:
           test -f dist/diagram-adapters.mjs
           test -f dist/deck-plan.mjs
           test -f dist/pptx-native.mjs
+          test -f dist/creative-spec.mjs
+          test -f dist/creative-renderer.mjs
+          test -f dist/studio-upgrade.mjs
+          grep -q 'studio-upgrade.mjs' dist/index.html
       - name: Smoke hosted runtime
         working-directory: labs/visual-intelligence-platform
         run: |
@@ -61,6 +65,7 @@ jobs:
           grep -q '"ok":true' /tmp/health.json
           grep -q '"diagram-spec"' /tmp/health.json
           grep -q '"native-pptx"' /tmp/health.json
+          grep -q '"creative-spec"' /tmp/health.json
           curl -fsS http://127.0.0.1:4173/ | grep -q 'Diagram Studio'
           curl -fsS -X POST http://127.0.0.1:4173/api/prompt -H 'content-type: application/json' --data '{"artifactType":"architecture-diagram","objective":"Show a secure multi-region RAG platform","plan":"community"}' >/tmp/prompt.json
           grep -q '"promptSpec"' /tmp/prompt.json
@@ -77,6 +82,8 @@ jobs:
           cat >/tmp/deck.json <<'JSON'
           {"title":"Enterprise AI Platform","slides":[{"title":"Enterprise AI Platform","subtitle":"Governed visual intelligence","layout":"title"},{"title":"Why now","bullets":["Editable artifacts","Governed agents","Evidence-backed review"]}]}
           JSON
+          curl -fsS -X POST 'http://127.0.0.1:4173/api/presentation?mode=receipt' -H 'content-type: application/json' --data-binary @/tmp/deck.json >/tmp/deck-receipt.json
+          grep -q '"editable":true' /tmp/deck-receipt.json
           curl -fsS -X POST http://127.0.0.1:4173/api/presentation -H 'content-type: application/json' --data-binary @/tmp/deck.json -o /tmp/visual-intelligence.pptx
           python3 - <<'PY'
           import zipfile
@@ -89,3 +96,7 @@ jobs:
               assert 'Editable artifacts' in slide
               assert '<p:sp>' in slide and '<a:t>' in slide
           PY
+          curl -fsS -X POST http://127.0.0.1:4173/api/creative -H 'content-type: application/json' --data '{"format":"landscape","headline":"Architecture that stays editable","body":"Semantic artifacts with governed agents","cta":"Build now"}' >/tmp/creative.json
+          grep -q '"creativeSpec"' /tmp/creative.json
+          grep -q '"editable":true' /tmp/creative.json
+          grep -q 'id=\"headline\"' /tmp/creative.json
