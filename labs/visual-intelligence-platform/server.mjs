@@ -4,35 +4,29 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compilePromptSpec, renderPrompt } from './prompt-core.mjs';
 import { createRunPlan } from './orchestrator.mjs';
+import { compileDiagramSpec } from './diagram-spec.mjs';
+import { layoutDiagram, renderDiagramSvg } from './diagram-renderer.mjs';
+import { critiqueDiagram } from './diagram-critic.mjs';
+import { toDrawioXml, toMermaid, toPlantUml } from './diagram-adapters.mjs';
 
 const root = fileURLToPath(new URL('./dist/', import.meta.url));
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || '0.0.0.0';
 
 const types = {
-  '.html': 'text/html; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
+  '.html': 'text/html; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.css': 'text/css; charset=utf-8'
 };
 
 function sendJson(response, status, body) {
-  response.writeHead(status, {
-    'content-type': 'application/json; charset=utf-8',
-    'cache-control': 'no-store',
-    'x-content-type-options': 'nosniff'
-  });
+  response.writeHead(status, {'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff'});
   response.end(JSON.stringify(body));
 }
 
 async function bodyJson(request) {
-  const chunks = [];
-  let size = 0;
+  const chunks = []; let size = 0;
   for await (const chunk of request) {
     size += chunk.length;
     if (size > 1024 * 1024) throw new Error('request-too-large');
@@ -51,16 +45,10 @@ async function serveStatic(pathname, response) {
     const meta = await stat(target);
     if (!meta.isFile()) return false;
     const data = await readFile(target);
-    response.writeHead(200, {
-      'content-type': types[extname(target)] || 'application/octet-stream',
-      'cache-control': extname(target) === '.html' ? 'no-store' : 'public, max-age=300',
-      'x-content-type-options': 'nosniff'
-    });
+    response.writeHead(200, {'content-type':types[extname(target)] || 'application/octet-stream','cache-control':extname(target) === '.html' ? 'no-store' : 'public, max-age=300','x-content-type-options':'nosniff'});
     response.end(data);
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
 const server = http.createServer(async (request, response) => {
@@ -69,40 +57,45 @@ const server = http.createServer(async (request, response) => {
 
     if (request.method === 'GET' && url.pathname === '/api/health') {
       return sendJson(response, 200, {
-        ok: true,
-        service: 'visual-intelligence-platform',
-        contractVersion: 'visual-intelligence-platform/v1alpha1',
-        releaseState: 'BUILDING'
+        ok: true, service: 'visual-intelligence-platform', contractVersion: 'visual-intelligence-platform/v1alpha1',
+        releaseState: 'BUILDING', capabilities: ['prompt-studio','agent-run-plan','diagram-spec','diagram-svg','mermaid','plantuml','drawio','visualbench']
       });
     }
 
     if (url.pathname === '/api/prompt') {
-      if (request.method !== 'POST') {
-        response.setHeader('allow', 'POST');
-        return sendJson(response, 405, { error: 'method-not-allowed' });
-      }
+      if (request.method !== 'POST') { response.setHeader('allow', 'POST'); return sendJson(response, 405, {error:'method-not-allowed'}); }
       try {
         const input = await bodyJson(request);
         const promptSpec = compilePromptSpec(input);
-        const runPlan = createRunPlan(input);
-        return sendJson(response, 200, {
-          promptSpec,
-          prompt: renderPrompt(promptSpec),
-          runPlan
-        });
+        return sendJson(response, 200, {promptSpec, prompt: renderPrompt(promptSpec), runPlan: createRunPlan(input)});
       } catch (error) {
         const code = error?.message || 'prompt-compilation-failed';
-        return sendJson(response, code === 'plan-capability-denied' ? 403 : 400, { error: code });
+        return sendJson(response, code === 'plan-capability-denied' ? 403 : 400, {error:code});
+      }
+    }
+
+    if (url.pathname === '/api/diagram') {
+      if (request.method !== 'POST') { response.setHeader('allow', 'POST'); return sendJson(response, 405, {error:'method-not-allowed'}); }
+      try {
+        const input = await bodyJson(request);
+        const diagramSpec = compileDiagramSpec(input);
+        const layout = layoutDiagram(diagramSpec);
+        return sendJson(response, 200, {
+          diagramSpec,
+          critique: critiqueDiagram(diagramSpec),
+          svg: renderDiagramSvg(diagramSpec),
+          exports: {mermaid:toMermaid(diagramSpec), plantuml:toPlantUml(diagramSpec), drawio:toDrawioXml(diagramSpec, layout)}
+        });
+      } catch (error) {
+        return sendJson(response, 400, {error:error?.message || 'diagram-generation-failed'});
       }
     }
 
     if (request.method === 'GET' && await serveStatic(url.pathname, response)) return;
-    return sendJson(response, 404, { error: 'not-found' });
-  } catch (error) {
-    return sendJson(response, 500, { error: 'internal-error' });
+    return sendJson(response, 404, {error:'not-found'});
+  } catch {
+    return sendJson(response, 500, {error:'internal-error'});
   }
 });
 
-server.listen(port, host, () => {
-  console.log(`Visual Intelligence Platform listening on http://${host}:${port}`);
-});
+server.listen(port, host, () => console.log(`Visual Intelligence Platform listening on http://${host}:${port}`));
