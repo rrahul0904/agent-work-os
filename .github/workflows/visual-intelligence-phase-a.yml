@@ -29,6 +29,9 @@ jobs:
       - name: Test platform core
         working-directory: labs/visual-intelligence-platform
         run: npm test
+      - name: Syntax check hosted runtime
+        working-directory: labs/visual-intelligence-platform
+        run: node --check server.mjs
       - name: Build hosted shell
         working-directory: labs/visual-intelligence-platform
         run: npm run build
@@ -61,7 +64,7 @@ jobs:
             if curl -fsS http://127.0.0.1:4173/api/health >/tmp/health.json; then READY=1; break; fi
             sleep 0.25
           done
-          test "$READY" = "1"
+          if test "$READY" != "1"; then cat /tmp/visual-intelligence-server.log; exit 1; fi
           grep -q '"ok":true' /tmp/health.json
           grep -q '"diagram-spec"' /tmp/health.json
           grep -q '"native-pptx"' /tmp/health.json
