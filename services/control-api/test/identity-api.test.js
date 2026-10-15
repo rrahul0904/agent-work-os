@@ -215,9 +215,35 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         return result.rows[0]?.status === "failed" && failedSession.status === "failed";
       }, 2_000, "routed daemon rejection persists and fails the queued session");
       const rejectedCommand = await databaseInspector.query(
-        "SELECT status, ack_error FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]
+        "SELECT status, ack_error, ack_reconciliation_status FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]
       );
       assert.equal(rejectedCommand.rows[0]?.ack_error, "agent_unavailable");
+      assert.equal(rejectedCommand.rows[0]?.ack_reconciliation_status, "complete");
+      await databaseInspector.query(
+        `UPDATE agent_work_os_sessions_v1
+         SET status = 'queued', record = jsonb_set(record, '{status}', '"queued"'::jsonb)
+         WHERE session_id = $1`, [replicaSession.id]
+      );
+      await databaseInspector.query(
+        `UPDATE agent_work_os_daemon_commands_v1
+         SET ack_reconciliation_status = 'pending', ack_reconciliation_owner_instance_id = NULL,
+             ack_reconciliation_lease_expires_at = NULL
+         WHERE command_id = $1`, [routedCommand.commandId]
+      );
+      await waitFor(async () => {
+        const [commandState, sessionResponse] = await Promise.all([
+          databaseInspector.query("SELECT ack_reconciliation_status FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]),
+          api(owner.cookies, null, `/api/sessions/${encodeURIComponent(replicaSession.id)}?organizationId=${encodeURIComponent(alphaId)}`)
+        ]);
+        const recoveredSession = await sessionResponse.json();
+        return commandState.rows[0]?.ack_reconciliation_status === "complete" && recoveredSession.status === "failed";
+      }, 2_000, "durable acknowledgement reconciliation retries after an interrupted resource update");
+      const reconciledEvents = await databaseInspector.query(
+        `SELECT count(*)::int AS count
+         FROM agent_work_os_sessions_v1, jsonb_array_elements(record->'events') AS event
+         WHERE session_id = $1 AND event->>'commandId' = $2`, [replicaSession.id, routedCommand.commandId]
+      );
+      assert.equal(reconciledEvents.rows[0]?.count, 1, "replayed reconciliation does not duplicate session failure events");
 
       const createdSessionResponse = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
         method: "POST", body: { organizationId: alphaId, machineId, cwd: "/tmp", agent: "echo", prompt: "tenant-scoped session" }

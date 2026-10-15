@@ -313,6 +313,14 @@ export class JsonStore {
     if (this.pool) {
       const normalized = await this.#updateSession(id, (session) => {
         session.events ??= [];
+        const existingCommandEvent = event.commandId && session.events.find((existing) => existing.commandId === event.commandId);
+        if (existingCommandEvent) {
+          if (existingCommandEvent.kind === "status" && session.status !== existingCommandEvent.status) {
+            session.status = existingCommandEvent.status;
+            session.updatedAt = new Date().toISOString();
+          }
+          return session;
+        }
         session.events.push(event);
         session.updatedAt = new Date().toISOString();
         if (event.kind === "status") session.status = event.status;
@@ -326,7 +334,17 @@ export class JsonStore {
       if (normalized) return normalized;
       if (!this.state.sessions[id] || this.state.sessions[id].organizationId) return null;
     }
-    const s = this.#session(id); s.events.push(event); s.updatedAt = new Date().toISOString();
+    const s = this.#session(id);
+    const existingCommandEvent = event.commandId && s.events.find((existing) => existing.commandId === event.commandId);
+    if (existingCommandEvent) {
+      if (existingCommandEvent.kind === "status" && s.status !== existingCommandEvent.status) {
+        s.status = existingCommandEvent.status;
+        s.updatedAt = new Date().toISOString();
+        await this.#persist();
+      }
+      return s;
+    }
+    s.events.push(event); s.updatedAt = new Date().toISOString();
     if (event.kind === "status") s.status = event.status;
     if (event.kind === "thread") s.nativeSessionId = event.nativeSessionId;
     if (event.kind === "text" && event.text?.trim()) s.messages.push({ id: crypto.randomUUID(), role: "assistant", text: event.text, createdAt: event.at });

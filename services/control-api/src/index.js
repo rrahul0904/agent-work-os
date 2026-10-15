@@ -141,12 +141,12 @@ export async function createControlPlane() {
       if (command.action === "session.start") {
         const session = await store.getSession(command.sessionId);
         if (!session) return;
-        const updated = await store.addEvent(session.id, { kind: "status", status: "failed", error, at: new Date().toISOString() });
+        const updated = await store.addEvent(session.id, { kind: "status", status: "failed", error, commandId: command.commandId, at: new Date().toISOString() });
         if (updated) broadcast({ type: "session.updated", session: updated });
       } else if (command.action === "session.message" || command.action === "session.interrupt") {
         const session = await store.getSession(command.sessionId);
         if (!session) return;
-        const updated = await store.addEvent(session.id, { kind: "error", message: error, at: new Date().toISOString() });
+        const updated = await store.addEvent(session.id, { kind: "error", message: error, commandId: command.commandId, at: new Date().toISOString() });
         if (updated) broadcast({ type: "session.updated", session: updated });
       } else if (command.action === "shipping.start") {
         const run = await store.getShippingRun(command.payload?.runId);

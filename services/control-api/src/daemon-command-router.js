@@ -47,13 +47,16 @@ export class PostgresDaemonCommandRouter {
     if (typeof ok !== "boolean") return false;
     const result = await this.pool.query(
       `UPDATE agent_work_os_daemon_commands_v1
-       SET status = $1, ack_error = $2, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+       SET status = $1, ack_error = $2, lease_expires_at = NULL,
+           ack_reconciliation_status = $6,
+           ack_reconciliation_owner_instance_id = NULL,
+           ack_reconciliation_lease_expires_at = NULL,
+           updated_at = CURRENT_TIMESTAMP
        WHERE command_id = $3 AND machine_id = $4 AND status = 'dispatching' AND owner_instance_id = $5
        RETURNING payload`,
-      [ok ? "acked" : "failed", ok ? null : String(error ?? "daemon_command_failed").slice(0, 2_000), commandId, machineId, this.instanceId]
+      [ok ? "acked" : "failed", ok ? null : String(error ?? "daemon_command_failed").slice(0, 2_000), commandId, machineId, this.instanceId, ok ? "complete" : "pending"]
     );
     if (!result.rowCount) return false;
-    await this.onAcknowledged(result.rows[0].payload, { ok, error });
     return true;
   }
 
@@ -68,14 +71,22 @@ export class PostgresDaemonCommandRouter {
        WHERE status = 'dispatching' AND owner_instance_id = $1`,
       [this.instanceId]
     );
+    await this.pool.query(
+      `UPDATE agent_work_os_daemon_commands_v1
+       SET ack_reconciliation_status = 'pending', ack_reconciliation_owner_instance_id = NULL,
+           ack_reconciliation_lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE ack_reconciliation_status = 'processing' AND ack_reconciliation_owner_instance_id = $1`,
+      [this.instanceId]
+    );
   }
 
   async #poll() {
     if (this.closed || this.polling) return;
     const machineIds = [...new Set(this.getConnectedMachineIds())];
-    if (!machineIds.length) return;
     this.polling = true;
     try {
+      await this.#reconcileAcknowledgements();
+      if (!machineIds.length) return;
       await this.pool.query(
         `UPDATE agent_work_os_daemon_commands_v1
          SET status = 'pending', owner_instance_id = NULL, lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
@@ -130,6 +141,60 @@ export class PostgresDaemonCommandRouter {
       this.onError(`[api] daemon command poll failed: ${error.message}`);
     } finally {
       this.polling = false;
+    }
+  }
+
+  async #reconcileAcknowledgements() {
+    await this.pool.query(
+      `UPDATE agent_work_os_daemon_commands_v1
+       SET ack_reconciliation_status = 'pending', ack_reconciliation_owner_instance_id = NULL,
+           ack_reconciliation_lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+       WHERE status = 'failed' AND ack_reconciliation_status = 'processing'
+         AND ack_reconciliation_lease_expires_at <= CURRENT_TIMESTAMP`
+    );
+    const client = await this.pool.connect();
+    let commands;
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query(
+        `SELECT command_id, payload, ack_error
+         FROM agent_work_os_daemon_commands_v1
+         WHERE status = 'failed' AND ack_reconciliation_status = 'pending'
+         ORDER BY updated_at, command_id
+         LIMIT 50 FOR UPDATE SKIP LOCKED`
+      );
+      commands = selected.rows;
+      if (commands.length) {
+        await client.query(
+          `UPDATE agent_work_os_daemon_commands_v1
+           SET ack_reconciliation_status = 'processing', ack_reconciliation_owner_instance_id = $1,
+               ack_reconciliation_lease_expires_at = CURRENT_TIMESTAMP + ($2 * INTERVAL '1 millisecond'),
+               updated_at = CURRENT_TIMESTAMP
+           WHERE command_id = ANY($3::uuid[])`,
+          [this.instanceId, this.leaseMs, commands.map((row) => row.command_id)]
+        );
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+    for (const row of commands ?? []) {
+      try {
+        await this.onAcknowledged(row.payload, { ok: false, error: row.ack_error });
+        await this.pool.query(
+          `UPDATE agent_work_os_daemon_commands_v1
+           SET ack_reconciliation_status = 'complete', ack_reconciliation_owner_instance_id = NULL,
+               ack_reconciliation_lease_expires_at = NULL, updated_at = CURRENT_TIMESTAMP
+           WHERE command_id = $1 AND status = 'failed' AND ack_reconciliation_owner_instance_id = $2
+             AND ack_reconciliation_status = 'processing'`,
+          [row.command_id, this.instanceId]
+        );
+      } catch (error) {
+        this.onError(`[api] daemon command acknowledgement reconciliation failed for ${row.command_id}: ${error.message}`);
+      }
     }
   }
 }
