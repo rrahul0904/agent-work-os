@@ -1,5 +1,6 @@
 import { once } from 'node:events';
 import { createVisualIntelligenceServer } from './http-app.mjs';
+import { MCP_PROTOCOL_VERSION } from './mcp-core.mjs';
 
 const server = createVisualIntelligenceServer();
 server.listen(0, '127.0.0.1');
@@ -19,6 +20,32 @@ async function post(path, body) {
   });
 }
 
+async function mcp(method, params, name) {
+  return fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'accept': 'application/json, text/event-stream',
+      'MCP-Protocol-Version': MCP_PROTOCOL_VERSION,
+      'Mcp-Method': method,
+      ...(name ? { 'Mcp-Name': name } : {})
+    },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: `${method}-smoke`,
+      method,
+      params: {
+        ...(params || {}),
+        _meta: {
+          'io.modelcontextprotocol/protocolVersion': MCP_PROTOCOL_VERSION,
+          'io.modelcontextprotocol/clientInfo': { name: 'visual-intelligence-smoke', version: '1.0.0' },
+          'io.modelcontextprotocol/clientCapabilities': {}
+        }
+      }
+    })
+  });
+}
+
 try {
   const healthResponse = await fetch(`${base}/api/health`);
   ensure(healthResponse.ok, 'health-status');
@@ -27,6 +54,7 @@ try {
   ensure(health.capabilities.includes('diagram-spec'), 'diagram-capability');
   ensure(health.capabilities.includes('native-pptx'), 'pptx-capability');
   ensure(health.capabilities.includes('creative-spec'), 'creative-capability');
+  ensure(health.capabilities.includes('mcp-tools'), 'mcp-capability');
 
   const homeResponse = await fetch(`${base}/`);
   ensure(homeResponse.ok, 'home-status');
@@ -36,9 +64,7 @@ try {
   ensure(home.includes('studio-upgrade.mjs'), 'studio-upgrade-ui');
 
   const promptResponse = await post('/api/prompt', {
-    artifactType: 'architecture-diagram',
-    objective: 'Show a secure multi-region RAG platform',
-    plan: 'community'
+    artifactType: 'architecture-diagram', objective: 'Show a secure multi-region RAG platform', plan: 'community'
   });
   ensure(promptResponse.ok, 'prompt-status');
   const prompt = await promptResponse.json();
@@ -46,8 +72,7 @@ try {
   ensure(prompt.runPlan?.providerPolicy?.selection === 'provider-neutral', 'run-plan');
 
   const diagramResponse = await post('/api/diagram', {
-    kind: 'rag',
-    title: 'Secure RAG',
+    kind: 'rag', title: 'Secure RAG',
     nodes: [
       { id: 'user', type: 'actor', label: 'User', evidence: 'requirements' },
       { id: 'idp', type: 'identity', label: 'IdP', evidence: 'security' },
@@ -88,21 +113,38 @@ try {
   ensure(String.fromCharCode(pptx[0], pptx[1]) === 'PK', 'pptx-zip-magic');
 
   const creativeResponse = await post('/api/creative', {
-    format: 'landscape',
-    headline: 'Architecture that stays editable',
-    body: 'Semantic artifacts with governed agents',
-    cta: 'Build now'
+    format: 'landscape', headline: 'Architecture that stays editable', body: 'Semantic artifacts with governed agents', cta: 'Build now'
   });
   ensure(creativeResponse.ok, 'creative-status');
   const creative = await creativeResponse.json();
   ensure(creative.receipt?.editable === true, 'creative-editable');
   ensure(creative.svg?.includes('id="headline"'), 'creative-layer');
 
+  const discoverResponse = await mcp('server/discover');
+  ensure(discoverResponse.ok, 'mcp-discover-status');
+  const discover = await discoverResponse.json();
+  ensure(discover.result?.supportedVersions?.includes(MCP_PROTOCOL_VERSION), 'mcp-discover-version');
+
+  const listResponse = await mcp('tools/list');
+  ensure(listResponse.ok, 'mcp-tools-list-status');
+  const toolList = await listResponse.json();
+  ensure(toolList.result?.tools?.length >= 5, 'mcp-tools-list');
+
+  const toolName = 'visual_prompt_compile';
+  const callResponse = await mcp('tools/call', {
+    name: toolName,
+    arguments: { artifactType: 'technical-diagram', objective: 'Explain the event-driven data flow', plan: 'community' }
+  }, toolName);
+  ensure(callResponse.ok, 'mcp-tool-call-status');
+  const call = await callResponse.json();
+  ensure(call.result?.structuredContent?.promptSpec?.artifactType === 'technical-diagram', 'mcp-tool-call-result');
+
   console.log(JSON.stringify({
     ok: true,
     service: 'visual-intelligence-platform',
-    routes: ['/','/api/health','/api/prompt','/api/diagram','/api/presentation','/api/creative'],
-    artifactFamilies: 5
+    routes: ['/','/api/health','/api/prompt','/api/diagram','/api/presentation','/api/creative','/mcp'],
+    artifactFamilies: 5,
+    mcpProtocolVersion: MCP_PROTOCOL_VERSION
   }));
 } finally {
   server.close();
