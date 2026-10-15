@@ -1,0 +1,108 @@
+import http from 'node:http';
+import { readFile, stat } from 'node:fs/promises';
+import { extname, join, normalize } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { compilePromptSpec, renderPrompt } from './prompt-core.mjs';
+import { createRunPlan } from './orchestrator.mjs';
+
+const root = fileURLToPath(new URL('./dist/', import.meta.url));
+const port = Number(process.env.PORT || 4173);
+const host = process.env.HOST || '0.0.0.0';
+
+const types = {
+  '.html': 'text/html; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.css': 'text/css; charset=utf-8'
+};
+
+function sendJson(response, status, body) {
+  response.writeHead(status, {
+    'content-type': 'application/json; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-content-type-options': 'nosniff'
+  });
+  response.end(JSON.stringify(body));
+}
+
+async function bodyJson(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > 1024 * 1024) throw new Error('request-too-large');
+    chunks.push(chunk);
+  }
+  if (!chunks.length) return {};
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+async function serveStatic(pathname, response) {
+  const requested = pathname === '/' ? '/index.html' : pathname;
+  const safe = normalize(requested).replace(/^(\.\.(\/|\\|$))+/, '');
+  const target = join(root, safe);
+  if (!target.startsWith(root)) return false;
+  try {
+    const meta = await stat(target);
+    if (!meta.isFile()) return false;
+    const data = await readFile(target);
+    response.writeHead(200, {
+      'content-type': types[extname(target)] || 'application/octet-stream',
+      'cache-control': extname(target) === '.html' ? 'no-store' : 'public, max-age=300',
+      'x-content-type-options': 'nosniff'
+    });
+    response.end(data);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const server = http.createServer(async (request, response) => {
+  try {
+    const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+
+    if (request.method === 'GET' && url.pathname === '/api/health') {
+      return sendJson(response, 200, {
+        ok: true,
+        service: 'visual-intelligence-platform',
+        contractVersion: 'visual-intelligence-platform/v1alpha1',
+        releaseState: 'BUILDING'
+      });
+    }
+
+    if (url.pathname === '/api/prompt') {
+      if (request.method !== 'POST') {
+        response.setHeader('allow', 'POST');
+        return sendJson(response, 405, { error: 'method-not-allowed' });
+      }
+      try {
+        const input = await bodyJson(request);
+        const promptSpec = compilePromptSpec(input);
+        const runPlan = createRunPlan(input);
+        return sendJson(response, 200, {
+          promptSpec,
+          prompt: renderPrompt(promptSpec),
+          runPlan
+        });
+      } catch (error) {
+        const code = error?.message || 'prompt-compilation-failed';
+        return sendJson(response, code === 'plan-capability-denied' ? 403 : 400, { error: code });
+      }
+    }
+
+    if (request.method === 'GET' && await serveStatic(url.pathname, response)) return;
+    return sendJson(response, 404, { error: 'not-found' });
+  } catch (error) {
+    return sendJson(response, 500, { error: 'internal-error' });
+  }
+});
+
+server.listen(port, host, () => {
+  console.log(`Visual Intelligence Platform listening on http://${host}:${port}`);
+});
