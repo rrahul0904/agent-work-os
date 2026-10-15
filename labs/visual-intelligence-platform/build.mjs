@@ -11,6 +11,9 @@ for (const file of [
   "diagram-renderer.mjs",
   "diagram-critic.mjs",
   "diagram-adapters.mjs",
+  "deck-plan.mjs",
+  "zip-store.mjs",
+  "pptx-native.mjs",
   "platform-manifest.json",
   "plugin-manifest.json"
 ]) {
