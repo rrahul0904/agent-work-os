@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "updated_at": "2026-10-15T01:07:00-04:00",
+  "products": [
+    {"slug":"ap-matchflow","repo":"rrahul0904/n8n-automated-vendor-invoice-to-purchase-order-matching","state":"E2E_REQUIRED","providers":["gmail","google_sheets","gemini","slack"],"rights_gate":true},
+    {"slug":"hotel-guest-whatsapp-concierge","repo":"rrahul0904/n8n-hotel-guest-whatsapp-concierge","state":"PACKAGE_REQUIRED","providers":["whatsapp","google_sheets","gemini","redis"],"rights_gate":true},
+    {"slug":"meeting-analyzer-crm","repo":"rrahul0904/n8n-ai-meeting-analyzer-transcribe-extract-tasks-update-ghl","state":"PACKAGE_REQUIRED","providers":["transcription","crm"],"rights_gate":true},
+    {"slug":"hvac-booking-agent","repo":"rrahul0904/n8n-ai-automated-hvac-appointment-booking-n8n-workflow-json","state":"PACKAGE_REQUIRED","providers":["calendar","messaging"],"rights_gate":true},
+    {"slug":"gym-checkin","repo":"rrahul0904/n8n-gym-checkin-system","state":"PACKAGE_REQUIRED","providers":[],"rights_gate":true},
+    {"slug":"email-scraper-pro","repo":"rrahul0904/n8n-email-scraper-pro-custom-n8n-node-workflow","state":"RIGHTS_REQUIRED","providers":["web"],"rights_gate":true},
+    {"slug":"linkedin-opportunity-finder","repo":"rrahul0904/n8n-automated-linkedin-engagement-oppurtunities-finder","state":"REBUILD_REQUIRED","providers":["linkedin"],"rights_gate":true,"clean_room":true},
+    {"slug":"hotel-smart-lock","repo":"rrahul0904/n8n-automate-hotel-smart-lock-access-with-n8n-json","state":"PACKAGE_REQUIRED","providers":["smart_lock"],"rights_gate":true},
+    {"slug":"inventory-reorder","repo":"rrahul0904/n8n-automated-inventory-reorder-vendor-notification-pipeline","state":"PACKAGE_REQUIRED","providers":["vendor"],"rights_gate":true},
+    {"slug":"pet-clinic-scheduler","repo":"rrahul0904/n8n-pet-clinic-appointment-scheduling-agent","state":"PACKAGE_REQUIRED","providers":["calendar"],"rights_gate":true},
+    {"slug":"barcode-scanner-node","repo":"rrahul0904/n8n-barcode-scanner-custom-node","state":"PACKAGE_REQUIRED","providers":[],"rights_gate":true},
+    {"slug":"shipping-quote-router","repo":"rrahul0904/n8n-automate-multi-carrier-shipping-quotes-with-ai","state":"E2E_REQUIRED","providers":["carrier"],"rights_gate":true},
+    {"slug":"lead-to-proposal-ai","repo":"rrahul0904/n8n-lead-scoring-and-automated-whatsapp-proposal-sender","state":"PACKAGE_REQUIRED","providers":["whatsapp"],"rights_gate":true},
+    {"slug":"equipment-enquiry-router","repo":"rrahul0904/n8n-routing-of-medical-equipment-enquiry","state":"PACKAGE_REQUIRED","providers":[],"rights_gate":true},
+    {"slug":"viralflow","repo":"rrahul0904/n8n-viralflow","state":"DONOR_ONLY","providers":[],"rights_gate":true,"clean_room":true},
+    {"slug":"reel-generator","repo":"rrahul0904/n8n-reel-generator","state":"DONOR_ONLY","providers":[],"rights_gate":true,"clean_room":true},
+    {"slug":"sogni-nodes","repo":"rrahul0904/n8n-nodes-sogni","state":"RIGHTS_REQUIRED","providers":["sogni"],"rights_gate":true},
+    {"slug":"sentinel-reliability-runtime","repo":"rrahul0904/n8n-sentinel-circuit-breaker-or-resilient-webhook-queue-engine","state":"PACKAGE_REQUIRED","providers":[],"rights_gate":false,"license":"MIT"},
+    {"slug":"freeflow-ai-media-factory","repo":"rrahul0904/youtube_project","workflow_path":"n8n/workflows/FreeFlow_Roman_Pilot_Starter.json","state":"PACKAGE_REQUIRED","providers":["media","youtube"],"rights_gate":true},
+    {"slug":"faceless-content-creator","repo":"rrahul0904/faceless-content-creator","workflow_path":"workflows/n8n/faceless-content-creator.json","state":"PACKAGE_REQUIRED","providers":["media","publishing"],"rights_gate":true}
+  ]
+}
