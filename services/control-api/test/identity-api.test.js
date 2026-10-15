@@ -149,6 +149,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     const machineSocket = await openMachineSocket(port, machineCredential.token, machineId);
     let replacementMachineSocket;
     let alphaSessionId;
+    let alphaShippingRunId;
     let rotatedMachineToken;
     try {
       await waitFor(async () => {
@@ -190,6 +191,44 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       );
       assert.deepEqual(globalSnapshotAfterSessionUpdates.rows[0]?.payload, globalSnapshotBeforeSessionUpdates.rows[0]?.payload,
         "machine and session mutations do not replace the shared legacy JSONB snapshot");
+
+      const shippingContractResponse = await api(owner.cookies, null, "/api/shipping/example");
+      const shippingContract = await shippingContractResponse.json();
+      alphaShippingRunId = `tenant-${crypto.randomUUID()}`;
+      const createdShippingRunResponse = await api(owner.cookies, owner.body.csrfToken, "/api/shipping/runs", {
+        method: "POST", body: { organizationId: alphaId, machineId, runId: alphaShippingRunId, contract: shippingContract }
+      });
+      const createdShippingRun = await createdShippingRunResponse.json();
+      assert.equal(createdShippingRunResponse.status, 202, JSON.stringify(createdShippingRun));
+      assert.equal(createdShippingRun.organizationId, alphaId);
+      assert.equal(createdShippingRun.createdBy, owner.body.user.id);
+      assert.equal((await machineSocket.readMessage()).action, "shipping.start");
+      const tenantRunRows = await databaseInspector.query(
+        "SELECT organization_id, record FROM agent_work_os_shipping_runs_v1 WHERE run_id = $1", [alphaShippingRunId]
+      );
+      assert.equal(tenantRunRows.rows[0]?.organization_id, alphaId, "ShippingRun is stored with an organization boundary");
+      const legacyRunRow = await databaseInspector.query(
+        "SELECT payload #> ARRAY['shippingRuns', $1] AS run FROM agent_work_os_state_v1 WHERE state_key = 'global'", [alphaShippingRunId]
+      );
+      assert.equal(legacyRunRow.rows[0]?.run, null, "tenant ShippingRun writes do not mutate the legacy global snapshot");
+      const listedShippingRunsResponse = await api(owner.cookies, null, `/api/shipping/runs?organizationId=${encodeURIComponent(alphaId)}`);
+      const listedShippingRuns = await listedShippingRunsResponse.json();
+      assert.equal(listedShippingRunsResponse.status, 200);
+      assert.ok(listedShippingRuns.runs.some((run) => run.runId === alphaShippingRunId));
+      const scopedShippingRunResponse = await api(owner.cookies, null, `/api/shipping/runs/${encodeURIComponent(alphaShippingRunId)}?organizationId=${encodeURIComponent(alphaId)}`);
+      assert.equal(scopedShippingRunResponse.status, 200);
+      machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: {
+        ...createdShippingRun, state: "RUNNING", updatedAt: "2099-01-01T00:00:00.000Z", createdBy: "forged-user", projectId: "forged-project"
+      } });
+      const firstRunEvent = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "RUNNING");
+      assert.ok(Date.parse(firstRunEvent.updatedAt) < Date.parse("2099-01-01T00:00:00.000Z"),
+        "authenticated daemon events cannot poison tenant ShippingRun ordering with client timestamps");
+      assert.equal(firstRunEvent.createdBy, owner.body.user.id, "daemon updates cannot replace the run's creator");
+      assert.equal(firstRunEvent.projectId, shippingContract.project.id, "daemon updates cannot replace the run's project provenance");
+      machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: { ...createdShippingRun, state: "SUCCEEDED", updatedAt: "2000-01-01T00:00:00.000Z" } });
+      const secondRunEvent = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "SUCCEEDED");
+      assert.ok(Date.parse(secondRunEvent.updatedAt) > Date.parse(firstRunEvent.updatedAt),
+        `same-run updates keep database-assigned timestamps monotonic (${firstRunEvent.updatedAt} then ${secondRunEvent.updatedAt})`);
       const machineSessionResponse = await fetch(`${origin}/api/sessions/${encodeURIComponent(createdSession.id)}`, {
         headers: { authorization: `Bearer ${machineCredential.token}` }
       });
@@ -228,12 +267,24 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     const viewerResult = await register(viewerEmail, "Beta Org");
     assert.equal(viewerResult.response.status, 201, JSON.stringify(viewerResult.body));
     const betaId = viewerResult.body.organization.id;
+    const betaShippingRuns = await api(viewerResult.cookies, null, `/api/shipping/runs?organizationId=${encodeURIComponent(betaId)}`);
+    assert.deepEqual((await betaShippingRuns.json()).runs, [], "a tenant's ShippingRun list excludes another organization's runs");
+    const foreignShippingRunRead = await api(viewerResult.cookies, null, `/api/shipping/runs/${encodeURIComponent(alphaShippingRunId)}?organizationId=${encodeURIComponent(betaId)}`);
+    assert.equal(foreignShippingRunRead.status, 404, "a tenant cannot fetch another organization's ShippingRun by ID");
     const betaMachineId = crypto.randomUUID();
     const betaCredentialResponse = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/organizations/${betaId}/machine-credentials`, {
       method: "POST", body: { machineId: betaMachineId, name: "Beta executor" }
     });
     const betaCredentialBody = await betaCredentialResponse.json();
     assert.equal(betaCredentialResponse.status, 201, JSON.stringify(betaCredentialBody));
+    const foreignMachineRun = await api(owner.cookies, owner.body.csrfToken, "/api/shipping/runs", {
+      method: "POST", body: {
+        organizationId: owner.body.organization.id,
+        machineId: betaMachineId,
+        contract: await (await api(owner.cookies, null, "/api/shipping/example")).json()
+      }
+    });
+    assert.equal(foreignMachineRun.status, 404, "an organization cannot launch a ShippingRun on another organization's machine");
     const machineReassignment = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/organizations/${betaId}/machine-credentials`, {
       method: "POST", body: { machineId, name: "Attempted reassignment" }
     });
@@ -252,6 +303,10 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.equal(revokedMachineRead.status, 401, "revoked machine credentials stop authenticating REST");
     const guestResult = await register(guestEmail, "Gamma Org");
     assert.equal(guestResult.response.status, 201, JSON.stringify(guestResult.body));
+    const foreignShippingRunList = await api(viewerResult.cookies, null, `/api/shipping/runs?organizationId=${encodeURIComponent(owner.body.organization.id)}`);
+    assert.equal(foreignShippingRunList.status, 404, "non-members cannot enumerate another organization's ShippingRuns");
+    const nonMemberShippingRunRead = await api(viewerResult.cookies, null, `/api/shipping/runs/${encodeURIComponent(alphaShippingRunId)}?organizationId=${encodeURIComponent(owner.body.organization.id)}`);
+    assert.equal(nonMemberShippingRunRead.status, 404, "non-members cannot read another organization's ShippingRun");
 
     const outsiderRead = await api(viewerResult.cookies, null, `/api/work-items/${workItemId}?organizationId=${encodeURIComponent(alphaId)}`);
     assert.equal(outsiderRead.status, 404, "non-member cannot read a foreign WorkItem");
@@ -297,7 +352,9 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       assert.ok(ownerSnapshot.workItems.some((item) => item.id === workItemId));
       assert.ok(ownerSnapshot.machines.some((machine) => machine.id === machineId));
       assert.ok(ownerSnapshot.sessions.some((session) => session.id === alphaSessionId));
+      assert.ok(ownerSnapshot.shippingRuns.some((run) => run.runId === alphaShippingRunId));
       assert.equal(guestSnapshot.workItems.length, 0, "WebSocket snapshot cannot expose another organization's WorkItems");
+      assert.equal(viewerSnapshot.shippingRuns.length, 0, "WebSocket snapshot cannot expose another organization's ShippingRuns");
       assert.equal(viewerSnapshot.workItems.length, 0, "WebSocket snapshot cannot expose another organization's WorkItems");
       assert.equal(guestSnapshot.sessions.length, 0, "WebSocket snapshot cannot expose another organization's sessions");
       assert.equal(guestSnapshot.machines.length, 0, "WebSocket snapshot cannot expose another organization's machines");
@@ -358,6 +415,10 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     const persistedSession = await sessionAfterRestart.json();
     assert.equal(sessionAfterRestart.status, 200, "normalized session rows survive control-plane restart");
     assert.equal(persistedSession.messages.length, 4, "all concurrent message updates survive restart");
+    const shippingRunsAfterRestart = await api(loginCookies, null, `/api/shipping/runs?organizationId=${encodeURIComponent(owner.body.organization.id)}`);
+    const persistedShippingRuns = await shippingRunsAfterRestart.json();
+    assert.equal(shippingRunsAfterRestart.status, 200);
+    assert.ok(persistedShippingRuns.runs.some((run) => run.runId === alphaShippingRunId), "tenant ShippingRuns survive control-plane restart");
     const machinesAfterRestart = await api(loginCookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
     const persistedMachineList = await machinesAfterRestart.json();
     assert.ok(persistedMachineList.machines.some((machine) => machine.id === machineId && machine.status === "offline"),
@@ -401,7 +462,7 @@ async function openMachineSocket(port, machineCredential, machineId) {
   });
   socket.send(encodeMessage({
     type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machineCredential,
-    machine: { id: machineId, name: "Test executor", capabilities: [{ name: "echo" }], shipping: { enabled: false } }
+    machine: { id: machineId, name: "Test executor", capabilities: [{ name: "echo" }], shipping: { enabled: true } }
   }));
   return {
     readMessage(timeoutMs = 2_000) {
@@ -418,8 +479,20 @@ async function openMachineSocket(port, machineCredential, machineId) {
       });
     },
     closed,
-    close() { if (socket.readyState < WebSocket.CLOSING) socket.close(); }
+    close() { if (socket.readyState < WebSocket.CLOSING) socket.close(); },
+    sendMessage(message) { socket.send(encodeMessage(message)); }
   };
+}
+
+async function waitForShippingRun(api, account, organizationId, runId, expectedState) {
+  let current;
+  await waitFor(async () => {
+    const response = await api(account.cookies, null, `/api/shipping/runs/${encodeURIComponent(runId)}?organizationId=${encodeURIComponent(organizationId)}`);
+    if (!response.ok) return false;
+    current = await response.json();
+    return current.state === expectedState;
+  }, 3_000, `ShippingRun state ${expectedState}`);
+  return current;
 }
 
 function openClientSocket(port, cookies) {

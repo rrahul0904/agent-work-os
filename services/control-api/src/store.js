@@ -9,6 +9,7 @@ const { Pool } = pg;
 const STATE_KEY = "global";
 const MIGRATION_URL = new URL("../../../migrations/001_durable_state.sql", import.meta.url);
 const MACHINE_SESSION_MIGRATION_URL = new URL("../../../migrations/005_tenant_machines_sessions.sql", import.meta.url);
+const SHIPPING_RUN_MIGRATION_URL = new URL("../../../migrations/006_tenant_shipping_runs.sql", import.meta.url);
 
 export class JsonStore {
   constructor(filePath) {
@@ -66,6 +67,10 @@ export class JsonStore {
     );
   }
 
+  async initializeShippingRunStore() {
+    if (this.pool) await this.pool.query(await readFile(SHIPPING_RUN_MIGRATION_URL, "utf8"));
+  }
+
   listMachines() {
     if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_machines_v1 ORDER BY record->>'name', machine_id").then((result) => {
       const machines = result.rows.map((row) => row.record);
@@ -98,7 +103,24 @@ export class JsonStore {
     ).then((result) => result.rows.map((row) => row.record));
     return Object.values(this.state.sessions).filter((session) => session.organizationId === organizationId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
-  listShippingRuns() { return Object.values(this.state.shippingRuns).sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? ""))); }
+  listShippingRuns() {
+    if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_shipping_runs_v1 ORDER BY updated_at DESC, run_id")
+      .then((result) => {
+        const runs = result.rows.map((row) => row.record);
+        const normalizedIds = new Set(runs.map((run) => run.runId));
+        const legacyRuns = Object.values(this.state.shippingRuns).filter((run) => !normalizedIds.has(run.runId));
+        return [...runs, ...legacyRuns].sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")));
+      });
+    return Object.values(this.state.shippingRuns).sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")));
+  }
+  listShippingRunsByOrganization(organizationId) {
+    if (this.pool) return this.pool.query(
+      "SELECT record FROM agent_work_os_shipping_runs_v1 WHERE organization_id = $1 ORDER BY updated_at DESC, run_id",
+      [organizationId]
+    ).then((result) => result.rows.map((row) => row.record));
+    return Object.values(this.state.shippingRuns).filter((run) => run.organizationId === organizationId)
+      .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? "").localeCompare(String(a.updatedAt ?? a.createdAt ?? "")));
+  }
   getMachine(id) {
     if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_machines_v1 WHERE machine_id = $1", [id]).then((result) => {
       const normalized = result.rows[0]?.record;
@@ -115,7 +137,14 @@ export class JsonStore {
     });
     return this.state.sessions[id];
   }
-  getShippingRun(id) { return this.state.shippingRuns[id]; }
+  getShippingRun(id, organizationId = null) {
+    if (this.pool) return this.pool.query(
+      `SELECT record FROM agent_work_os_shipping_runs_v1 WHERE run_id = $1${organizationId ? " AND organization_id = $2" : ""}`,
+      organizationId ? [id, organizationId] : [id]
+    ).then((result) => result.rows[0]?.record ?? (organizationId ? null : this.state.shippingRuns[id] ?? null));
+    const run = this.state.shippingRuns[id];
+    return run && (!organizationId || run.organizationId === organizationId) ? run : null;
+  }
   getWorkItem(id, organizationId) {
     const item = this.state.workItems[id];
     return item?.organizationId === organizationId ? structuredClone(item) : null;
@@ -287,6 +316,7 @@ export class JsonStore {
   }
   async upsertShippingRun(run) {
     if (!run?.runId) throw new Error("shipping_run_id_required");
+    if (this.pool && run.organizationId) return this.#upsertTenantShippingRun(run);
     if (!this.pool) {
       this.state.shippingRuns[run.runId] = structuredClone(run);
       await this.#persist();
@@ -300,6 +330,76 @@ export class JsonStore {
     } finally {
       if (this.shippingRunWriteChains.get(run.runId) === pending) this.shippingRunWriteChains.delete(run.runId);
     }
+  }
+
+  async #upsertTenantShippingRun(run) {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query(
+        "SELECT organization_id, machine_id, record FROM agent_work_os_shipping_runs_v1 WHERE run_id = $1 FOR UPDATE",
+        [run.runId]
+      );
+      if (selected.rows[0] && selected.rows[0].organization_id !== run.organizationId) {
+        throw Object.assign(new Error("shipping_run_organization_mismatch"), { code: "shipping_run_organization_mismatch", statusCode: 409 });
+      }
+      if (selected.rows[0] && selected.rows[0].machine_id !== run.machineId) {
+        throw Object.assign(new Error("shipping_run_machine_mismatch"), { code: "shipping_run_machine_mismatch", statusCode: 409 });
+      }
+      const clock = await client.query("SELECT clock_timestamp() AS now");
+      const now = Date.parse(clock.rows[0].now);
+      const updatedAt = new Date(now).toISOString();
+      const currentRun = selected.rows[0]?.record;
+      const persistedRun = currentRun
+        ? {
+            ...currentRun,
+            ...run,
+            runId: currentRun.runId,
+            organizationId: currentRun.organizationId,
+            machineId: currentRun.machineId,
+            createdBy: currentRun.createdBy,
+            createdAt: currentRun.createdAt,
+            projectId: currentRun.projectId,
+            releaseVersion: currentRun.releaseVersion,
+            contractDigest: currentRun.contractDigest,
+            updatedAt
+          }
+        : { ...run, updatedAt };
+      const saved = selected.rows[0]
+        ? await client.query(
+            `WITH timestamped AS (
+               SELECT GREATEST(clock_timestamp(), existing.updated_at + INTERVAL '1 millisecond') AS next_updated_at
+               FROM agent_work_os_shipping_runs_v1 AS existing
+               WHERE existing.run_id = $3
+               FOR UPDATE
+             )
+             UPDATE agent_work_os_shipping_runs_v1 AS shipping
+             SET status = $1,
+                 updated_at = timestamped.next_updated_at,
+                 record = jsonb_set(
+                   $2::jsonb,
+                   '{updatedAt}',
+                   to_jsonb(to_char(timestamped.next_updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+                   true
+                 )
+             FROM timestamped
+             WHERE shipping.run_id = $3 AND shipping.organization_id = $4
+             RETURNING shipping.record`,
+            [persistedRun.state ?? "unknown", JSON.stringify(persistedRun), run.runId, run.organizationId]
+          )
+        : await client.query(
+            `INSERT INTO agent_work_os_shipping_runs_v1
+               (run_id, organization_id, machine_id, status, record, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) RETURNING record`,
+            [run.runId, run.organizationId, run.machineId, persistedRun.state ?? "unknown", JSON.stringify(persistedRun), run.createdAt ?? updatedAt, updatedAt]
+          );
+      await client.query("COMMIT");
+      return saved.rows[0].record;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      if (error.code === "23505") throw Object.assign(new Error("shipping_run_exists"), { code: "shipping_run_exists", statusCode: 409 });
+      throw error;
+    } finally { client.release(); }
   }
 
   async #writeShippingRun(run) {
