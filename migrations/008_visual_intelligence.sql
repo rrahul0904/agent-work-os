@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS agent_work_os_visual_projects_v1 (
   brand_kit JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(brand_kit) = 'object'),
   created_by TEXT NOT NULL REFERENCES agent_work_os_users_v1(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT agent_work_os_visual_projects_id_org_unique_v1 UNIQUE (id, organization_id)
 );
 
 CREATE INDEX IF NOT EXISTS agent_work_os_visual_projects_org_v1
@@ -42,18 +43,9 @@ CREATE TABLE IF NOT EXISTS agent_work_os_visual_artifacts_v1 (
   CONSTRAINT agent_work_os_visual_artifact_project_org_v1
     FOREIGN KEY (project_id, organization_id)
     REFERENCES agent_work_os_visual_projects_v1(id, organization_id)
+    ON DELETE CASCADE
     DEFERRABLE INITIALLY DEFERRED
 );
-
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'agent_work_os_visual_projects_id_org_unique_v1'
-  ) THEN
-    ALTER TABLE agent_work_os_visual_projects_v1
-      ADD CONSTRAINT agent_work_os_visual_projects_id_org_unique_v1 UNIQUE (id, organization_id);
-  END IF;
-END $$;
 
 CREATE INDEX IF NOT EXISTS agent_work_os_visual_artifacts_project_v1
   ON agent_work_os_visual_artifacts_v1 (project_id, updated_at DESC);
