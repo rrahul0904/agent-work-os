@@ -4,8 +4,7 @@ import { compileDiagramSpec } from './diagram-spec.mjs';
 import { layoutDiagram, renderDiagramSvg } from './diagram-renderer.mjs';
 import { critiqueDiagram } from './diagram-critic.mjs';
 import { toDrawioXml, toMermaid, toPlantUml } from './diagram-adapters.mjs';
-import { compileDeckPlan } from './deck-plan.mjs';
-import { generateNativePptx, nativePptxReceipt } from './pptx-native.mjs';
+import { createNativePresentation } from './presentation-service.mjs';
 import { compileCreativeSpec } from './creative-spec.mjs';
 import { renderCreativeSvg, creativeReceipt } from './creative-renderer.mjs';
 import { scoreVisualArtifact } from './visualbench.mjs';
@@ -36,9 +35,9 @@ export const MCP_TOOLS = Object.freeze([
   Object.freeze({
     name: 'visual_presentation_generate',
     title: 'Generate Native PowerPoint',
-    description: 'Compile DeckPlan and generate a native editable OOXML PowerPoint artifact receipt. Optionally include PPTX bytes as base64.',
+    description: 'Generate native editable OOXML PowerPoint for Pro or Enterprise. Optionally include PPTX bytes as base64.',
     inputSchema: objectSchema({
-      title: { type: 'string' }, audience: { type: 'string' }, purpose: { type: 'string' }, slides: { type: 'array' }, includeBase64: { type: 'boolean' }
+      title: { type: 'string' }, audience: { type: 'string' }, purpose: { type: 'string' }, slides: { type: 'array' }, plan: { type: 'string', enum: ['pro','enterprise'] }, includeBase64: { type: 'boolean' }
     })
   }),
   Object.freeze({
@@ -60,29 +59,13 @@ export const MCP_TOOLS = Object.freeze([
 ]);
 
 const toolMap = new Map(MCP_TOOLS.map(tool => [tool.name, tool]));
-
-function resultMeta() {
-  return { 'io.modelcontextprotocol/serverInfo': MCP_SERVER_INFO };
-}
-
-function complete(result) {
-  return { resultType: 'complete', ...result, _meta: resultMeta() };
-}
-
-function rpcResult(id, result) {
-  return { jsonrpc: '2.0', id, result: complete(result) };
-}
-
-function rpcError(id, code, message, data) {
-  return { jsonrpc: '2.0', id: id ?? null, error: { code, message, ...(data ? { data } : {}) } };
-}
+const resultMeta = () => ({ 'io.modelcontextprotocol/serverInfo': MCP_SERVER_INFO });
+const complete = result => ({ resultType: 'complete', ...result, _meta: resultMeta() });
+const rpcResult = (id, result) => ({ jsonrpc: '2.0', id, result: complete(result) });
+const rpcError = (id, code, message, data) => ({ jsonrpc: '2.0', id: id ?? null, error: { code, message, ...(data ? { data } : {}) } });
 
 function textAndStructured(structuredContent, summary) {
-  return {
-    content: [{ type: 'text', text: summary || JSON.stringify(structuredContent) }],
-    structuredContent,
-    isError: false
-  };
+  return { content: [{ type: 'text', text: summary || JSON.stringify(structuredContent) }], structuredContent, isError: false };
 }
 
 async function callTool(name, args = {}) {
@@ -105,11 +88,14 @@ async function callTool(name, args = {}) {
     return textAndStructured(data, `Generated ${diagramSpec.kind} diagram with ${diagramSpec.nodes.length} nodes; critic score ${data.critique.score}/100.`);
   }
   if (name === 'visual_presentation_generate') {
-    const deckPlan = compileDeckPlan(args);
-    const pptx = generateNativePptx(deckPlan);
-    const receipt = nativePptxReceipt(deckPlan);
-    const data = { deckPlan, receipt, ...(args.includeBase64 ? { pptxBase64: pptx.toString('base64') } : {}) };
-    return textAndStructured(data, `Generated native editable PowerPoint receipt for ${receipt.slides} slides (${receipt.bytes} bytes).`);
+    const artifact = createNativePresentation(args, { includeBytes: Boolean(args.includeBase64) });
+    const data = {
+      plan: artifact.plan,
+      deckPlan: artifact.deckPlan,
+      receipt: artifact.receipt,
+      ...(args.includeBase64 ? { pptxBase64: artifact.pptx.toString('base64') } : {})
+    };
+    return textAndStructured(data, `Generated native editable PowerPoint receipt for ${artifact.receipt.slides} slides (${artifact.receipt.bytes} bytes) on ${artifact.plan}.`);
   }
   if (name === 'visual_creative_generate') {
     const creativeSpec = compileCreativeSpec(args);
@@ -138,15 +124,10 @@ export function validateModernMcpHeaders(headers, request) {
 export async function handleMcpRequest(request, headers = {}) {
   const id = request?.id ?? null;
   if (!request || request.jsonrpc !== '2.0' || typeof request.method !== 'string') return rpcError(id, -32600, 'Invalid Request');
-
   const envelopeVersion = request.params?._meta?.['io.modelcontextprotocol/protocolVersion'];
-  if (envelopeVersion && envelopeVersion !== MCP_PROTOCOL_VERSION) {
-    return rpcError(id, -32022, 'Unsupported protocol version', { supported: [MCP_PROTOCOL_VERSION], requested: envelopeVersion });
-  }
-
+  if (envelopeVersion && envelopeVersion !== MCP_PROTOCOL_VERSION) return rpcError(id, -32022, 'Unsupported protocol version', { supported: [MCP_PROTOCOL_VERSION], requested: envelopeVersion });
   const headerCheck = validateModernMcpHeaders(headers, request);
   if (!headerCheck.ok) return rpcError(id, headerCheck.code, headerCheck.message, headerCheck.data);
-
   try {
     if (request.method === 'server/discover') {
       return rpcResult(id, {
@@ -157,14 +138,8 @@ export async function handleMcpRequest(request, headers = {}) {
         cacheScope: 'public'
       });
     }
-    if (request.method === 'tools/list') {
-      return rpcResult(id, { tools: MCP_TOOLS, nextCursor: null, ttlMs: 60000, cacheScope: 'public' });
-    }
-    if (request.method === 'tools/call') {
-      const name = request.params?.name;
-      const args = request.params?.arguments ?? {};
-      return rpcResult(id, await callTool(name, args));
-    }
+    if (request.method === 'tools/list') return rpcResult(id, { tools: MCP_TOOLS, nextCursor: null, ttlMs: 60000, cacheScope: 'public' });
+    if (request.method === 'tools/call') return rpcResult(id, await callTool(request.params?.name, request.params?.arguments ?? {}));
     return rpcError(id, -32601, 'Method not found');
   } catch (error) {
     return rpcError(id, error.rpcCode || -32602, error.message || 'Invalid params', error.rpcData);
