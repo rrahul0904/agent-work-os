@@ -449,14 +449,18 @@ export async function createControlPlane() {
           deployedSha: null,
           events: []
         };
-        queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
-        try {
-          await sendCommand(machine.id, { type: "server.command", commandId: crypto.randomUUID(), sessionId: `shipping:${runId}`, action: "shipping.start", payload: { runId, contract: body.contract } });
-        } catch (error) {
-          queued = { ...queued, state: "FAILED", fatalError: error.message, updatedAt: new Date().toISOString() };
-          queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
-          return json(res, 409, { error: error.message, run: queued });
+        const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId: `shipping:${runId}`, action: "shipping.start", payload: { runId, contract: body.contract } };
+        if (commandRouter) queued = await store.upsertShippingRunWithCommand(queued, command);
+        else {
+          queued = await store.upsertShippingRun(queued);
+          try { await sendCommand(machine.id, command); }
+          catch (error) {
+            queued = { ...queued, state: "FAILED", fatalError: error.message, updatedAt: new Date().toISOString() };
+            queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
+            return json(res, 409, { error: error.message, run: queued });
+          }
         }
+        broadcast({ type: "shipping.run.updated", run: queued });
         return json(res, 202, queued);
       }
 
@@ -473,9 +477,14 @@ export async function createControlPlane() {
         if (!machine.capabilities.some((c) => c.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
         const now = new Date().toISOString();
         const session = { id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent, model: body.model || undefined, status: "queued", createdAt: now, updatedAt: now, messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: [] };
-        await store.createSession(session); broadcast({ type: "session.updated", session });
-        try { await sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
-        catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
+        const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } };
+        if (commandRouter) await store.createSessionWithCommand(session, command);
+        else {
+          await store.createSession(session);
+          try { await sendCommand(body.machineId, command); }
+          catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
+        }
+        broadcast({ type: "session.updated", session });
         return json(res, 201, session);
       }
       const messageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
@@ -484,9 +493,14 @@ export async function createControlPlane() {
         if (!session) return json(res, 404, { error: "session_not_found" });
         const body = await readJson(req); const text = body.text?.trim();
         if (!text) return json(res, 400, { error: "text is required" });
-        const updated = await store.addMessage(session.id, { id: crypto.randomUUID(), role: "user", text, createdAt: new Date().toISOString() }); broadcast({ type: "session.updated", session: updated });
-        try { await sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: text } }); }
-        catch (error) { return json(res, 409, { error: error.message }); }
+        const message = { id: crypto.randomUUID(), role: "user", text, createdAt: new Date().toISOString() };
+        const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: text } };
+        const updated = commandRouter ? await store.addMessageWithCommand(session.id, message, command) : await store.addMessage(session.id, message);
+        broadcast({ type: "session.updated", session: updated });
+        if (!commandRouter) {
+          try { await sendCommand(session.machineId, command); }
+          catch (error) { return json(res, 409, { error: error.message }); }
+        }
         return json(res, 202, updated);
       }
       const interruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);
@@ -526,10 +540,14 @@ export async function createControlPlane() {
           status: "queued", createdAt: now, updatedAt: now,
           messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: []
         };
-        await store.createSession(session);
+        const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } };
+        if (commandRouter) await store.createSessionWithCommand(session, command);
+        else {
+          await store.createSession(session);
+          try { await sendCommand(body.machineId, command); }
+          catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
+        }
         broadcast({ type: "session.updated", session });
-        try { await sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
-        catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
         return json(res, 201, session);
       }
       const scopedSessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
@@ -555,10 +573,14 @@ export async function createControlPlane() {
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
         const body = await readJson(req); const message = body.text?.trim();
         if (!message) return json(res, 400, { error: "text is required" });
-        const updated = await store.addMessage(session.id, { id: crypto.randomUUID(), role: "user", text: message, createdAt: new Date().toISOString() });
+        const userMessage = { id: crypto.randomUUID(), role: "user", text: message, createdAt: new Date().toISOString() };
+        const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: message } };
+        const updated = commandRouter ? await store.addMessageWithCommand(session.id, userMessage, command) : await store.addMessage(session.id, userMessage);
         broadcast({ type: "session.updated", session: updated });
-        try { await sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: message } }); }
-        catch (error) { return json(res, 409, { error: error.message }); }
+        if (!commandRouter) {
+          try { await sendCommand(session.machineId, command); }
+          catch (error) { return json(res, 409, { error: error.message }); }
+        }
         return json(res, 202, updated);
       }
       const sessionInterruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);

@@ -287,7 +287,65 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         "machine and session mutations do not replace the shared legacy JSONB snapshot");
 
       const shippingContractResponse = await api(owner.cookies, null, "/api/shipping/example");
-      const shippingContract = await shippingContractResponse.json();
+      const shippingContractForOutboxRollback = await shippingContractResponse.json();
+      const outboxRollbackPrompt = `outbox rollback ${crypto.randomUUID()}`;
+      const outboxRollbackRunId = `outbox-rollback-${crypto.randomUUID()}`;
+      await databaseInspector.query(`
+        CREATE OR REPLACE FUNCTION awos_test_reject_selected_outbox_command() RETURNS trigger AS $$
+        BEGIN
+          IF NEW.payload->>'action' = 'session.start'
+             AND NEW.payload->'payload'->>'prompt' = '${outboxRollbackPrompt}' THEN
+            RAISE EXCEPTION 'test_reject_session_outbox_command';
+          END IF;
+          IF NEW.payload->>'action' = 'session.message'
+             AND NEW.payload->'payload'->>'prompt' = '${outboxRollbackPrompt}' THEN
+            RAISE EXCEPTION 'test_reject_session_message_outbox_command';
+          END IF;
+          IF NEW.payload->>'action' = 'shipping.start'
+             AND NEW.payload->'payload'->>'runId' = '${outboxRollbackRunId}' THEN
+            RAISE EXCEPTION 'test_reject_shipping_outbox_command';
+          END IF;
+          RETURN NEW;
+        END;
+        $$ LANGUAGE plpgsql;
+        CREATE TRIGGER awos_test_reject_selected_outbox_command
+        BEFORE INSERT ON agent_work_os_daemon_commands_v1
+        FOR EACH ROW EXECUTE FUNCTION awos_test_reject_selected_outbox_command();
+      `);
+      try {
+        const rejectedSessionResponse = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
+          method: "POST", body: { organizationId: alphaId, machineId, cwd: "/tmp", agent: "echo", prompt: outboxRollbackPrompt }
+        });
+        assert.equal(rejectedSessionResponse.status, 500, "outbox failure rejects the session request");
+        const rolledBackSession = await databaseInspector.query(
+          "SELECT count(*)::int AS count FROM agent_work_os_sessions_v1 WHERE record->'messages'->0->>'text' = $1", [outboxRollbackPrompt]
+        );
+        assert.equal(rolledBackSession.rows[0].count, 0, "session creation rolls back when its outbox insert fails");
+
+        const rejectedMessageResponse = await api(owner.cookies, owner.body.csrfToken, `/api/sessions/${encodeURIComponent(createdSession.id)}/messages`, {
+          method: "POST", body: { text: outboxRollbackPrompt }
+        });
+        assert.equal(rejectedMessageResponse.status, 500, "outbox failure rejects the session message request");
+        const rolledBackMessage = await databaseInspector.query(
+          "SELECT count(*)::int AS count FROM agent_work_os_sessions_v1 WHERE session_id = $1 AND record->'messages' @> $2::jsonb",
+          [createdSession.id, JSON.stringify([{ text: outboxRollbackPrompt }])]
+        );
+        assert.equal(rolledBackMessage.rows[0].count, 0, "session message rolls back when its outbox insert fails");
+
+        const rejectedShippingResponse = await api(owner.cookies, owner.body.csrfToken, "/api/shipping/runs", {
+          method: "POST", body: { organizationId: alphaId, machineId, runId: outboxRollbackRunId, contract: shippingContractForOutboxRollback }
+        });
+        assert.equal(rejectedShippingResponse.status, 500, "outbox failure rejects the shipping request");
+        const rolledBackShippingRun = await databaseInspector.query(
+          "SELECT count(*)::int AS count FROM agent_work_os_shipping_runs_v1 WHERE run_id = $1", [outboxRollbackRunId]
+        );
+        assert.equal(rolledBackShippingRun.rows[0].count, 0, "ShippingRun creation rolls back when its outbox insert fails");
+      } finally {
+        await databaseInspector.query("DROP TRIGGER IF EXISTS awos_test_reject_selected_outbox_command ON agent_work_os_daemon_commands_v1");
+        await databaseInspector.query("DROP FUNCTION IF EXISTS awos_test_reject_selected_outbox_command()");
+      }
+
+      const shippingContract = shippingContractForOutboxRollback;
       alphaShippingRunId = `tenant-${crypto.randomUUID()}`;
       const createdShippingRunResponse = await api(owner.cookies, owner.body.csrfToken, "/api/shipping/runs", {
         method: "POST", body: { organizationId: alphaId, machineId, runId: alphaShippingRunId, contract: shippingContract }

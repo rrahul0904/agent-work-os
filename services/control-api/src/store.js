@@ -4,6 +4,7 @@ import path from "node:path";
 import pg from "pg";
 import { DomainValidationError, assertCanonicalId, assertNewWorkItem, canonicalDigest, createCanonicalId, transitionWorkItem, workItemCreateDigest } from "../../../packages/domain/src/index.js";
 import { IdempotencyConflictError, OptimisticConcurrencyError } from "./work-item-store.js";
+import { insertDaemonCommand } from "./daemon-command-outbox.js";
 
 const { Pool } = pg;
 const STATE_KEY = "global";
@@ -296,6 +297,39 @@ export class JsonStore {
     else await this.#persist();
     return session;
   }
+  async createSessionWithCommand(session, command) {
+    if (!this.pool) throw new Error("transactional_daemon_outbox_requires_postgres");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      if (session.organizationId) {
+        const result = await client.query(
+          `INSERT INTO agent_work_os_sessions_v1
+             (session_id, organization_id, machine_id, created_by, status, record, created_at, updated_at)
+           SELECT $1, $2, $3, $4, $5, $6::jsonb, $7, $8
+           FROM agent_work_os_machines_v1 AS machine
+           WHERE machine.machine_id = $3 AND machine.organization_id = $2 AND machine.status = 'online'
+           RETURNING record`,
+          [session.id, session.organizationId, session.machineId, session.createdBy ?? null, session.status,
+            JSON.stringify(session), session.createdAt, session.updatedAt]
+        );
+        if (!result.rowCount) throw Object.assign(new Error("machine_not_available_in_organization"), { code: "machine_not_available_in_organization" });
+      } else {
+        await client.query(
+          "SELECT 1 FROM agent_work_os_state_v1 WHERE state_key = $1 FOR UPDATE",
+          [STATE_KEY]
+        );
+        await this.#persistLegacyRecord(client, "sessions", session.id, session);
+      }
+      await insertDaemonCommand(client, session.machineId, command);
+      await client.query("COMMIT");
+      if (!session.organizationId) this.state.sessions[session.id] = structuredClone(session);
+      return session;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
   async addMessage(id, message) {
     if (this.pool) {
       const normalized = await this.#updateSession(id, (session) => {
@@ -308,6 +342,48 @@ export class JsonStore {
       if (!this.state.sessions[id] || this.state.sessions[id].organizationId) return null;
     }
     const s = this.#session(id); s.messages.push(message); s.updatedAt = new Date().toISOString(); await this.#persist(); return s;
+  }
+  async addMessageWithCommand(id, message, command) {
+    if (!this.pool) throw new Error("transactional_daemon_outbox_requires_postgres");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const selected = await client.query("SELECT record FROM agent_work_os_sessions_v1 WHERE session_id = $1 FOR UPDATE", [id]);
+      let saved;
+      if (selected.rows[0]) {
+        const session = structuredClone(selected.rows[0].record);
+        session.messages ??= [];
+        session.messages.push(message);
+        session.updatedAt = new Date().toISOString();
+        const result = await client.query(
+          "UPDATE agent_work_os_sessions_v1 SET record = $1::jsonb, updated_at = $2 WHERE session_id = $3 RETURNING record",
+          [JSON.stringify(session), session.updatedAt, id]
+        );
+        saved = result.rows[0].record;
+      } else {
+        const legacyRow = await client.query(
+          "SELECT payload #> ARRAY['sessions', $1] AS record FROM agent_work_os_state_v1 WHERE state_key = $2 FOR UPDATE",
+          [id, STATE_KEY]
+        );
+        const legacy = legacyRow.rows[0]?.record ?? this.state.sessions[id];
+        if (!legacy || legacy.organizationId) {
+          await client.query("COMMIT");
+          return null;
+        }
+        saved = structuredClone(legacy);
+        saved.messages ??= [];
+        saved.messages.push(message);
+        saved.updatedAt = new Date().toISOString();
+        await this.#persistLegacyRecord(client, "sessions", id, saved);
+      }
+      await insertDaemonCommand(client, saved.machineId, command);
+      await client.query("COMMIT");
+      if (!selected.rows[0]) this.state.sessions[id] = structuredClone(saved);
+      return saved;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
   }
   async addEvent(id, event) {
     if (this.pool) {
@@ -376,6 +452,17 @@ export class JsonStore {
     }
   }
 
+  async upsertShippingRunWithCommand(run, command) {
+    if (!run?.runId) throw new Error("shipping_run_id_required");
+    if (!this.pool) throw new Error("transactional_daemon_outbox_requires_postgres");
+    if (run.organizationId) return this.#upsertTenantShippingRun(run, { command });
+    const priorWrite = this.shippingRunWriteChains.get(run.runId) ?? Promise.resolve();
+    const pending = priorWrite.catch(() => {}).then(() => this.#writeShippingRun(run, command));
+    this.shippingRunWriteChains.set(run.runId, pending);
+    try { return await pending; }
+    finally { if (this.shippingRunWriteChains.get(run.runId) === pending) this.shippingRunWriteChains.delete(run.runId); }
+  }
+
   async updateShippingRunFromMachine(run) {
     if (!run?.runId || !run.organizationId || !run.machineId) return null;
     if (!this.pool) {
@@ -386,7 +473,7 @@ export class JsonStore {
     return this.#upsertTenantShippingRun(run, { allowInsert: false });
   }
 
-  async #upsertTenantShippingRun(run, { allowInsert = true } = {}) {
+  async #upsertTenantShippingRun(run, { allowInsert = true, command = null } = {}) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -451,6 +538,7 @@ export class JsonStore {
              VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7) RETURNING record`,
             [run.runId, run.organizationId, run.machineId, persistedRun.state ?? "unknown", JSON.stringify(persistedRun), run.createdAt ?? updatedAt, updatedAt]
           );
+      if (command) await insertDaemonCommand(client, run.machineId, command);
       await client.query("COMMIT");
       return saved.rows[0].record;
     } catch (error) {
@@ -460,7 +548,7 @@ export class JsonStore {
     } finally { client.release(); }
   }
 
-  async #writeShippingRun(run) {
+  async #writeShippingRun(run, command = null) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -482,6 +570,7 @@ export class JsonStore {
       const persistedRun = { ...run, updatedAt };
       await this.#persistLegacyRecord(client, "shippingRuns", run.runId, persistedRun);
       await this.#persistLegacyRecord(client, "_shippingRunUpdatedAt", run.runId, updatedAt);
+      if (command) await insertDaemonCommand(client, run.machineId, command);
       await client.query("COMMIT");
       this.state.shippingRuns[run.runId] = structuredClone(persistedRun);
       return this.state.shippingRuns[run.runId];
