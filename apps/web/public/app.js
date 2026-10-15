@@ -1,7 +1,7 @@
 const state = {
   page: 'overview', product: null, machines: [], sessions: [], shippingRuns: [],
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
-  connected: false, loading: false, notice: null
+  connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set()
 };
 const app = document.querySelector('#app');
 let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('agentWorkOsToken') || '';
@@ -43,12 +43,25 @@ function connect() {
   if (!token) return;
   const url = new URL('/ws', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('role', 'client'); url.searchParams.set('token', token);
+  if (typeof state.lastCursor === 'string') url.searchParams.set('cursor', state.lastCursor);
   const ws = new WebSocket(url);
   ws.onopen = () => { state.connected = true; render(); };
   ws.onclose = () => { state.connected = false; render(); if (token) setTimeout(connect, 1800); };
   ws.onmessage = async event => {
     const msg = JSON.parse(event.data);
-    if (msg.type === 'state.snapshot') { state.machines = msg.machines || []; state.sessions = msg.sessions || []; state.shippingRuns = msg.shippingRuns || []; }
+    if (typeof msg.eventId === 'string') {
+      if (state.seenEventTags.has(msg.eventId)) return;
+      state.seenEventTags.add(msg.eventId);
+      if (state.seenEventTags.size > 256) state.seenEventTags.delete(state.seenEventTags.values().next().value);
+    }
+    if (typeof msg.cursor === 'string') state.lastCursor = msg.cursor;
+    if (msg.type === 'realtime.cursor') {
+      return;
+    }
+    if (msg.type === 'state.snapshot') {
+      state.machines = msg.machines || []; state.sessions = msg.sessions || []; state.shippingRuns = msg.shippingRuns || [];
+      if (typeof msg.cursor === 'string') state.lastCursor = msg.cursor;
+    }
     if (msg.type === 'machine.updated') state.machines = upsert(state.machines, msg.machine);
     if (msg.type === 'session.updated') state.sessions = upsert(state.sessions, msg.session, true);
     if (msg.type === 'shipping.run.updated') state.shippingRuns = upsert(state.shippingRuns, msg.run, true);

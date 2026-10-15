@@ -3,6 +3,42 @@ import crypto from "node:crypto";
 const CHANNEL = "agent_work_os_realtime_events_v1";
 const WRITE_LOCK = "agent_work_os_realtime_events_v1_write";
 
+export function createOpaqueCursorCodec(secret) {
+  if (!secret) throw new Error("event_cursor_secret_required");
+  const key = crypto.createHash("sha256").update("agent-work-os-event-cursor-v1\0").update(secret).digest();
+  const aad = Buffer.from("agent-work-os-event-cursor-v1");
+  return {
+    encode(value) {
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error("invalid_event_cursor");
+      const nonce = crypto.randomBytes(12);
+      const cipher = crypto.createCipheriv("aes-256-gcm", key, nonce);
+      cipher.setAAD(aad);
+      const ciphertext = Buffer.concat([cipher.update(String(value), "utf8"), cipher.final()]);
+      return Buffer.concat([nonce, cipher.getAuthTag(), ciphertext]).toString("base64url");
+    },
+    decode(token) {
+      if (typeof token !== "string" || !/^[A-Za-z0-9_-]{39,128}$/.test(token)) return null;
+      try {
+        const payload = Buffer.from(token, "base64url");
+        if (payload.length < 29) return null;
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, payload.subarray(0, 12));
+        decipher.setAAD(aad);
+        decipher.setAuthTag(payload.subarray(12, 28));
+        const plaintext = Buffer.concat([decipher.update(payload.subarray(28)), decipher.final()]).toString("utf8");
+        if (!/^\d+$/.test(plaintext)) return null;
+        const value = Number(plaintext);
+        return Number.isSafeInteger(value) ? value : null;
+      } catch {
+        return null;
+      }
+    },
+    eventTag(value) {
+      if (!Number.isSafeInteger(value) || value < 0) throw new Error("invalid_event_cursor");
+      return crypto.createHmac("sha256", key).update("event-id\0").update(String(value)).digest("base64url");
+    }
+  };
+}
+
 export class PostgresEventFanout {
   constructor(pool, onEvent, {
     onError = console.warn,
@@ -60,6 +96,45 @@ export class PostgresEventFanout {
     this.publishQueueBytes += eventBytes;
     this.ready = false;
     void this.#flushPublishQueue();
+  }
+
+  async currentCursor() {
+    const result = await this.pool.query("SELECT COALESCE(MAX(event_id), 0) AS event_id FROM agent_work_os_realtime_events_v1");
+    return Number(result.rows[0].event_id);
+  }
+
+  async replayAfter(cursor, { maxEvents = 5_000 } = {}) {
+    if (!Number.isSafeInteger(cursor) || cursor < 0) return { gap: true };
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ");
+      const bounds = await client.query(
+        "SELECT COALESCE(MIN(event_id), 0) AS first_event_id, COALESCE(MAX(event_id), 0) AS last_event_id FROM agent_work_os_realtime_events_v1"
+      );
+      const firstEventId = Number(bounds.rows[0].first_event_id);
+      const latestEventId = Number(bounds.rows[0].last_event_id);
+      const sequenceHighWater = await this.#sequenceHighWater(client);
+      if (cursor > latestEventId || (firstEventId && cursor < firstEventId - 1) || (!firstEventId && cursor < sequenceHighWater)) {
+        await client.query("COMMIT");
+        return { gap: true };
+      }
+      const result = await client.query(
+        "SELECT event_id, event FROM agent_work_os_realtime_events_v1 WHERE event_id > $1 AND event_id <= $2 ORDER BY event_id LIMIT $3",
+        [cursor, latestEventId, maxEvents + 1]
+      );
+      await client.query("COMMIT");
+      if (result.rows.length > maxEvents || result.rows.some((row) => row.event?.type === "realtime.resync_required")) return { gap: true };
+      return {
+        gap: false,
+        cursor: latestEventId,
+        rows: result.rows.map((row) => ({ eventId: Number(row.event_id), event: row.event }))
+      };
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async #persist({ eventKey, event, serializedEvent }) {
@@ -260,7 +335,7 @@ export class PostgresEventFanout {
         for (const row of result.rows) {
           this.lastEventId = Number(row.event_id);
           if (row.event?.type === "realtime.resync_required") this.onGap();
-          else this.onEvent(row.event);
+          else this.onEvent(row.event, Number(row.event_id));
         }
       }
     } catch (error) {
@@ -274,8 +349,8 @@ export class PostgresEventFanout {
     }
   }
 
-  async #sequenceHighWater() {
-    const result = await this.pool.query("SELECT last_value, is_called FROM agent_work_os_realtime_events_v1_event_id_seq");
+  async #sequenceHighWater(queryable = this.pool) {
+    const result = await queryable.query("SELECT last_value, is_called FROM agent_work_os_realtime_events_v1_event_id_seq");
     return result.rows[0].is_called ? Number(result.rows[0].last_value) : 0;
   }
 
