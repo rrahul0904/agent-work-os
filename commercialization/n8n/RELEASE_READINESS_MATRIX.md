@@ -1,86 +1,92 @@
 # n8n Commercial Release Readiness Matrix
 
-_Last updated: 2026-10-14 (America/New_York)_
+_Last updated: 2026-10-15 (America/New_York)_
 
-This is the canonical release-control view for the n8n commercialization program. `SELLABLE` means the product can be delivered to a paying customer with a documented installation path, acceptable provenance/license, secret-safe configuration, supported n8n compatibility, deterministic demo fixtures, failure/recovery tests, provider-safe verification where required, support terms, and an exact-SHA release receipt.
+`SELLABLE` means a paying customer can receive the product with acceptable provenance/license, secret-safe configuration, supported n8n compatibility, deterministic fixtures, failure/recovery evidence, provider-safe verification where required, support terms, and an exact-SHA GO receipt.
 
 ## Status vocabulary
 
-- `DONOR_ONLY`: third-party/reference artifact; never sell source as-is.
-- `REBUILD_REQUIRED`: clean-room implementation required before packaging.
-- `PACKAGE_REQUIRED`: usable implementation exists but commercial packaging/evidence is incomplete.
-- `E2E_REQUIRED`: package is materially complete; provider sandbox/live-safe proof is still required.
-- `RIGHTS_REQUIRED`: code exists but redistribution/commercial rights are not yet evidenced.
-- `SELLABLE`: all gates passed for the stated compatibility/support boundary.
-- `PUBLISHED`: sellable release is actually listed in an approved channel.
+- `DONOR_ONLY`: reference artifact; never ship/sell this source.
+- `REBUILD_REQUIRED`: independent implementation still required.
+- `PACKAGE_REQUIRED`: owned/clean-room implementation exists but local package/import/evidence gates remain.
+- `E2E_REQUIRED`: commercial package exists; external/provider or full integration verification remains.
+- `RIGHTS_REQUIRED`: implementation/package exists but redistribution rights remain unproven.
+- `SELLABLE`: all release gates passed for the documented support boundary.
+- `PUBLISHED`: a `SELLABLE` exact-SHA release is listed in an approved channel.
 
-## Current code-backed products
+## Current 20 code-backed assets after hardening
 
-| # | Product | Source repo / path | Current state | What remains before SELLABLE |
-|---:|---|---|---|---|
-| 1 | AP MatchFlow | `n8n-automated-vendor-invoice-to-purchase-order-matching` | E2E_REQUIRED | provider sandbox credentials/callbacks/test records; commercial license/provenance receipt; final package docs + release receipt |
-| 2 | Hotel Guest WhatsApp Concierge | `n8n-hotel-guest-whatsapp-concierge` | PACKAGE_REQUIRED | provenance, package standardization, WhatsApp/provider sandbox, failure/idempotency tests, demo proof |
-| 3 | AI Meeting Analyzer → GHL/CRM | `n8n-ai-meeting-analyzer-transcribe-extract-tasks-update-ghl` | PACKAGE_REQUIRED | provenance, transcription/CRM sandbox, retries/idempotency, package docs, demo proof |
-| 4 | AI HVAC Appointment Booking | `n8n-ai-automated-hvac-appointment-booking-n8n-workflow-json` | PACKAGE_REQUIRED | provenance, calendar/SMS sandbox, duplicate-booking prevention, failure tests, release package |
-| 5 | Gym Check-in System | `n8n-gym-checkin-system` | PACKAGE_REQUIRED | provenance, input/device contract, duplicate check-in tests, package docs, demo proof |
-| 6 | Email Scraper Pro | `n8n-email-scraper-pro-custom-n8n-node-workflow` | RIGHTS_REQUIRED | provenance/license + ToS/access-policy review; compatibility tests; package docs |
-| 7 | LinkedIn Engagement Opportunities Finder | `n8n-automated-linkedin-engagement-oppurtunities-finder` | REBUILD_REQUIRED | clean-room implementation/policy-safe data sources; human approval; platform-policy review; E2E |
-| 8 | Hotel Smart Lock Access | `n8n-automate-hotel-smart-lock-access-with-n8n-json` | PACKAGE_REQUIRED | provenance, lock-vendor sandbox, revoke/expiry/idempotency tests, release package |
-| 9 | Inventory Reorder + Vendor Notification | `n8n-automated-inventory-reorder-vendor-notification-pipeline` | PACKAGE_REQUIRED | provenance, vendor integration sandbox, duplicate-order prevention, threshold/recovery tests |
-| 10 | Pet Clinic Appointment Scheduling | `n8n-pet-clinic-appointment-scheduling-agent` | PACKAGE_REQUIRED | provenance, calendar sandbox, duplicate/reschedule/cancel tests, no diagnostic claims |
-| 11 | Barcode Scanner Custom Node | `n8n-barcode-scanner-custom-node` | PACKAGE_REQUIRED | provenance, n8n compatibility matrix, malformed barcode/device tests, package docs |
-| 12 | Multi-Carrier Shipping Quote Router | `n8n-automate-multi-carrier-shipping-quotes-with-ai` | E2E_REQUIRED | carrier sandbox accounts, timeout/rate-limit/fallback tests, exact quote fixtures, release receipt |
-| 13 | Lead Scoring + WhatsApp Proposal | `n8n-lead-scoring-and-automated-whatsapp-proposal-sender` | PACKAGE_REQUIRED | provenance, WhatsApp sandbox, approval/duplicate-send controls, scoring regression tests |
-| 14 | Medical Equipment Enquiry Router | `n8n-routing-of-medical-equipment-enquiry` | PACKAGE_REQUIRED | provenance, remove clinical/PHI assumptions, routing tests, package docs, demo proof |
-| 15 | ViralFlow | `n8n-viralflow` | DONOR_ONLY | clean-room rebuild if commercialized; original attributed source must not be resold as-is |
-| 16 | AI Reel Generator | `n8n-reel-generator` | DONOR_ONLY | clean-room rebuild if commercialized; original attributed source must not be resold as-is |
-| 17 | Sogni n8n Nodes | `n8n-nodes-sogni` | RIGHTS_REQUIRED | upstream license/provenance review, supported-version compatibility, packaging/support boundary |
-| 18 | Sentinel Reliability Runtime | `n8n-sentinel-circuit-breaker-or-resilient-webhook-queue-engine` | PACKAGE_REQUIRED | premium differentiation beyond public/permissive baseline; Postgres state/idempotency/observability package; release proof |
-| 19 | FreeFlow AI Media Factory | `youtube_project/n8n/workflows/FreeFlow_Roman_Pilot_Starter.json` | PACKAGE_REQUIRED | release packaging, media-provider sandbox, copyright/release evidence, private-upload demo, support boundary |
-| 20 | Faceless Content Creator | `faceless-content-creator/workflows/n8n/faceless-content-creator.json` | PACKAGE_REQUIRED | package n8n edition, provider sandbox, render/publish failure recovery, demo proof, release receipt |
+| # | Product / commercial disposition | State | What remains before SELLABLE |
+|---:|---|---|---|
+| 1 | AP MatchFlow | E2E_REQUIRED | rights/provenance receipt; Gmail/Sheets/Gemini/Slack safe E2E; exact-SHA GO |
+| 2 | Hotel Guest WhatsApp Concierge | E2E_REQUIRED | rights; WhatsApp/Google/Gemini/Redis E2E; isolation/idempotency evidence; GO receipt |
+| 3 | Meeting Analyzer → CRM | E2E_REQUIRED | rights; Deepgram/Gemini/HighLevel/Slack/Gmail E2E; malformed-output/idempotency proof |
+| 4 | HVAC Booking Agent | E2E_REQUIRED | rights; calendar/messaging E2E; duplicate/concurrent booking proof; rerun CI after runner issue |
+| 5 | Gym Check-in | E2E_REQUIRED | workflow/custom-node rights; n8n/node compatibility; Supabase/Google E2E; webhook-auth proof |
+| 6 | **Authorized Email Extractor** (clean-room replacement) | PACKAGE_REQUIRED | record license/authorship for new files; n8n import; CI/unit tests; demo + exact-SHA GO |
+| 7 | **Authorized Social Opportunity Radar** (clean-room replacement) | PACKAGE_REQUIRED | record license/authorship; n8n import; CI/unit tests; human-review/no-auto-engagement demo |
+| 8 | Hotel Smart Lock Access | E2E_REQUIRED | rights; Apaleo/Seam/Twilio/Gmail E2E; expiry/revocation/idempotency proof |
+| 9 | Inventory Reorder + Vendor Notification | E2E_REQUIRED | rights; vendor E2E; duplicate/concurrent reorder proof; rerun CI after runner issue |
+| 10 | Pet Clinic Scheduler | E2E_REQUIRED | rights; HighLevel/WhatsApp/Gemini/Redis E2E; schedule lifecycle; administrative-only claim proof |
+| 11 | Barcode Scanner Node | RIGHTS_REQUIRED | workflow/custom-node rights; n8n/node compatibility; deterministic barcode/QR fixtures; GO receipt |
+| 12 | Multi-Carrier Shipping Quote Router | E2E_REQUIRED | rights; ShipEngine/WhatsApp/HighLevel E2E; ranking/commission/rate-limit proof |
+| 13 | Lead-to-Proposal AI | E2E_REQUIRED | rights; WhatsApp E2E; scoring/approval/idempotency proof; rerun CI after runner issue |
+| 14 | Equipment Enquiry Router | E2E_REQUIRED | rights; Google/Slack E2E; privacy + administrative/product-enquiry-only boundary proof |
+| 15 | ViralFlow donor source | DONOR_ONLY | **never ship donor**; capability is fulfilled by FreeFlow + Faceless once those receive GO |
+| 16 | Reel Generator donor source | DONOR_ONLY | **never ship donor**; capability is fulfilled by Faceless + FreeFlow once those receive GO |
+| 17 | Sogni Integration Engineering Pack | E2E_REQUIRED | build/lint/tests; n8n node load; Sogni safe fixture/failure tests; exact-SHA GO |
+| 18 | Sentinel Production Engineering Pack | PACKAGE_REQUIRED | supported n8n import; behavioral/load evidence; separately authored premium enhancement/support evidence |
+| 19 | FreeFlow AI Media Factory n8n Edition | E2E_REQUIRED | code/content rights; n8n import; deterministic render; evidence packet; provider/private-upload proof |
+| 20 | Faceless Content Creator n8n Edition | E2E_REQUIRED | app+n8n compatibility; tenant/quota/cancel/idempotency tests; provider/test-private publish; rights |
 
-## Historical / clean-room product lineages
+## Material progress completed
+
+- All 20 code-backed entries now have a concrete governed disposition and candidate SHA/branch/PR recorded in `release_registry.json` and `RELEASE_TRAIN_STATUS.md`.
+- Commercial release packages were added across the sellable candidates with QUICKSTART, dependencies, release test matrix, support boundary, provenance/license gate and release receipt.
+- The Email Scraper lineage now has an independently authored core-node **Authorized Email Extractor** that excludes the historical third-party scraper node and does no crawling/outreach.
+- The LinkedIn lineage now has an independently authored core-node **Authorized Social Opportunity Radar** that consumes customer-authorized records, scores deterministically, requires human review and performs no automated engagement.
+- Sogni's upstream MIT license and Sogni AI attribution are explicitly preserved; its commercial offer is integration engineering/support rather than proprietary resale.
+- Sentinel's MIT core remains free; paid value is production engineering/support and independently authored enhancements.
+- ViralFlow and Reel Generator are formally excluded from commercial shipping; their useful capability themes are mapped to owned FreeFlow/Faceless implementations rather than cloned.
+
+## Historical / clean-room lineages beyond the current 20
 
 | Product | State | Required action |
 |---|---|---|
-| Research Agent OS | REBUILD_REQUIRED | recover exact artifact or recreate cleanly, then package and verify |
-| Buyer Intent / Intent Revenue OS | REBUILD_REQUIRED | commercial clean-room workflow edition; do not sell historical donor workflow |
+| Research Agent OS | REBUILD_REQUIRED | recover exact artifact or recreate cleanly, then package/verify |
+| Buyer Intent / Intent Revenue OS | REBUILD_REQUIRED | build governed commercial workflow edition; do not ship historical donor workflow |
 | Restaurant AI OS / Cafe Management | DONOR_ONLY → REBUILD_REQUIRED | independent implementation only |
-| BillingOps / InvoiceFlow | DONOR_ONLY → REBUILD_REQUIRED | independent implementation with idempotent payment/refund/event handling |
+| BillingOps / InvoiceFlow | DONOR_ONLY → REBUILD_REQUIRED | independent idempotent invoice/payment/refund implementation |
 | Agency Automation Pack | DONOR_ONLY → REBUILD_REQUIRED | clean-room implementation |
-| Healthcare Operations Pack | DONOR_ONLY → REBUILD_REQUIRED | clean-room implementation with privacy/compliance boundaries |
+| Healthcare Operations Pack | DONOR_ONLY → REBUILD_REQUIRED | clean-room implementation with privacy/compliance boundary |
 | Restaurant/Hospitality Pack | DONOR_ONLY → REBUILD_REQUIRED | clean-room implementation |
-| LeadGen Pack | DONOR_ONLY → REBUILD_REQUIRED | clean-room implementation with platform-policy-safe acquisition |
+| LeadGen Pack | DONOR_ONLY → REBUILD_REQUIRED | policy-safe clean-room acquisition workflow |
 | Property/Real-Estate Pack | DONOR_ONLY → REBUILD_REQUIRED | clean-room implementation |
 
 ## Pending Reddit evidence targets
 
-The six unresolved `/s/<token>` Reddit links remain `SOURCE_IDENTITY_BLOCKED` and are not counted as new products until canonical identity and deduplication are proven. See `PENDING_REDDIT_TARGETS.md`.
+Six unresolved Reddit `/s/<token>` targets remain `SOURCE_IDENTITY_BLOCKED` and are not promoted into the product count until canonical identity and deduplication are proven. See `PENDING_REDDIT_TARGETS.md`.
 
-## Mandatory gates before a product can become SELLABLE
+## Mandatory gates before SELLABLE
 
-1. Source identity and exact source SHA recorded.
+1. Exact source/candidate SHA recorded.
 2. Provenance/license/redistribution rights acceptable, or clean-room implementation used.
-3. No secrets or live credentials committed; `.env.example`/credential map complete.
-4. Supported n8n version pinned and import validation passes.
-5. Deterministic demo input and expected output included.
+3. No live credentials committed; credential map/placeholders complete.
+4. Supported n8n version pinned and import validated.
+5. Deterministic demo input/output exists.
 6. Happy path passes.
-7. Malformed/invalid input path passes.
+7. Invalid/malformed input path passes.
 8. Duplicate/idempotency behavior proven.
 9. Provider timeout/failure/rate-limit behavior proven where applicable.
-10. Retry policy is classified by failure type, not blind retry.
+10. Retry policy is failure-class aware, not blind retry.
 11. Recovery/replay path proven.
-12. Kill switch / safe-disable path documented for side-effecting workflows.
-13. External provider claims verified in sandbox/live-safe mode.
-14. QUICKSTART, DEPENDENCIES, TEST_MATRIX, SUPPORT, LICENSE/terms, compatibility and architecture docs included.
-15. Demo screenshots/video or equivalent evidence captured.
-16. Exact-SHA release receipt created.
-17. No product is published until the shipping decision is `GO`.
+12. Kill switch/safe-disable documented for side-effecting workflows.
+13. External provider claims verified sandbox/live-safe.
+14. QUICKSTART, dependencies, tests, support, license/terms, compatibility and architecture are complete.
+15. Demo evidence exists.
+16. Exact-SHA release receipt is complete.
+17. Shipping decision is `GO` before sale/publication.
 
-## What can be completed without customer/provider credentials
+## External boundary
 
-We can complete code cleanup, clean-room rebuilds, deterministic fixtures, mock/provider simulators, import tests, failure injection, docs, packaging, version pinning, CI, secret scanning, demo-mode execution, storefront metadata, and release-candidate receipts.
-
-## What still requires an external gate
-
-A product that depends on WhatsApp, CRM, carrier, calendar, lock, publishing, billing, scraping, storage, messaging or other provider APIs cannot honestly receive a production-provider `SELLABLE` claim until sandbox/live-safe credentials and test accounts are supplied outside Git and the provider-specific tests pass.
+We can complete code, clean-room rebuilds, mocks/fixtures, CI, docs, packaging, secret scans and local/import testing without customer accounts. We cannot honestly claim production-provider readiness for WhatsApp, CRM, carriers, calendars, locks, publishing or similar APIs until approved sandbox/test credentials and accounts are supplied outside Git and those exact-SHA provider tests pass.
