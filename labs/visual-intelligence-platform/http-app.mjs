@@ -4,6 +4,7 @@ import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compilePromptSpec, renderPrompt } from './prompt-core.mjs';
 import { createRunPlan } from './orchestrator.mjs';
+import { executeAgentRun, ProviderRegistry } from './agent-runtime.mjs';
 import { compileDiagramSpec } from './diagram-spec.mjs';
 import { layoutDiagram, renderDiagramSvg } from './diagram-renderer.mjs';
 import { critiqueDiagram } from './diagram-critic.mjs';
@@ -66,6 +67,7 @@ async function serveStatic(pathname, response, root) {
 
 export function createVisualIntelligenceServer(options = {}) {
   const root = options.root || defaultRoot;
+  const providerRegistry = options.providerRegistry instanceof ProviderRegistry ? options.providerRegistry : new ProviderRegistry();
   return http.createServer(async (request, response) => {
     try {
       const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
@@ -77,8 +79,9 @@ export function createVisualIntelligenceServer(options = {}) {
           contractVersion: 'visual-intelligence-platform/v1alpha1',
           releaseState: 'BUILDING',
           mcpProtocolVersion: MCP_PROTOCOL_VERSION,
+          configuredProviders: providerRegistry.names(),
           capabilities: [
-            'prompt-studio', 'agent-run-plan', 'diagram-spec', 'diagram-svg',
+            'prompt-studio', 'agent-run-plan', 'agent-execution', 'diagram-spec', 'diagram-svg',
             'mermaid', 'plantuml', 'drawio', 'deck-plan', 'native-pptx',
             'creative-spec', 'creative-svg', 'visualbench', 'mcp-tools'
           ]
@@ -112,6 +115,30 @@ export function createVisualIntelligenceServer(options = {}) {
         } catch (error) {
           const code = error?.message || 'prompt-compilation-failed';
           return sendJson(response, code === 'plan-capability-denied' ? 403 : 400, { error: code });
+        }
+      }
+
+      if (url.pathname === '/api/agents/run') {
+        if (request.method !== 'POST') {
+          response.setHeader('allow', 'POST');
+          return sendJson(response, 405, { error: 'method-not-allowed' });
+        }
+        if (!providerRegistry.names().length) return sendJson(response, 503, { error: 'provider_unavailable' });
+        try {
+          const body = await bodyJson(request);
+          const input = body.input && typeof body.input === 'object' ? body.input : body;
+          const result = await executeAgentRun(input, {
+            registry: providerRegistry,
+            providerPolicy: {
+              providers: Array.isArray(body.providers) ? body.providers : undefined,
+              allowFallback: body.allowFallback !== false
+            },
+            approvedStages: Array.isArray(body.approvedStages) ? body.approvedStages : []
+          });
+          return sendJson(response, result.status === 'approval_required' ? 202 : 200, result);
+        } catch (error) {
+          const code = error?.code || error?.message || 'agent_execution_failed';
+          return sendJson(response, code === 'provider_unavailable' ? 503 : 400, { error: code, details: error?.details ?? null });
         }
       }
 
