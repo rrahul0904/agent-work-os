@@ -23,7 +23,19 @@ export class PostgresDaemonCommandRouter {
   }
 
   async start() {
-    await this.pool.query(await readFile(MIGRATION_URL, "utf8"));
+    const migration = await readFile(MIGRATION_URL, "utf8");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["agent_work_os_daemon_commands_v1"]);
+      await client.query(migration);
+      await client.query("COMMIT");
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
     this.timer = setInterval(() => void this.#poll(), this.pollIntervalMs);
     this.timer.unref?.();
     void this.#poll();
