@@ -7,7 +7,12 @@ for (const file of [
   "entitlements.mjs",
   "orchestrator.mjs",
   "visualbench.mjs",
-  "platform-manifest.json"
+  "diagram-spec.mjs",
+  "diagram-renderer.mjs",
+  "diagram-critic.mjs",
+  "diagram-adapters.mjs",
+  "platform-manifest.json",
+  "plugin-manifest.json"
 ]) {
   await cp(file, `dist/${file}`);
 }
