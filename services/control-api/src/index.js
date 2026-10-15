@@ -11,6 +11,7 @@ import { JsonStore } from "./store.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { IdentityError, IdentityRepository } from "./identity-store.js";
+import { PostgresEventFanout } from "./realtime-events.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -41,15 +42,78 @@ export async function createControlPlane() {
   if (identities) await identities.initialize();
   await store.initializeMachineSessionStore();
   await store.initializeShippingRunStore();
+  await store.initializeRealtimeEventStore();
   const daemonSockets = new Map();
   const clientSockets = new Map();
-
-  const broadcast = (event) => {
-    const encoded = encodeMessage(event);
-    for (const [peer, principal] of clientSockets) {
-      const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
-      if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) peer.send(encoded);
+  const pendingDaemonCloseTasks = new Set();
+  const pendingDaemonMessageTasks = new Set();
+  const snapshotForClient = async (principal) => {
+    if (principal.kind === "user") {
+      principal.organizationIds = (await identities.listMemberships(principal.userId)).map((membership) => membership.organizationId);
+      return {
+        machines: (await Promise.all(principal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
+        sessions: (await Promise.all(principal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
+        shippingRuns: (await Promise.all(principal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
+        workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
+      };
     }
+    return { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
+  };
+  const finishClientResync = (peer, state, snapshot = null) => {
+    try {
+      if (snapshot) peer.send(encodeMessage({ type: "state.snapshot", ...snapshot }));
+      while (state.pendingEvents.length) peer.send(state.pendingEvents.shift());
+    } catch (error) {
+      clientSockets.delete(peer);
+      console.warn("[api] websocket resync send failed", error.message);
+      return;
+    }
+    state.resyncing = false;
+  };
+  const resyncClient = async (peer, state) => {
+    try {
+      const snapshot = await snapshotForClient(state.principal);
+      if (clientSockets.get(peer) === state) finishClientResync(peer, state, snapshot);
+    } catch (error) {
+      console.warn("[api] websocket resync failed", error.message);
+      if (clientSockets.get(peer) === state) {
+        clientSockets.delete(peer);
+        peer.close(1011, "state_resync_failed");
+      }
+    }
+  };
+  const resyncClients = () => {
+    for (const [peer, state] of clientSockets) {
+      if (state.resyncing) continue;
+      state.resyncing = true;
+      void resyncClient(peer, state);
+    }
+  };
+
+  const broadcastLocal = (event) => {
+    const encoded = encodeMessage(event);
+    for (const [peer, state] of clientSockets) {
+      const principal = state.principal;
+      const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
+      if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) {
+        if (state.resyncing) {
+          state.pendingEvents.push(encoded);
+          continue;
+        }
+        try { peer.send(encoded); } catch (error) {
+          clientSockets.delete(peer);
+          console.warn("[api] client websocket send failed", error.message);
+        }
+      }
+    }
+  };
+  const eventFanout = store.pool ? new PostgresEventFanout(store.pool, broadcastLocal, { onGap: resyncClients }) : null;
+  await eventFanout?.start();
+  const broadcast = (event) => {
+    if (eventFanout) {
+      try { eventFanout.publish(event); }
+      catch (error) { console.warn("[api] realtime event enqueue failed", error.message); }
+    } else broadcastLocal(event);
   };
   const sendCommand = (machineId, command) => {
     const peer = daemonSockets.get(machineId);
@@ -65,7 +129,8 @@ export async function createControlPlane() {
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, product: "agent-work-os", protocolVersion: PROTOCOL_VERSION });
       if (req.method === "GET" && url.pathname === "/readyz") {
         if (store.pool) await store.pool.query("SELECT 1");
-        return json(res, 200, { ok: true, database: store.pool ? "ready" : "local" });
+        const ready = !eventFanout || eventFanout.ready;
+        return json(res, ready ? 200 : 503, { ok: ready, database: store.pool ? "ready" : "local", eventFanout: eventFanout ? (ready ? "ready" : "connecting") : "local" });
       }
       const isPublicAuthRoute = req.method === "POST" && ["/api/auth/register", "/api/auth/login"].includes(url.pathname);
       let principal = null;
@@ -106,7 +171,7 @@ export async function createControlPlane() {
       if (req.method === "POST" && url.pathname === "/api/auth/logout" && principal.kind === "user") {
         const rawToken = readCookie(req, sessionCookieName);
         await identities.revokeSession(rawToken);
-        for (const [peer, client] of clientSockets) if (client.sessionId === principal.sessionId) peer.close(1008, "session_revoked");
+        for (const [peer, state] of clientSockets) if (state.principal.sessionId === principal.sessionId) peer.close(1008, "session_revoked");
         clearAuthCookies(res);
         return json(res, 200, { ok: true });
       }
@@ -155,7 +220,7 @@ export async function createControlPlane() {
         const body = await readJson(req);
         const membership = await identities.acceptInvitation(body.token, principal.userId);
         const organizationIds = (await identities.listMemberships(principal.userId)).map((entry) => entry.organizationId);
-        for (const client of clientSockets.values()) if (client.userId === principal.userId) client.organizationIds = organizationIds;
+        for (const state of clientSockets.values()) if (state.principal.userId === principal.userId) state.principal.organizationIds = organizationIds;
         return json(res, 200, { membership });
       }
 
@@ -456,27 +521,25 @@ export async function createControlPlane() {
         peer.on("close", () => clearTimeout(daemonAuthTimeout));
       }
       if (role === "client") {
-        clientSockets.set(peer, clientPrincipal);
+        const clientState = { principal: clientPrincipal, resyncing: true, pendingEvents: [] };
+        clientSockets.set(peer, clientState);
+        peer.on("error", (error) => {
+          clientSockets.delete(peer);
+          console.warn("[api] client websocket peer error", error.message);
+        });
         if (clientPrincipal.kind === "user") {
           const remaining = Math.max(0, Date.parse(clientPrincipal.expiresAt) - Date.now());
           const expiry = setTimeout(() => peer.close(1008, "session_expired"), remaining);
           expiry.unref?.();
           peer.on("close", () => clearTimeout(expiry));
         }
-        const state = clientPrincipal.kind === "user"
-          ? {
-              machines: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
-              sessions: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
-              shippingRuns: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
-              workItems: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
-            }
-          : { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
-        peer.send(encodeMessage({ type: "state.snapshot", ...state }));
         peer.on("close", () => clientSockets.delete(peer));
+        void resyncClient(peer, clientState);
         return;
       }
       let machineId;
-      peer.on("message", async (raw) => {
+      peer.on("message", (raw) => {
+        const messageTask = (async () => {
         try {
           if (peer.closed) return;
           const msg = decodeMessage(raw);
@@ -518,11 +581,19 @@ export async function createControlPlane() {
             if (persistedRun) broadcast({ type: "shipping.run.updated", run: persistedRun }); return;
           }
         } catch (error) { console.warn("[api] invalid daemon message", error.message); }
+        })();
+        pendingDaemonMessageTasks.add(messageTask);
+        void messageTask.finally(() => pendingDaemonMessageTasks.delete(messageTask));
       });
-      peer.on("close", async () => {
-        if (!machineId || daemonSockets.get(machineId) !== peer) return;
-        daemonSockets.delete(machineId);
-        const machine = await store.markMachineOffline(machineId); if (machine) broadcast({ type: "machine.updated", machine });
+      peer.on("close", () => {
+        const closeTask = (async () => {
+          if (!machineId || daemonSockets.get(machineId) !== peer) return;
+          daemonSockets.delete(machineId);
+          const machine = await store.markMachineOffline(machineId);
+          if (machine) broadcast({ type: "machine.updated", machine });
+        })().catch((error) => console.warn("[api] machine disconnect update failed", error.message));
+        pendingDaemonCloseTasks.add(closeTask);
+        void closeTask.finally(() => pendingDaemonCloseTasks.delete(closeTask));
       });
       peer.on("error", (error) => console.warn("[api] websocket peer error", error.message));
     })().catch(() => socket.destroy());
@@ -531,11 +602,16 @@ export async function createControlPlane() {
   return {
     server, store,
     listen: () => new Promise((resolve) => server.listen(port, host, resolve)),
-    close: () => new Promise((resolve) => {
+    close: async () => {
+      const serverClosed = new Promise((resolve) => server.close(resolve));
       for (const peer of daemonSockets.values()) peer.close(1001, "server_shutdown");
       for (const peer of clientSockets.keys()) peer.close(1001, "server_shutdown");
-      server.close(resolve);
-    })
+      await serverClosed;
+      while (pendingDaemonCloseTasks.size || pendingDaemonMessageTasks.size) {
+        await Promise.all([...pendingDaemonCloseTasks, ...pendingDaemonMessageTasks]);
+      }
+      await eventFanout?.close();
+    }
   };
 }
 
