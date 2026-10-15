@@ -35,6 +35,9 @@ jobs:
           node --check server.mjs
           node --check http-app.mjs
           node --check smoke-runtime.mjs
+          node --check agent-runtime.mjs
+          node --check model-providers.mjs
+          node --check agent-console.mjs
       - name: Build hosted product
         working-directory: labs/visual-intelligence-platform
         run: npm run build
@@ -45,6 +48,8 @@ jobs:
           test -f dist/prompt-core.mjs
           test -f dist/entitlements.mjs
           test -f dist/orchestrator.mjs
+          test -f dist/agent-runtime.mjs
+          test -f dist/model-providers.mjs
           test -f dist/visualbench.mjs
           test -f dist/diagram-spec.mjs
           test -f dist/diagram-renderer.mjs
@@ -52,10 +57,14 @@ jobs:
           test -f dist/diagram-adapters.mjs
           test -f dist/deck-plan.mjs
           test -f dist/pptx-native.mjs
+          test -f dist/presentation-service.mjs
           test -f dist/creative-spec.mjs
           test -f dist/creative-renderer.mjs
+          test -f dist/mcp-core.mjs
           test -f dist/studio-upgrade.mjs
+          test -f dist/agent-console.mjs
           grep -q 'studio-upgrade.mjs' dist/index.html
+          grep -q 'agent-console.mjs' dist/index.html
       - name: Deterministic end-to-end runtime smoke
         working-directory: labs/visual-intelligence-platform
         run: node smoke-runtime.mjs
