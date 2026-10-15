@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { encodeMessage } from "../../../packages/protocol/src/index.js";
+import { insertDaemonCommand } from "./daemon-command-outbox.js";
 
 const MIGRATION_URL = new URL("../../../migrations/008_daemon_commands.sql", import.meta.url);
 
@@ -43,16 +44,7 @@ export class PostgresDaemonCommandRouter {
 
   async enqueue(machineId, command) {
     if (this.closed) throw new Error("daemon_command_router_closed");
-    const commandId = command.commandId;
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(commandId ?? "")) {
-      throw new Error("daemon_command_id_invalid");
-    }
-    await this.pool.query(
-      `INSERT INTO agent_work_os_daemon_commands_v1 (command_id, machine_id, payload)
-       VALUES ($1, $2, $3::jsonb) ON CONFLICT (command_id) DO NOTHING`,
-      [commandId, machineId, JSON.stringify(command)]
-    );
-    return commandId;
+    return insertDaemonCommand(this.pool, machineId, command);
   }
 
   async acknowledge(machineId, { commandId, ok, error = null }) {
