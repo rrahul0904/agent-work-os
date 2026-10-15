@@ -8,8 +8,7 @@ import { compileDiagramSpec } from './diagram-spec.mjs';
 import { layoutDiagram, renderDiagramSvg } from './diagram-renderer.mjs';
 import { critiqueDiagram } from './diagram-critic.mjs';
 import { toDrawioXml, toMermaid, toPlantUml } from './diagram-adapters.mjs';
-import { compileDeckPlan } from './deck-plan.mjs';
-import { generateNativePptx, nativePptxReceipt } from './pptx-native.mjs';
+import { createNativePresentation } from './presentation-service.mjs';
 import { compileCreativeSpec } from './creative-spec.mjs';
 import { renderCreativeSvg, creativeReceipt } from './creative-renderer.mjs';
 import { handleMcpRequest, MCP_PROTOCOL_VERSION } from './mcp-core.mjs';
@@ -96,7 +95,7 @@ export function createVisualIntelligenceServer(options = {}) {
           const result = await handleMcpRequest(input, request.headers);
           const status = result?.error && [-32022, -32020].includes(result.error.code) ? 400 : 200;
           return sendJson(response, status, result, { 'MCP-Protocol-Version': MCP_PROTOCOL_VERSION });
-        } catch (error) {
+        } catch {
           return sendJson(response, 400, { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { 'MCP-Protocol-Version': MCP_PROTOCOL_VERSION });
         }
       }
@@ -147,19 +146,21 @@ export function createVisualIntelligenceServer(options = {}) {
         }
         try {
           const input = await bodyJson(request);
-          const plan = compileDeckPlan(input);
-          if (url.searchParams.get('mode') === 'receipt') return sendJson(response, 200, { deckPlan: plan, receipt: nativePptxReceipt(plan) });
-          const pptx = generateNativePptx(plan);
+          const receiptOnly = url.searchParams.get('mode') === 'receipt';
+          const artifact = createNativePresentation(input, { includeBytes: !receiptOnly });
+          if (receiptOnly) return sendJson(response, 200, { plan: artifact.plan, deckPlan: artifact.deckPlan, receipt: artifact.receipt });
           response.writeHead(200, {
             'content-type': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             'content-disposition': 'attachment; filename="visual-intelligence.pptx"',
-            'content-length': String(pptx.length),
+            'content-length': String(artifact.pptx.length),
             'x-visual-intelligence-editable': 'true',
+            'x-visual-intelligence-plan': artifact.plan,
             'cache-control': 'no-store'
           });
-          return response.end(pptx);
+          return response.end(artifact.pptx);
         } catch (error) {
-          return sendJson(response, 400, { error: error?.message || 'presentation-generation-failed' });
+          const code = error?.message || 'presentation-generation-failed';
+          return sendJson(response, code === 'plan-capability-denied' ? 403 : 400, { error: code });
         }
       }
 
@@ -180,7 +181,7 @@ export function createVisualIntelligenceServer(options = {}) {
 
       if (request.method === 'GET' && await serveStatic(url.pathname, response, root)) return;
       return sendJson(response, 404, { error: 'not-found' });
-    } catch (error) {
+    } catch {
       return sendJson(response, 500, { error: 'internal-error' });
     }
   });
