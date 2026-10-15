@@ -16,6 +16,7 @@ for (const file of [
   "pptx-native.mjs",
   "creative-spec.mjs",
   "creative-renderer.mjs",
+  "mcp-core.mjs",
   "studio-upgrade.mjs",
   "platform-manifest.json",
   "plugin-manifest.json"
