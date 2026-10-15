@@ -189,6 +189,36 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         const body = await response.json();
         return response.ok && body.machines.some((machine) => machine.id === machineId && machine.organizationId === alphaId);
       }, 3_000, "organization-bound machine authentication");
+      await stopReplica();
+      await startReplica();
+      const machineAfterReplicaRestart = await api(owner.cookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
+      const machinesAfterReplicaRestart = await machineAfterReplicaRestart.json();
+      assert.equal(machinesAfterReplicaRestart.machines.find((machine) => machine.id === machineId)?.status, "online",
+        "starting another API instance does not mark a recently active machine offline");
+      const replicaSessionResponse = await fetch(`http://127.0.0.1:${replicaPort}/api/sessions`, {
+        method: "POST",
+        headers: { cookie: owner.cookies, "x-csrf-token": owner.body.csrfToken, "content-type": "application/json" },
+        body: JSON.stringify({ organizationId: alphaId, machineId, cwd: "/tmp", agent: "echo", prompt: "route through the other API instance" })
+      });
+      const replicaSession = await replicaSessionResponse.json();
+      assert.equal(replicaSessionResponse.status, 201, JSON.stringify(replicaSession));
+      const routedCommand = await machineSocket.readMessage();
+      assert.equal(routedCommand.type, "server.command");
+      assert.equal(routedCommand.sessionId, replicaSession.id, "a command submitted on the replica reaches the daemon connected to the primary instance");
+      machineSocket.sendMessage({ type: "daemon.command.ack", machineId, commandId: routedCommand.commandId, ok: false, error: "agent_unavailable" });
+      await waitFor(async () => {
+        const [result, failedSessionResponse] = await Promise.all([
+          databaseInspector.query("SELECT status, ack_error FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]),
+          api(owner.cookies, null, `/api/sessions/${encodeURIComponent(replicaSession.id)}?organizationId=${encodeURIComponent(alphaId)}`)
+        ]);
+        const failedSession = await failedSessionResponse.json();
+        return result.rows[0]?.status === "failed" && failedSession.status === "failed";
+      }, 2_000, "routed daemon rejection persists and fails the queued session");
+      const rejectedCommand = await databaseInspector.query(
+        "SELECT status, ack_error FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]
+      );
+      assert.equal(rejectedCommand.rows[0]?.ack_error, "agent_unavailable");
+
       const createdSessionResponse = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
         method: "POST", body: { organizationId: alphaId, machineId, cwd: "/tmp", agent: "echo", prompt: "tenant-scoped session" }
       });
