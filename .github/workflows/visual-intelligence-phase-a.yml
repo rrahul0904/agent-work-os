@@ -26,16 +26,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Test platform core
+      - name: Test platform core and HTTP runtime
         working-directory: labs/visual-intelligence-platform
         run: npm test
       - name: Syntax check hosted runtime
         working-directory: labs/visual-intelligence-platform
-        run: node --check server.mjs
-      - name: Build hosted shell
+        run: |
+          node --check server.mjs
+          node --check http-app.mjs
+          node --check smoke-runtime.mjs
+      - name: Build hosted product
         working-directory: labs/visual-intelligence-platform
         run: npm run build
-      - name: Verify static artifact
+      - name: Verify built artifact
         working-directory: labs/visual-intelligence-platform
         run: |
           test -f dist/index.html
@@ -53,41 +56,24 @@ jobs:
           test -f dist/creative-renderer.mjs
           test -f dist/studio-upgrade.mjs
           grep -q 'studio-upgrade.mjs' dist/index.html
-      - name: Smoke hosted runtime
+      - name: Deterministic end-to-end runtime smoke
+        working-directory: labs/visual-intelligence-platform
+        run: node smoke-runtime.mjs
+      - name: Verify native PPTX OOXML package
         working-directory: labs/visual-intelligence-platform
         run: |
-          PORT=4173 node server.mjs >/tmp/visual-intelligence-server.log 2>&1 &
-          SERVER_PID=$!
-          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
-          READY=0
-          for i in $(seq 1 20); do
-            if curl -fsS http://127.0.0.1:4173/api/health >/tmp/health.json; then READY=1; break; fi
-            sleep 0.25
-          done
-          if test "$READY" != "1"; then cat /tmp/visual-intelligence-server.log; exit 1; fi
-          grep -q '"ok":true' /tmp/health.json
-          grep -q '"diagram-spec"' /tmp/health.json
-          grep -q '"native-pptx"' /tmp/health.json
-          grep -q '"creative-spec"' /tmp/health.json
-          curl -fsS http://127.0.0.1:4173/ | grep -q 'Diagram Studio'
-          curl -fsS -X POST http://127.0.0.1:4173/api/prompt -H 'content-type: application/json' --data '{"artifactType":"architecture-diagram","objective":"Show a secure multi-region RAG platform","plan":"community"}' >/tmp/prompt.json
-          grep -q '"promptSpec"' /tmp/prompt.json
-          grep -q '"runPlan"' /tmp/prompt.json
-          cat >/tmp/diagram.json <<'JSON'
-          {"kind":"rag","title":"Secure RAG","nodes":[{"id":"user","type":"actor","label":"User","evidence":"requirements"},{"id":"idp","type":"identity","label":"IdP","evidence":"security"},{"id":"svc","type":"service","label":"RAG Service","evidence":"repo"},{"id":"kb","type":"dataset","label":"Knowledge","boundary":"data","evidence":"model"},{"id":"llm","type":"model","label":"LLM","evidence":"provider"}],"edges":[{"from":"user","to":"idp","label":"auth","protocol":"OIDC","evidence":"security"},{"from":"idp","to":"svc","label":"token","protocol":"HTTPS","evidence":"security"},{"from":"svc","to":"kb","label":"retrieve","evidence":"model"},{"from":"svc","to":"llm","label":"generate","evidence":"provider"}]}
-          JSON
-          curl -fsS -X POST http://127.0.0.1:4173/api/diagram -H 'content-type: application/json' --data-binary @/tmp/diagram.json >/tmp/diagram-response.json
-          grep -q '"diagramSpec"' /tmp/diagram-response.json
-          grep -q '"svg"' /tmp/diagram-response.json
-          grep -q 'flowchart LR' /tmp/diagram-response.json
-          grep -q '@startuml' /tmp/diagram-response.json
-          grep -q '<mxfile' /tmp/diagram-response.json
-          cat >/tmp/deck.json <<'JSON'
-          {"title":"Enterprise AI Platform","slides":[{"title":"Enterprise AI Platform","subtitle":"Governed visual intelligence","layout":"title"},{"title":"Why now","bullets":["Editable artifacts","Governed agents","Evidence-backed review"]}]}
-          JSON
-          curl -fsS -X POST 'http://127.0.0.1:4173/api/presentation?mode=receipt' -H 'content-type: application/json' --data-binary @/tmp/deck.json >/tmp/deck-receipt.json
-          grep -q '"editable":true' /tmp/deck-receipt.json
-          curl -fsS -X POST http://127.0.0.1:4173/api/presentation -H 'content-type: application/json' --data-binary @/tmp/deck.json -o /tmp/visual-intelligence.pptx
+          node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          import { generateNativePptx } from './pptx-native.mjs';
+          const pptx = generateNativePptx({
+            title: 'CI Native Deck',
+            slides: [
+              { title: 'CI Native Deck', subtitle: 'Editable OOXML', layout: 'title' },
+              { title: 'Proof', bullets: ['Native text boxes', 'Native shapes', 'Owned compiler'] }
+            ]
+          });
+          await writeFile('/tmp/visual-intelligence.pptx', pptx);
+          NODE
           python3 - <<'PY'
           import zipfile
           path='/tmp/visual-intelligence.pptx'
@@ -96,10 +82,6 @@ jobs:
               required={'[Content_Types].xml','ppt/presentation.xml','ppt/slides/slide1.xml','ppt/slides/slide2.xml','ppt/theme/theme1.xml'}
               assert required <= names, required-names
               slide=z.read('ppt/slides/slide2.xml').decode('utf-8')
-              assert 'Editable artifacts' in slide
+              assert 'Native text boxes' in slide
               assert '<p:sp>' in slide and '<a:t>' in slide
           PY
-          curl -fsS -X POST http://127.0.0.1:4173/api/creative -H 'content-type: application/json' --data '{"format":"landscape","headline":"Architecture that stays editable","body":"Semantic artifacts with governed agents","cta":"Build now"}' >/tmp/creative.json
-          grep -q '"creativeSpec"' /tmp/creative.json
-          grep -q '"editable":true' /tmp/creative.json
-          grep -q 'id=\"headline\"' /tmp/creative.json
