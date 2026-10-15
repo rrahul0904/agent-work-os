@@ -40,6 +40,7 @@ export async function createControlPlane() {
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
   await store.initializeMachineSessionStore();
+  await store.initializeShippingRunStore();
   const daemonSockets = new Map();
   const clientSockets = new Map();
 
@@ -158,7 +159,7 @@ export async function createControlPlane() {
         return json(res, 200, { membership });
       }
 
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
       if (req.method === "GET" && url.pathname === "/api/work-items") {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
@@ -234,10 +235,19 @@ export async function createControlPlane() {
       if (req.method === "GET" && url.pathname === "/api/portfolio") return json(res, 200, { projects: rankPortfolio(await loadPortfolio(portfolioPath)) });
       if (req.method === "GET" && url.pathname === "/api/receipts") return json(res, 200, { receipts: await listReceipts(receiptsRoot) });
       if (req.method === "GET" && url.pathname === "/api/shipping/example") return json(res, 200, JSON.parse(await readFile(exampleContractPath, "utf8")));
-      if (req.method === "GET" && url.pathname === "/api/shipping/runs" && principal.kind === "legacy") return json(res, 200, { runs: store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/shipping/runs" && principal.kind === "legacy") return json(res, 200, { runs: await store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/shipping/runs" && principal.kind === "user") {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        return json(res, 200, { runs: await store.listShippingRunsByOrganization(organizationId) });
+      }
       const shippingRunMatch = url.pathname.match(/^\/api\/shipping\/runs\/([^/]+)$/);
       if (req.method === "GET" && shippingRunMatch) {
-        const run = store.getShippingRun(decodeURIComponent(shippingRunMatch[1]));
+        const organizationId = principal.kind === "user" ? url.searchParams.get("organizationId") : null;
+        if (principal.kind === "user" && (!organizationId || !(await identities.getMembership(principal.userId, organizationId)))) return json(res, 404, { error: "shipping_run_not_found" });
+        const run = await store.getShippingRun(decodeURIComponent(shippingRunMatch[1]), organizationId);
+        if (principal.kind === "user" && run?.organizationId !== organizationId) return json(res, 404, { error: "shipping_run_not_found" });
         return run ? json(res, 200, run) : json(res, 404, { error: "shipping_run_not_found" });
       }
       if (req.method === "POST" && url.pathname === "/api/shipping/contracts/validate") {
@@ -245,19 +255,29 @@ export async function createControlPlane() {
         const result = validateShippingContract(body.contract ?? body);
         return json(res, result.valid ? 200 : 400, result);
       }
-      if (req.method === "POST" && url.pathname === "/api/shipping/runs" && principal.kind === "legacy") {
+      if (req.method === "POST" && url.pathname === "/api/shipping/runs" && ["legacy", "user"].includes(principal.kind)) {
         const body = await readJson(req);
+        let organizationId = null;
+        if (principal.kind === "user") {
+          organizationId = body.organizationId;
+          if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+          const membership = await identities.getMembership(principal.userId, organizationId);
+          if (!membership) return json(res, 404, { error: "organization_not_found" });
+          if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        }
         const machine = await store.getMachine(body.machineId);
+        if (organizationId && (!machine || machine.organizationId !== organizationId)) return json(res, 404, { error: "machine_not_found" });
         if (!machine || machine.status !== "online") return json(res, 409, { error: "machine_not_online" });
         if (!machine.shipping?.enabled) return json(res, 409, { error: "shipping_not_enabled_on_machine" });
         const validation = validateShippingContract(body.contract);
         if (!validation.valid) return json(res, 400, { error: "shipping_contract_invalid", details: validation.errors });
         const runId = body.runId?.trim() || `ship-${crypto.randomUUID()}`;
-        if (store.getShippingRun(runId)) return json(res, 409, { error: "shipping_run_exists" });
+        if (await store.getShippingRun(runId)) return json(res, 409, { error: "shipping_run_exists" });
         const now = new Date().toISOString();
         let queued = {
           version: "shipping-run-remote/v1",
           runId,
+          ...(organizationId ? { organizationId, createdBy: principal.userId } : {}),
           machineId: machine.id,
           projectId: body.contract.project.id,
           releaseVersion: body.contract.release.version,
@@ -270,12 +290,12 @@ export async function createControlPlane() {
           deployedSha: null,
           events: []
         };
-        await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
+        queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
         try {
           sendCommand(machine.id, { type: "server.command", commandId: crypto.randomUUID(), sessionId: `shipping:${runId}`, action: "shipping.start", payload: { runId, contract: body.contract } });
         } catch (error) {
           queued = { ...queued, state: "FAILED", fatalError: error.message, updatedAt: new Date().toISOString() };
-          await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
+          queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
           return json(res, 409, { error: error.message, run: queued });
         }
         return json(res, 202, queued);
@@ -447,10 +467,10 @@ export async function createControlPlane() {
           ? {
               machines: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
               sessions: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
-              shippingRuns: store.listShippingRuns().filter((run) => clientPrincipal.organizationIds.includes(run.organizationId)),
+              shippingRuns: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
               workItems: (await Promise.all(clientPrincipal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
             }
-          : { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: store.listShippingRuns() };
+          : { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
         peer.send(encodeMessage({ type: "state.snapshot", ...state }));
         peer.on("close", () => clientSockets.delete(peer));
         return;
@@ -492,7 +512,10 @@ export async function createControlPlane() {
           }
           if (msg.type === "daemon.shipping.run") {
             const run = { ...msg.run, machineId, ...(daemonPrincipal.kind === "machine" ? { organizationId: daemonPrincipal.organizationId } : {}) };
-            await store.upsertShippingRun(run); broadcast({ type: "shipping.run.updated", run }); return;
+            const persistedRun = daemonPrincipal.kind === "machine"
+              ? await store.updateShippingRunFromMachine(run)
+              : await store.upsertShippingRun(run);
+            if (persistedRun) broadcast({ type: "shipping.run.updated", run: persistedRun }); return;
           }
         } catch (error) { console.warn("[api] invalid daemon message", error.message); }
       });
@@ -533,6 +556,7 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/organizations" || /^\/api\/organizations\/[^/]+\/invitations$/.test(pathname)
     || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
+    || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
     || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
 }
 function isMachineScopedRoute(method, pathname) {

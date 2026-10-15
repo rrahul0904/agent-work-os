@@ -71,11 +71,13 @@ Authentication endpoints:
 - `POST /api/organizations/:id/invitations` — `{ email, role }`; returns a one-time invitation token for out-of-band delivery.
 - `POST /api/organizations/:id/machine-credentials` — `{ machineId, name }`; returns a one-time machine token. Store it as `AGENT_WORK_OS_MACHINE_TOKEN` on that daemon.
 - `POST /api/organizations/:id/machine-credentials/:credentialId` — revoke a machine credential and disconnect its active daemon.
+- `GET /api/shipping/runs?organizationId=...` and `GET /api/shipping/runs/:runId?organizationId=...` — read only the organization's durable Shipping Runs.
+- `POST /api/shipping/runs` — `{ organizationId, machineId, contract, runId? }`; starts a validated run on an online machine in the same organization. Owner/Admin/Member can start runs; Viewer is read-only.
 - The daemon prints its stable machine ID at startup. Use that ID when issuing its credential; production daemon WebSockets authenticate in the first protocol message, not in the URL.
 - `POST /api/auth/accept-invitation` — `{ token }`; email must match the invitation.
 - `POST /api/auth/logout` — revokes the active server-side session.
 
-This is an incremental identity foundation, not a production SaaS launch claim. Email verification, password recovery, external IdP integration, invitation delivery, tenant-scoped Shipping Run APIs, and multi-instance event routing remain open. PostgreSQL stores tenant-owned Machines and Sessions in separate rows; session updates lock only the affected session row. Shipping Runs and compatibility data remain in the global state snapshot, which still lacks safe multi-instance write coordination. Run one API instance. Public registration still needs email verification and deployment-level bot/abuse controls before opening signups broadly.
+This is an incremental identity foundation, not a production SaaS launch claim. Email verification, password recovery, external IdP integration, invitation delivery, and multi-instance event routing remain open. PostgreSQL stores tenant-owned Machines, Sessions, and Shipping Runs in separate rows; updates serialize on their owning row. Legacy Shipping Runs without explicit matching organization and machine ownership remain in the compatibility snapshot. Run one API instance. Public registration still needs email verification and deployment-level bot/abuse controls before opening signups broadly.
 
 ## Canonical work items
 
@@ -89,7 +91,7 @@ Authenticated routes:
 - `POST /api/work-items/:id/transitions` — body includes `organizationId`, `commandId`, `expectedVersion`, and `to`.
 - `GET /api/work-items/:id/events?organizationId=...` — read ordered transition evidence.
 
-Local development uses the existing JSON state file as a compatibility adapter and retains the legacy bearer mode. Production requires PostgreSQL and first-party account sessions; the shared `AGENT_WORK_OS_TOKEN` is reserved for local daemon connections and does not authenticate customer REST requests. PostgreSQL stores normalized WorkItem rows/events, identity, organizations, memberships, invitations, auth sessions, tenant-owned Machines, and tenant-owned Agent Sessions. Shipping Runs and compatibility data remain in the global state snapshot.
+Local development uses the existing JSON state file as a compatibility adapter and retains the legacy bearer mode. Production requires PostgreSQL and first-party account sessions; the shared `AGENT_WORK_OS_TOKEN` is reserved for local daemon connections and does not authenticate customer REST requests. PostgreSQL stores normalized WorkItem rows/events, identity, organizations, memberships, invitations, auth sessions, tenant-owned Machines, Agent Sessions, and Shipping Runs. Unowned compatibility records remain in the global state snapshot.
 
 ## Repository map
 

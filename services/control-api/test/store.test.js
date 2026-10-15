@@ -72,7 +72,7 @@ test('Postgres compatibility keeps unowned local daemon sessions on the JSON sna
     assert.equal((await reloaded.getSession(sessionId)).messages.length, 3,
       'a shipping snapshot update cannot overwrite a concurrent legacy session path');
     assert.ok((await reloaded.getMachine(machineId)), 'legacy machine remains available after reload');
-    assert.equal(reloaded.listShippingRuns().find((run) => run.runId === runId).state, 'QUEUED',
+    assert.equal((await reloaded.listShippingRuns()).find((run) => run.runId === runId).state, 'QUEUED',
       'the latest serialized ShippingRun update wins regardless of its client timestamp');
   } finally {
     if (reloaded?.pool) await reloaded.pool.end();
