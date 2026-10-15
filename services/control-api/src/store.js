@@ -10,6 +10,7 @@ const STATE_KEY = "global";
 const MIGRATION_URL = new URL("../../../migrations/001_durable_state.sql", import.meta.url);
 const MACHINE_SESSION_MIGRATION_URL = new URL("../../../migrations/005_tenant_machines_sessions.sql", import.meta.url);
 const SHIPPING_RUN_MIGRATION_URL = new URL("../../../migrations/006_tenant_shipping_runs.sql", import.meta.url);
+const REALTIME_EVENT_MIGRATION_URL = new URL("../../../migrations/007_realtime_events.sql", import.meta.url);
 
 export class JsonStore {
   constructor(filePath) {
@@ -69,6 +70,10 @@ export class JsonStore {
 
   async initializeShippingRunStore() {
     if (this.pool) await this.pool.query(await readFile(SHIPPING_RUN_MIGRATION_URL, "utf8"));
+  }
+
+  async initializeRealtimeEventStore() {
+    if (this.pool) await this.pool.query(await readFile(REALTIME_EVENT_MIGRATION_URL, "utf8"));
   }
 
   listMachines() {

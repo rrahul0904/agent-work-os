@@ -17,7 +17,8 @@ const root = path.resolve(new URL("../../..", import.meta.url).pathname);
 
 test("production identity, machine credentials, scoped sessions, WorkItem tenancy, CSRF, and WebSocket scope", { skip: !databaseUrl }, async () => {
   const temp = await mkdtemp(path.join(os.tmpdir(), "agent-work-os-identity-"));
-  const port = 21500 + Math.floor(Math.random() * 10000);
+  const port = await getAvailablePort();
+  const replicaPort = await getAvailablePort();
   const origin = `http://127.0.0.1:${port}`;
   const emailTag = crypto.randomUUID();
   const ipBytes = crypto.randomBytes(2);
@@ -38,6 +39,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     AGENT_WORK_OS_STATE_PATH: path.join(temp, "state.json")
   };
   let child;
+  let replicaChild;
   const logs = [];
   const startServer = async () => {
     child = spawn(process.execPath, ["services/control-api/src/index.js"], { cwd: root, env: serverEnv, stdio: ["ignore", "pipe", "pipe"] });
@@ -50,6 +52,26 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
   const stopServer = async () => {
     if (!child || child.exitCode !== null) return;
     const current = child;
+    current.kill("SIGTERM");
+    await Promise.race([new Promise((resolve) => current.once("exit", resolve)), new Promise((resolve) => setTimeout(resolve, 2_000))]);
+    if (current.exitCode === null) current.kill("SIGKILL");
+  };
+  const startReplica = async () => {
+    replicaChild = spawn(process.execPath, ["services/control-api/src/index.js"], {
+      cwd: root,
+      env: { ...serverEnv, PORT: String(replicaPort), AGENT_WORK_OS_STATE_PATH: path.join(temp, "replica-state.json") },
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    replicaChild.stdout.on("data", (data) => logs.push(String(data)));
+    replicaChild.stderr.on("data", (data) => logs.push(String(data)));
+    replicaChild.on("exit", (code, signal) => logs.push(`[replica] exited code=${code} signal=${signal}\n`));
+    await waitFor(async () => {
+      try { return (await fetch(`http://127.0.0.1:${replicaPort}/readyz`)).ok; } catch { return false; }
+    }, 15_000, "replica API readiness");
+  };
+  const stopReplica = async () => {
+    if (!replicaChild || replicaChild.exitCode !== null) return;
+    const current = replicaChild;
     current.kill("SIGTERM");
     await Promise.race([new Promise((resolve) => current.once("exit", resolve)), new Promise((resolve) => setTimeout(resolve, 2_000))]);
     if (current.exitCode === null) current.kill("SIGKILL");
@@ -75,6 +97,14 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
   try {
     await waitForPostgres();
     await startServer();
+    const expiredEventKey = `expired-${crypto.randomUUID()}`;
+    await databaseInspector.query(
+      "INSERT INTO agent_work_os_realtime_events_v1 (event_key, origin_id, event, created_at) VALUES ($1, 'test', $2::jsonb, clock_timestamp() - INTERVAL '8 days')",
+      [expiredEventKey, JSON.stringify({ type: "test.expired" })]
+    );
+    await startReplica();
+    const expiredEvent = await databaseInspector.query("SELECT 1 FROM agent_work_os_realtime_events_v1 WHERE event_key = $1", [expiredEventKey]);
+    assert.equal(expiredEvent.rowCount, 0, "event fan-out storage prunes records older than seven days");
     assert.equal((await fetch(`${origin}/api/state`, { headers: { authorization: "Bearer daemon-only-test-secret" } })).status, 401,
       "the daemon credential must not authenticate customer REST requests");
     assert.equal((await fetch(`${origin}/api/state`, { headers: { origin: "https://evil.example" } })).status, 403,
@@ -103,6 +133,8 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
 
     const owner = await register(ownerEmail, "Alpha Org");
     assert.equal(owner.response.status, 201, JSON.stringify(owner.body));
+    const otherTenant = await register(`other-${emailTag}@example.test`, "Other Org");
+    assert.equal(otherTenant.response.status, 201, JSON.stringify(otherTenant.body));
     const ownerSetCookies = owner.response.headers.getSetCookie().join("\n");
     assert.match(ownerSetCookies, /awos_session=[0-9a-f]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=\d+; Secure/);
     assert.match(ownerSetCookies, /awos_csrf=[0-9a-f]{64}; Path=\/; SameSite=Strict; Max-Age=\d+; Secure/);
@@ -229,6 +261,37 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const secondRunEvent = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "SUCCEEDED");
       assert.ok(Date.parse(secondRunEvent.updatedAt) > Date.parse(firstRunEvent.updatedAt),
         `same-run updates keep database-assigned timestamps monotonic (${firstRunEvent.updatedAt} then ${secondRunEvent.updatedAt})`);
+      assert.equal(replicaChild.exitCode, null, `replica API exited unexpectedly: ${logs.join("")}`);
+      await waitFor(async () => (await fetch(`http://127.0.0.1:${replicaPort}/readyz`)).ok, 2_000, "replica still ready before fanout test");
+      const fanoutClient = await openClientSocket(replicaPort, owner.cookies);
+      const otherOrgFanoutClient = await openClientSocket(replicaPort, otherTenant.cookies);
+      try {
+        await readUntilMessage(fanoutClient, (message) => message.type === "state.snapshot");
+        await readUntilMessage(otherOrgFanoutClient, (message) => message.type === "state.snapshot");
+        machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: { ...secondRunEvent, state: "RUNNING" } });
+        const canonicalFanoutRun = await waitForShippingRun(api, owner, alphaId, alphaShippingRunId, "RUNNING");
+        const replicatedEvent = await readUntilMessage(fanoutClient, (message) =>
+          message.type === "shipping.run.updated" && message.run?.updatedAt === canonicalFanoutRun.updatedAt
+        );
+        assert.equal(replicatedEvent.type, "shipping.run.updated", "another API instance receives persisted live events");
+        assert.equal(replicatedEvent.run.runId, alphaShippingRunId);
+        assert.equal(replicatedEvent.run.organizationId, alphaId, "cross-instance fan-out retains tenant scope");
+        await assert.rejects(otherOrgFanoutClient.readMessage(250), /timed out/, "cross-instance fan-out does not disclose another organization's event");
+
+        await databaseInspector.query("DELETE FROM agent_work_os_realtime_events_v1");
+        await databaseInspector.query(
+          "INSERT INTO agent_work_os_realtime_events_v1 (event_key, origin_id, event) VALUES ($1, 'retention-test', $2::jsonb)",
+          [`retention-gap-${crypto.randomUUID()}`, JSON.stringify({ type: "test.retained_event_removed" })]
+        );
+        await databaseInspector.query("DELETE FROM agent_work_os_realtime_events_v1");
+        await databaseInspector.query("SELECT pg_notify('agent_work_os_realtime_events_v1', 'retention-gap-test')");
+        const recoveredSnapshot = await readUntilMessage(fanoutClient, (message) => message.type === "state.snapshot");
+        assert.ok(recoveredSnapshot.shippingRuns.some((run) => run.runId === alphaShippingRunId),
+          "a listener catching up after retention removes every event receives a fresh tenant-scoped snapshot");
+      } finally {
+        fanoutClient.close();
+        otherOrgFanoutClient.close();
+      }
       const forgedShippingRunId = `daemon-forged-${crypto.randomUUID()}`;
       machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: {
         runId: forgedShippingRunId, state: "SHIPPED", testedSha: "forged", deployedSha: "forged", events: [{ type: "release.succeeded" }]
@@ -349,13 +412,18 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     const invitationToken = invitationBody.invitation.token;
 
     const wsOwner = await openClientSocket(port, owner.cookies);
+    assert.equal(replicaChild.exitCode, null, `replica API exited unexpectedly: ${logs.join("")}`);
+    const wsReplica = await openClientSocket(replicaPort, owner.cookies);
     const wsGuest = await openClientSocket(port, guestResult.cookies);
     const wsViewer = await openClientSocket(port, viewerResult.cookies);
     try {
       const ownerSnapshot = await wsOwner.readMessage();
+      const replicaSnapshot = await wsReplica.readMessage();
       const guestSnapshot = await wsGuest.readMessage();
       const viewerSnapshot = await wsViewer.readMessage();
       assert.equal(ownerSnapshot.type, "state.snapshot");
+      assert.equal(replicaSnapshot.type, "state.snapshot");
+      assert.ok(replicaSnapshot.shippingRuns.some((run) => run.runId === alphaShippingRunId));
       assert.ok(ownerSnapshot.workItems.some((item) => item.id === workItemId));
       assert.ok(ownerSnapshot.machines.some((machine) => machine.id === machineId));
       assert.ok(ownerSnapshot.sessions.some((session) => session.id === alphaSessionId));
@@ -402,6 +470,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       await assert.rejects(wsGuest.readMessage(150), /timed out/, "unrelated org socket receives no WorkItem event");
     } finally {
       wsOwner.close();
+      wsReplica.close();
       wsGuest.close();
       wsViewer.close();
     }
@@ -439,12 +508,24 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     throw error;
   } finally {
     await stopServer();
+    await stopReplica();
     await databaseInspector.end();
   }
 });
 
 function getCookies(response) {
   return response.headers.getSetCookie().map((cookie) => cookie.split(";", 1)[0]).join("; ");
+}
+
+async function getAvailablePort() {
+  const server = net.createServer();
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = server.address();
+  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  return port;
 }
 
 async function openMachineSocket(port, machineCredential, machineId) {
@@ -561,6 +642,15 @@ function openClientSocket(port, cookies) {
     },
     close() { socket.destroy(); }
   };
+}
+
+async function readUntilMessage(socket, predicate, timeoutMs = 3_000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    const message = await socket.readMessage(end - Date.now());
+    if (predicate(message)) return message;
+  }
+  throw new Error("timed out waiting for matching websocket message");
 }
 
 async function waitFor(check, timeoutMs, label) {
