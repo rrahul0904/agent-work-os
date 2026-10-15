@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { assertKnownBlocker, assertShippingContract, digestShippingContract } from "./shipping-contract.js";
 import { appendShippingEvent, buildReleaseReceipt, createShippingRun } from "./shipping-receipts.js";
@@ -41,7 +42,8 @@ export class ShippingSupervisor {
     run.worktreePath = worktree.worktreePath;
     run = await this.event(run, { type: "worktree.ready", state: "WORKTREE_READY", evidence: { baseSha: worktree.baseSha, worktreePath: worktree.worktreePath } });
 
-    const runDir = path.join(worktree.worktreePath, ".agent-work-os", "shipping", runId);
+    const artifactRoot = this.store?.root ?? path.join(os.tmpdir(), "agent-work-os-shipping-artifacts");
+    const runDir = path.join(artifactRoot, "artifacts", runId);
     await fs.mkdir(runDir, { recursive: true });
     const contextFile = path.join(runDir, "context.json");
     const failureFile = path.join(runDir, "last-failure.json");

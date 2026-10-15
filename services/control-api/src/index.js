@@ -12,12 +12,14 @@ import { DomainValidationError, createWorkItem } from "../../../packages/domain/
 import { createWorkItemRepository } from "./work-item-store.js";
 import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
+import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
 const webRoot = path.join(projectRoot, "apps/web/public");
 const host = process.env.AGENT_WORK_OS_HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? process.env.AGENT_WORK_OS_PORT ?? 8787);
+const machineStaleAfterMs = Number(process.env.AGENT_WORK_OS_MACHINE_STALE_AFTER_MS ?? 45_000);
 const token = process.env.AGENT_WORK_OS_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "dev-token");
 const isProduction = process.env.NODE_ENV === "production";
 const sessionCookieName = "awos_session";
@@ -31,6 +33,7 @@ const CONTROL_PLANE_ACTOR_ID = "service_00000000-0000-4000-8000-000000000001";
 
 export async function createControlPlane() {
   if (isProduction && !process.env.DATABASE_URL) throw new Error("DATABASE_URL_required_in_production");
+  if (!Number.isFinite(machineStaleAfterMs) || machineStaleAfterMs < 1) throw new Error("AGENT_WORK_OS_MACHINE_STALE_AFTER_MS_must_be_positive");
   if (!["Strict", "Lax", "None"].includes(cookieSameSite)) throw new Error("AGENT_WORK_OS_COOKIE_SAME_SITE_must_be_Strict_Lax_or_None");
   if (cookieSameSite === "None" && !isProduction) throw new Error("cross_site_auth_cookies_require_production_secure_transport");
   const store = new JsonStore(statePath);
@@ -40,7 +43,7 @@ export async function createControlPlane() {
   if (isProduction && !store.pool) throw new Error("DATABASE_URL_required_in_production");
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
-  await store.initializeMachineSessionStore();
+  const staleMachinesAtStartup = await store.initializeMachineSessionStore(machineStaleAfterMs);
   await store.initializeShippingRunStore();
   await store.initializeRealtimeEventStore();
   const daemonSockets = new Map();
@@ -129,6 +132,30 @@ export async function createControlPlane() {
     }
   };
   const eventFanout = store.pool ? new PostgresEventFanout(store.pool, broadcastLocal, { onGap: resyncClients }) : null;
+  const commandRouter = store.pool ? new PostgresDaemonCommandRouter(store.pool, {
+    getConnectedMachineIds: () => [...daemonSockets.keys()],
+    getPeer: (machineId) => daemonSockets.get(machineId),
+    onAcknowledged: async (command, receipt) => {
+      if (receipt.ok) return;
+      const error = String(receipt.error ?? "daemon_command_failed").slice(0, 2_000);
+      if (command.action === "session.start") {
+        const session = await store.getSession(command.sessionId);
+        if (!session) return;
+        const updated = await store.addEvent(session.id, { kind: "status", status: "failed", error, commandId: command.commandId, at: new Date().toISOString() });
+        if (updated) broadcast({ type: "session.updated", session: updated });
+      } else if (command.action === "session.message" || command.action === "session.interrupt") {
+        const session = await store.getSession(command.sessionId);
+        if (!session) return;
+        const updated = await store.addEvent(session.id, { kind: "error", message: error, commandId: command.commandId, at: new Date().toISOString() });
+        if (updated) broadcast({ type: "session.updated", session: updated });
+      } else if (command.action === "shipping.start") {
+        const run = await store.getShippingRun(command.payload?.runId);
+        if (!run || run.state !== "QUEUED") return;
+        const updated = await store.upsertShippingRun({ ...run, state: "FAILED", fatalError: error, updatedAt: new Date().toISOString() });
+        if (updated) broadcast({ type: "shipping.run.updated", run: updated });
+      }
+    }
+  }) : null;
   const cursorCodec = eventFanout
     ? createOpaqueCursorCodec(process.env.AGENT_WORK_OS_EVENT_CURSOR_SECRET ?? process.env.DATABASE_URL)
     : null;
@@ -167,17 +194,26 @@ export async function createControlPlane() {
     }
   };
   await eventFanout?.start();
+  await commandRouter?.start();
   const broadcast = (event) => {
     if (eventFanout) {
       try { eventFanout.publish(event); }
       catch (error) { console.warn("[api] realtime event enqueue failed", error.message); }
     } else broadcastLocal(event);
   };
-  const sendCommand = (machineId, command) => {
+  for (const machine of staleMachinesAtStartup) broadcast({ type: "machine.updated", machine });
+  const sendCommand = async (machineId, command) => {
+    if (commandRouter) return commandRouter.enqueue(machineId, command);
     const peer = daemonSockets.get(machineId);
     if (!peer || peer.closed) throw new Error(`Machine ${machineId} is not connected`);
     peer.send(encodeMessage(command));
   };
+  const machineStaleTimer = setInterval(() => {
+    void store.markStaleMachines(machineStaleAfterMs).then((machines) => {
+      for (const machine of machines) broadcast({ type: "machine.updated", machine });
+    }).catch((error) => console.warn("[api] stale machine reconciliation failed", error.message));
+  }, Math.max(1_000, Math.min(15_000, machineStaleAfterMs / 3)));
+  machineStaleTimer.unref?.();
 
   const server = http.createServer(async (req, res) => {
     try {
@@ -415,7 +451,7 @@ export async function createControlPlane() {
         };
         queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
         try {
-          sendCommand(machine.id, { type: "server.command", commandId: crypto.randomUUID(), sessionId: `shipping:${runId}`, action: "shipping.start", payload: { runId, contract: body.contract } });
+          await sendCommand(machine.id, { type: "server.command", commandId: crypto.randomUUID(), sessionId: `shipping:${runId}`, action: "shipping.start", payload: { runId, contract: body.contract } });
         } catch (error) {
           queued = { ...queued, state: "FAILED", fatalError: error.message, updatedAt: new Date().toISOString() };
           queued = await store.upsertShippingRun(queued); broadcast({ type: "shipping.run.updated", run: queued });
@@ -438,7 +474,7 @@ export async function createControlPlane() {
         const now = new Date().toISOString();
         const session = { id: crypto.randomUUID(), machineId: body.machineId, cwd: body.cwd, agent: body.agent, model: body.model || undefined, status: "queued", createdAt: now, updatedAt: now, messages: [{ id: crypto.randomUUID(), role: "user", text: body.prompt.trim(), createdAt: now }], events: [] };
         await store.createSession(session); broadcast({ type: "session.updated", session });
-        try { sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
+        try { await sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
         catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
         return json(res, 201, session);
       }
@@ -449,14 +485,14 @@ export async function createControlPlane() {
         const body = await readJson(req); const text = body.text?.trim();
         if (!text) return json(res, 400, { error: "text is required" });
         const updated = await store.addMessage(session.id, { id: crypto.randomUUID(), role: "user", text, createdAt: new Date().toISOString() }); broadcast({ type: "session.updated", session: updated });
-        try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: text } }); }
+        try { await sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: text } }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, updated);
       }
       const interruptMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/interrupt$/);
       if (req.method === "POST" && interruptMatch && principal.kind === "legacy") {
         const session = await store.getSession(decodeURIComponent(interruptMatch[1])); if (!session) return json(res, 404, { error: "session_not_found" });
-        try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
+        try { await sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, { ok: true });
       }
@@ -492,7 +528,7 @@ export async function createControlPlane() {
         };
         await store.createSession(session);
         broadcast({ type: "session.updated", session });
-        try { sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
+        try { await sendCommand(body.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.start", payload: { cwd: body.cwd, agent: body.agent, model: body.model || undefined, prompt: body.prompt.trim() } }); }
         catch (error) { const failed = await store.setSessionStatus(session.id, "failed"); broadcast({ type: "session.updated", session: failed }); return json(res, 409, { error: error.message, session: failed }); }
         return json(res, 201, session);
       }
@@ -521,7 +557,7 @@ export async function createControlPlane() {
         if (!message) return json(res, 400, { error: "text is required" });
         const updated = await store.addMessage(session.id, { id: crypto.randomUUID(), role: "user", text: message, createdAt: new Date().toISOString() });
         broadcast({ type: "session.updated", session: updated });
-        try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: message } }); }
+        try { await sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.message", payload: { prompt: message } }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, updated);
       }
@@ -533,7 +569,7 @@ export async function createControlPlane() {
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
         const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
-        try { sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
+        try { await sendCommand(session.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: session.id, action: "session.interrupt" }); }
         catch (error) { return json(res, 409, { error: error.message }); }
         return json(res, 202, { ok: true });
       }
@@ -641,6 +677,10 @@ export async function createControlPlane() {
               : await store.upsertShippingRun(run);
             if (persistedRun) broadcast({ type: "shipping.run.updated", run: persistedRun }); return;
           }
+          if (msg.type === "daemon.command.ack") {
+            await commandRouter?.acknowledge(machineId, msg);
+            return;
+          }
         } catch (error) { console.warn("[api] invalid daemon message", error.message); }
         })();
         pendingDaemonMessageTasks.add(messageTask);
@@ -665,6 +705,8 @@ export async function createControlPlane() {
     listen: () => new Promise((resolve) => server.listen(port, host, resolve)),
     close: async () => {
       const serverClosed = new Promise((resolve) => server.close(resolve));
+      clearInterval(machineStaleTimer);
+      await commandRouter?.close();
       for (const peer of daemonSockets.values()) peer.close(1001, "server_shutdown");
       for (const peer of clientSockets.keys()) peer.close(1001, "server_shutdown");
       await serverClosed;

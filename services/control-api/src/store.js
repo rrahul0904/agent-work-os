@@ -57,15 +57,36 @@ export class JsonStore {
     await this.#persist();
   }
 
-  async initializeMachineSessionStore() {
-    if (!this.pool) return;
+  async initializeMachineSessionStore(staleAfterMs = 45_000) {
+    if (!this.pool) return [];
     await this.pool.query(await readFile(MACHINE_SESSION_MIGRATION_URL, "utf8"));
-    await this.pool.query(
-      `UPDATE agent_work_os_machines_v1
-       SET status = 'offline',
-           record = jsonb_set(jsonb_set(record, '{status}', '"offline"'::jsonb), '{lastSeenAt}', to_jsonb(CURRENT_TIMESTAMP::text), true),
-           updated_at = CURRENT_TIMESTAMP`
-    );
+    return this.markStaleMachines(staleAfterMs);
+  }
+
+  async markStaleMachines(staleAfterMs = 45_000) {
+    if (!Number.isFinite(staleAfterMs) || staleAfterMs < 1) throw new Error("machine_stale_timeout_invalid");
+    if (this.pool) {
+      const result = await this.pool.query(
+        `UPDATE agent_work_os_machines_v1
+         SET status = 'offline',
+             record = jsonb_set(record, '{status}', '"offline"'::jsonb),
+             updated_at = CURRENT_TIMESTAMP
+         WHERE status = 'online' AND updated_at < CURRENT_TIMESTAMP - ($1 * INTERVAL '1 millisecond')
+         RETURNING record`,
+        [staleAfterMs]
+      );
+      return result.rows.map((row) => row.record);
+    }
+    const stale = [];
+    for (const machine of Object.values(this.state.machines)) {
+      const lastSeen = Date.parse(machine.lastSeenAt ?? "");
+      if (machine.status === "online" && Number.isFinite(lastSeen) && Date.now() - lastSeen > staleAfterMs) {
+        machine.status = "offline";
+        stale.push(machine);
+      }
+    }
+    if (stale.length) await this.#persist();
+    return stale;
   }
 
   async initializeShippingRunStore() {
@@ -292,6 +313,14 @@ export class JsonStore {
     if (this.pool) {
       const normalized = await this.#updateSession(id, (session) => {
         session.events ??= [];
+        const existingCommandEvent = event.commandId && session.events.find((existing) => existing.commandId === event.commandId);
+        if (existingCommandEvent) {
+          if (existingCommandEvent.kind === "status" && session.status !== existingCommandEvent.status) {
+            session.status = existingCommandEvent.status;
+            session.updatedAt = new Date().toISOString();
+          }
+          return session;
+        }
         session.events.push(event);
         session.updatedAt = new Date().toISOString();
         if (event.kind === "status") session.status = event.status;
@@ -305,7 +334,17 @@ export class JsonStore {
       if (normalized) return normalized;
       if (!this.state.sessions[id] || this.state.sessions[id].organizationId) return null;
     }
-    const s = this.#session(id); s.events.push(event); s.updatedAt = new Date().toISOString();
+    const s = this.#session(id);
+    const existingCommandEvent = event.commandId && s.events.find((existing) => existing.commandId === event.commandId);
+    if (existingCommandEvent) {
+      if (existingCommandEvent.kind === "status" && s.status !== existingCommandEvent.status) {
+        s.status = existingCommandEvent.status;
+        s.updatedAt = new Date().toISOString();
+        await this.#persist();
+      }
+      return s;
+    }
+    s.events.push(event); s.updatedAt = new Date().toISOString();
     if (event.kind === "status") s.status = event.status;
     if (event.kind === "thread") s.nativeSessionId = event.nativeSessionId;
     if (event.kind === "text" && event.text?.trim()) s.messages.push({ id: crypto.randomUUID(), role: "assistant", text: event.text, createdAt: event.at });

@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { ShippingSupervisor } from "../src/shipping-supervisor.js";
 import { ShippingStore } from "../src/shipping-store.js";
+import { GitWorktreeManager, ShellRunner } from "../src/shipping-adapters.js";
 
 const SHA = "a".repeat(40);
 
@@ -48,12 +49,48 @@ test("happy path reaches SHIPPED only after exact SHA and UAT evidence", async (
   const store = new ShippingStore(path.join(root, "state"));
   const supervisor = new ShippingSupervisor({ runner, worktrees: new FakeWorktrees(path.join(root, "wt")), store });
   const run = await supervisor.run(contract(), { runId: "happy" });
-  assert.equal(run.state, "SHIPPED");
+  assert.equal(run.state, "SHIPPED", JSON.stringify(run));
   assert.equal(run.testedSha, SHA);
   assert.equal(run.deployedSha, SHA);
   assert.equal(run.releaseReceipt.goldenPath[0].status, "PASS");
   assert.ok(run.events.find((event) => event.type === "preview.uat"));
   assert.ok(run.events.find((event) => event.type === "production.uat"));
+});
+
+test("shipping evidence stays outside a worktree so cleanup succeeds after SHIPPED", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), "ship-cleanup-"));
+  const repo = path.join(root, "repo");
+  const stateRoot = path.join(root, "shipping-state");
+  const worktreeRoot = path.join(root, "worktrees");
+  await fs.mkdir(repo, { recursive: true });
+  const shell = new ShellRunner({ timeoutMs: 10_000 });
+  const runShell = async (command, cwd) => {
+    const result = await shell.run({ command }, { cwd });
+    assert.equal(result.ok, true, `${command}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  await runShell("git init -q && git config user.email test@example.com && git config user.name Test", repo);
+  await fs.writeFile(path.join(repo, "README.md"), "clean worktree\n");
+  await runShell("git add README.md && git commit -qm initial", repo);
+  const input = contract(repo);
+  input.worktree = { baseRef: "HEAD", root: worktreeRoot, cleanupOnSuccess: true };
+  input.builder = { command: { name: "build", command: "true" }, repairCommand: { name: "repair", command: "true" }, maxRepairAttempts: 0 };
+  input.verification = [{ name: "verification", command: "true" }];
+  input.preview = { required: false };
+  input.production = { required: false };
+  input.exactSha = { required: false, testedShaCommand: { name: "tested-sha", command: "git rev-parse HEAD" } };
+  const supervisor = new ShippingSupervisor({
+    runner: shell,
+    worktrees: new GitWorktreeManager({ runner: shell }),
+    store: new ShippingStore(stateRoot)
+  });
+
+  const run = await supervisor.run(input, { runId: "cleanup-evidence" });
+
+  assert.equal(run.state, "SHIPPED", JSON.stringify(run));
+  assert.ok(run.receiptFile.startsWith(stateRoot));
+  await fs.access(run.receiptFile);
+  await assert.rejects(() => fs.access(run.worktreePath));
 });
 
 test("failed verification triggers repair and re-verification", async () => {

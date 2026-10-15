@@ -6,6 +6,7 @@ import { createDefaultShippingSupervisor } from "../../../services/control-api/s
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
 import { CodexAdapter, EchoAdapter } from "./adapters.js";
 import { loadMachineId } from "./identity.js";
+import { createCommandReceiptCache } from "./command-receipts.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const machineCredential = process.env.AGENT_WORK_OS_MACHINE_TOKEN ?? "";
@@ -17,6 +18,7 @@ const machineId = await loadMachineId();
 const adapters = new Map();
 const nativeSessions = new Map();
 const shippingRuns = new Set();
+const commandReceipts = createCommandReceiptCache();
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter(); if (codex.capability()) adapters.set("codex", codex);
 
@@ -34,7 +36,10 @@ function connect() {
     ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, ...(machineCredential ? { machineCredential } : {}), machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
   });
-  ws.addEventListener("message", async (event) => {
+  let commandMessageChain = Promise.resolve();
+  ws.addEventListener("message", (event) => {
+    commandMessageChain = commandMessageChain.then(async () => {
+    let activeCommand = null;
     try {
       const command = decodeMessage(String(event.data));
       if (command.type === "server.machine.authenticated") {
@@ -42,7 +47,18 @@ function connect() {
         return;
       }
       if (command.type !== "server.command") return;
-      const ack = (ok, error) => ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ok, error }));
+      activeCommand = command;
+      const receipt = commandReceipts.begin(command.commandId);
+      if (receipt.kind === "in_flight") return;
+      if (receipt.kind === "duplicate") {
+        ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ...receipt.receipt }));
+        return;
+      }
+      const ack = (ok, error) => {
+        const result = { ok, ...(error ? { error } : {}) };
+        commandReceipts.complete(command.commandId, result);
+        ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ...result }));
+      };
       const emit = (agentEvent) => { if (agentEvent.kind === "thread") nativeSessions.set(command.sessionId, agentEvent.nativeSessionId); ws.send(encodeMessage({ type: "daemon.session.event", machineId, sessionId: command.sessionId, event: agentEvent })); };
       if (command.action === "shipping.start") {
         const p = command.payload;
@@ -61,7 +77,18 @@ function connect() {
         ack(true); void adapter.run({ sessionId: command.sessionId, cwd: state.cwd, prompt: command.payload?.prompt, model: state.model, nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
       if (command.action === "session.interrupt") { await adapter.interrupt(command.sessionId); emit({ kind: "status", status: "interrupted", at: new Date().toISOString() }); ack(true); }
-    } catch (error) { try { ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: decodeMessage(String(event.data)).commandId, ok: false, error: error.message })); } catch {} }
+      else throw new Error(`Unsupported server command action ${command.action}`);
+    } catch (error) {
+      console.warn(`[daemon] command handling error: ${error.message}`);
+      try {
+        if (activeCommand?.commandId) {
+          const receipt = { ok: false, error: error.message };
+          commandReceipts.complete(activeCommand.commandId, receipt);
+          ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: activeCommand.commandId, ...receipt }));
+        }
+      } catch {}
+    }
+    }).catch((error) => console.warn(`[daemon] command message handler failed: ${error.message}`));
   });
   ws.addEventListener("close", () => {
     if (heartbeat) { clearInterval(heartbeat); heartbeat = undefined; }
