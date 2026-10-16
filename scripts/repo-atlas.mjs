@@ -6,6 +6,7 @@ import process from "node:process";
 import { scanRepository, selectRepositoryContext } from "../packages/repo-intelligence/src/index.js";
 import { analyzeRepositoryTopology } from "../packages/repo-intelligence/src/topology.js";
 import { analyzeStructuralRisk } from "../packages/repo-intelligence/src/risk.js";
+import { analyzeGitSignals } from "../packages/repo-intelligence/src/git-signals.js";
 import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
 import { diffRepositoryMaps } from "../packages/repo-intelligence/src/diff.js";
 import { renderRepoAtlasHtml } from "../packages/repo-intelligence/src/report.js";
@@ -34,6 +35,12 @@ try {
     const topology = await analyzeRepositoryTopology(repoArg, map);
     const result = analyzeStructuralRisk(map, topology, { topN });
     await emit(result, getFlag(flags, "--output="));
+  } else if (command === "git") {
+    const map = await scanRepository(repoArg);
+    const result = await analyzeGitSignals(repoArg, map, {
+      maxCommits: parseIntegerFlag(flags, "--max-commits=", 500)
+    });
+    await emit(result, getFlag(flags, "--output="));
   } else if (command === "bundle") {
     const map = await scanRepository(repoArg);
     const topology = await analyzeRepositoryTopology(repoArg, map);
@@ -48,12 +55,16 @@ try {
       : null;
     const previousMapPath = getFlag(flags, "--previous-map=");
     const diff = previousMapPath ? diffRepositoryMaps(await readJson(previousMapPath), map) : null;
+    const gitSignals = hasFlag(flags, "--include-git")
+      ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
+      : null;
     const result = createRepositoryEvidenceBundle({
       repoMap: map,
       topology,
       risk,
       context,
       diff,
+      gitSignals,
       provenance: {
         repository: getFlag(flags, "--repository=") ?? undefined,
         ref: getFlag(flags, "--ref=") ?? undefined,
@@ -68,11 +79,15 @@ try {
     const risk = analyzeStructuralRisk(map, topology, { topN: parseIntegerFlag(flags, "--top=", 25) });
     const previousMapPath = getFlag(flags, "--previous-map=");
     const diff = previousMapPath ? diffRepositoryMaps(await readJson(previousMapPath), map) : null;
+    const gitSignals = hasFlag(flags, "--include-git")
+      ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
+      : null;
     const html = renderRepoAtlasHtml({
       repoMap: map,
       topology,
       risk,
       diff,
+      gitSignals,
       title: getFlag(flags, "--title=") ?? undefined
     });
     await emitHtml(html, getFlag(flags, "--output="), map.digest);
@@ -90,8 +105,9 @@ try {
       "  npm run repo:atlas -- topology <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
-      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
-      "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
+      "  npm run repo:atlas -- git <repo-path> [--max-commits=500] [--output=<file>]\n" +
+      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--git-max-commits=500] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
+      "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--include-git] [--git-max-commits=500] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
       "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
     process.exitCode = 2;
@@ -136,6 +152,10 @@ async function emitHtml(html, outputPath, repositoryDigest) {
 function getFlag(flags, prefix) {
   const match = flags.find((flag) => flag.startsWith(prefix));
   return match ? match.slice(prefix.length) : null;
+}
+
+function hasFlag(flags, name) {
+  return flags.includes(name);
 }
 
 function parseIntegerFlag(flags, prefix, fallback) {
