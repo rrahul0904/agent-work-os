@@ -16,6 +16,18 @@ function requirePositiveInteger(value, name) {
   return value;
 }
 
+function requireInteger(value, name) {
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${name} must be an integer`);
+  }
+  return value;
+}
+
+function payloadFromManifest(manifest) {
+  const { manifestSha256: _manifestSha256, ...payload } = manifest;
+  return payload;
+}
+
 export function createRetrieverDescriptor({
   retrieverId,
   version,
@@ -32,12 +44,16 @@ export function createRetrieverDescriptor({
     throw new TypeError(`distanceMetric must be one of: ${DISTANCE_METRICS.join(', ')}`);
   }
 
-  if (embeddingProvider !== null) requireString(embeddingProvider, 'embeddingProvider');
-  if (embeddingModel !== null) requireString(embeddingModel, 'embeddingModel');
-  if (dimensions !== null) requirePositiveInteger(dimensions, 'dimensions');
-
-  if ((embeddingProvider === null) !== (embeddingModel === null)) {
-    throw new Error('embeddingProvider and embeddingModel must be supplied together');
+  const embeddingValues = [embeddingProvider, embeddingModel, dimensions];
+  const hasEmbedding = embeddingValues.some((value) => value !== null);
+  const hasCompleteEmbedding = embeddingValues.every((value) => value !== null);
+  if (hasEmbedding && !hasCompleteEmbedding) {
+    throw new Error('embeddingProvider, embeddingModel, and dimensions must be supplied together');
+  }
+  if (hasCompleteEmbedding) {
+    requireString(embeddingProvider, 'embeddingProvider');
+    requireString(embeddingModel, 'embeddingModel');
+    requirePositiveInteger(dimensions, 'dimensions');
   }
 
   return Object.freeze({
@@ -75,14 +91,19 @@ export function createIndexManifest({
 
   const seen = new Set();
   const records = spans.map((span) => {
-    if (!span || span.workspaceId !== workspaceId) {
-      throw new Error('every indexed span must belong to the index workspace');
+    if (!span || span.contractVersion !== RESEARCH_CONTRACT_VERSION || span.workspaceId !== workspaceId) {
+      throw new Error('every indexed span must be a research evidence span in the index workspace');
     }
     requireString(span.spanId, 'span.spanId');
     requireString(span.documentId, 'span.documentId');
     requireString(span.sourceId, 'span.sourceId');
     requireString(span.revision, 'span.revision');
     requireString(span.quoteSha256, 'span.quoteSha256');
+    requireInteger(span.start, 'span.start');
+    requireInteger(span.end, 'span.end');
+    if (span.start < 0 || span.end <= span.start) {
+      throw new RangeError('indexed span offsets are invalid');
+    }
     if (seen.has(span.spanId)) throw new Error(`duplicate indexed span: ${span.spanId}`);
     seen.add(span.spanId);
 
@@ -113,9 +134,32 @@ export function createIndexManifest({
   });
 }
 
+export function validateIndexManifestIntegrity(manifest) {
+  if (!manifest || manifest.contractVersion !== RESEARCH_CONTRACT_VERSION) return false;
+  if (typeof manifest.manifestSha256 !== 'string' || manifest.manifestSha256.length !== 64) return false;
+  if (!manifest.retriever || !Array.isArray(manifest.records) || manifest.records.length === 0) return false;
+  try {
+    requireString(manifest.workspaceId, 'manifest.workspaceId');
+    requireString(manifest.indexId, 'manifest.indexId');
+    requireString(manifest.indexRevision, 'manifest.indexRevision');
+    for (const record of manifest.records) {
+      requireString(record?.spanId, 'manifest.record.spanId');
+      requireString(record?.documentId, 'manifest.record.documentId');
+      requireString(record?.sourceId, 'manifest.record.sourceId');
+      requireString(record?.revision, 'manifest.record.revision');
+      requireString(record?.quoteSha256, 'manifest.record.quoteSha256');
+      requireInteger(record?.start, 'manifest.record.start');
+      requireInteger(record?.end, 'manifest.record.end');
+    }
+  } catch {
+    return false;
+  }
+  return manifest.manifestSha256 === sha256(stableJson(payloadFromManifest(manifest)));
+}
+
 export function validateRetrievalAgainstIndex({ manifest, retrievalReceipt }) {
-  if (!manifest || manifest.contractVersion !== RESEARCH_CONTRACT_VERSION) {
-    throw new TypeError('manifest must be a research index manifest');
+  if (!validateIndexManifestIntegrity(manifest)) {
+    throw new TypeError('manifest must be an intact research index manifest');
   }
   if (!retrievalReceipt || retrievalReceipt.contractVersion !== RESEARCH_CONTRACT_VERSION) {
     throw new TypeError('retrievalReceipt must be a research retrieval receipt');
