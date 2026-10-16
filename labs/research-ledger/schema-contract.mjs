@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,5 +32,46 @@ const explicitVersions = [
 ];
 assert.ok(explicitVersions.length >= 2, 'expected both main and completion storage paths to be covered');
 assert.match(schema, /version < DB_VERSION/);
+
+function makeFakeRequest() {
+  const stores = new Set();
+  const listeners = new Map();
+  return {
+    result: {
+      objectStoreNames: { contains: name => stores.has(name) },
+      createObjectStore(name) { stores.add(name); return {}; }
+    },
+    addEventListener(type, listener) { listeners.set(type, listener); },
+    trigger(type) { listeners.get(type)?.(); },
+    stores
+  };
+}
+
+const calls = [];
+const fakeIndexedDB = {
+  open(name, version) {
+    const request = makeFakeRequest();
+    calls.push({ name, version, request });
+    return request;
+  }
+};
+
+vm.runInNewContext(schema, { indexedDB: fakeIndexedDB, Number, Object });
+
+const legacyRequest = fakeIndexedDB.open('research-ledger', 2);
+const legacyCall = calls.at(-1);
+assert.equal(legacyCall.name, 'research-ledger');
+assert.equal(legacyCall.version, 3, 'legacy v2 calls must be promoted to v3');
+legacyRequest.trigger('upgradeneeded');
+assert.deepEqual([...legacyRequest.stores].sort(), ['captures', 'documents', 'snapshots']);
+
+fakeIndexedDB.open('research-ledger', 4);
+assert.equal(calls.at(-1).version, 4, 'newer Research Ledger schemas must never be downgraded');
+
+fakeIndexedDB.open('other-product', 2);
+assert.equal(calls.at(-1).version, 2, 'unrelated IndexedDB databases must remain untouched');
+
+fakeIndexedDB.open('research-ledger');
+assert.equal(calls.at(-1).version, undefined, 'versionless opens must preserve native IndexedDB behavior');
 
 console.log('research-ledger browser storage schema contract passed');
