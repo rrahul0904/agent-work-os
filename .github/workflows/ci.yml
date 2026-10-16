@@ -32,3 +32,26 @@ jobs:
       - name: Research Ledger v0.3 local acceptance
         working-directory: labs/research-ledger
         run: npm run check
+      - name: REA intake 229 official Reddit info probe
+        continue-on-error: true
+        run: |
+          node --input-type=module <<'NODE'
+          const share = 'https://www.reddit.com/r/BestGitHubRepos/s/EjKhT844dz';
+          const endpoint = new URL('https://www.reddit.com/api/info.json');
+          endpoint.searchParams.set('url', share);
+          endpoint.searchParams.set('raw_json', '1');
+          const response = await fetch(endpoint, {
+            redirect: 'manual',
+            headers: {
+              'accept': 'application/json',
+              'user-agent': 'linux:agent-work-os:0.1 (read-only REA source identity; by u/rrahul0904)'
+            }
+          });
+          const text = await response.text();
+          console.log(JSON.stringify({
+            status: response.status,
+            location: response.headers.get('location'),
+            contentType: response.headers.get('content-type'),
+            bodyPreview: text.slice(0, 4000)
+          }, null, 2));
+          NODE
