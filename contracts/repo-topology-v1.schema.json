@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-topology-v1.schema.json",
+  "title": "Agent Work OS Repository Topology v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "modules", "externalPackages", "moduleEdges", "fileImports", "centrality", "metrics", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-topology/v1" },
+    "repositoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "modules": { "type": "array", "items": { "$ref": "#/$defs/module" } },
+    "externalPackages": { "type": "array", "items": { "$ref": "#/$defs/externalPackage" } },
+    "moduleEdges": { "type": "array", "items": { "$ref": "#/$defs/moduleEdge" } },
+    "fileImports": { "type": "array", "items": { "$ref": "#/$defs/fileImport" } },
+    "centrality": { "type": "array", "items": { "$ref": "#/$defs/centrality" } },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modules", "externalPackages", "moduleEdges", "fileImports", "crossModuleImports"],
+      "properties": {
+        "modules": { "type": "integer", "minimum": 1 },
+        "externalPackages": { "type": "integer", "minimum": 0 },
+        "moduleEdges": { "type": "integer", "minimum": 0 },
+        "fileImports": { "type": "integer", "minimum": 0 },
+        "crossModuleImports": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "module": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "path", "private"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^module:" },
+        "kind": { "const": "module" },
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "private": { "type": "boolean" }
+      }
+    },
+    "externalPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "name", "ecosystem"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^npm:" },
+        "kind": { "const": "external-package" },
+        "name": { "type": "string", "minLength": 1 },
+        "ecosystem": { "const": "npm" }
+      }
+    },
+    "moduleEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "from", "to", "dependencyType"],
+      "properties": {
+        "kind": { "enum": ["workspace-dependency", "external-dependency", "observed-import"] },
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "dependencyType": { "type": "string", "minLength": 1 }
+      }
+    },
+    "fileImport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "from", "to", "boundary"],
+      "properties": {
+        "kind": { "const": "file-import" },
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "boundary": { "enum": ["intra-module", "cross-module"] }
+      }
+    },
+    "centrality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["moduleId", "incoming", "outgoing", "degree"],
+      "properties": {
+        "moduleId": { "type": "string", "pattern": "^module:" },
+        "incoming": { "type": "integer", "minimum": 0 },
+        "outgoing": { "type": "integer", "minimum": 0 },
+        "degree": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
