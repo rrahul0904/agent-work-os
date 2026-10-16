@@ -41,6 +41,7 @@ test('Reddit share resolver emits an integrity-bound canonical post identity wit
   assert.equal(receipt.target.postId, '1abc234');
   assert.equal(receipt.target.subreddit, 'BestGitHubRepos');
   assert.equal(receipt.target.canonicalUrl, canonicalUrl);
+  assert.equal(receipt.requiredCapability, null);
   assert.equal(receipt.redirects.length, 1);
   assert.deepEqual(requests, [shareUrl]);
   assert.deepEqual(resolvedHosts, ['www.reddit.com']);
@@ -104,6 +105,20 @@ test('resolver rejects redirects that escape Reddit or downgrade transport', asy
   );
 });
 
+test('Reddit 401/403 becomes a signed access-context blocker instead of a retry loop', async () => {
+  for (const status of [401, 403]) {
+    const resolver = createSourceIdentityResolver({
+      resolveHost: async () => [{ address: '151.101.1.140' }],
+      fetchImpl: async () => new Response('denied', { status }),
+    });
+    const receipt = await resolver({ sourceId: `rea-${status}`, url: shareUrl, resolvedAt });
+    assert.equal(receipt.state, 'unresolved');
+    assert.equal(receipt.errorCode, 'ACCESS_CONTEXT_REQUIRED');
+    assert.equal(receipt.requiredCapability, 'reddit-authenticated-or-browser-read');
+    assert.equal(validateSourceIdentityResolutionReceipt(receipt), true);
+  }
+});
+
 test('non-canonical final URLs and redirect exhaustion produce signed unresolved receipts', async () => {
   const nonCanonical = createSourceIdentityResolver({
     resolveHost: async () => [{ address: '151.101.1.140' }],
@@ -112,6 +127,7 @@ test('non-canonical final URLs and redirect exhaustion produce signed unresolved
   const unresolved = await nonCanonical({ sourceId: 'rea-229', url: shareUrl, resolvedAt });
   assert.equal(unresolved.state, 'unresolved');
   assert.equal(unresolved.errorCode, 'NON_CANONICAL_FINAL_URL');
+  assert.equal(unresolved.requiredCapability, null);
   assert.equal(validateSourceIdentityResolutionReceipt(unresolved), true);
 
   let hop = 0;
@@ -126,6 +142,7 @@ test('non-canonical final URLs and redirect exhaustion produce signed unresolved
   const receipt = await exhausted({ sourceId: 'rea-229', url: shareUrl, resolvedAt });
   assert.equal(receipt.state, 'unresolved');
   assert.equal(receipt.errorCode, 'REDIRECT_LIMIT_EXCEEDED');
+  assert.equal(receipt.requiredCapability, null);
   assert.equal(receipt.redirects.length, 2);
   assert.equal(validateSourceIdentityResolutionReceipt(receipt), true);
 });
