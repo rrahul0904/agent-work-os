@@ -1,0 +1,53 @@
+{
+  "name": "Lead Qualification + Human Approval Starter",
+  "nodes": [
+    {
+      "parameters": {"httpMethod":"POST","path":"lead-qualification-starter","responseMode":"responseNode","options":{}},
+      "id": "f2-webhook",
+      "name": "Lead Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0,0]
+    },
+    {
+      "parameters": {"jsCode":"const body=$json.body??$json;\nconst lead=body.lead??body;\nconst rules={budget:Number(body.rules?.budget??2),urgency:Number(body.rules?.urgency??2),fit:Number(body.rules?.fit??2)};\nconst budget=Math.max(0,Math.min(5,Number(lead.budgetScore??0)));\nconst urgency=Math.max(0,Math.min(5,Number(lead.urgencyScore??0)));\nconst fit=Math.max(0,Math.min(5,Number(lead.fitScore??0)));\nconst score=budget*rules.budget+urgency*rules.urgency+fit*rules.fit;\nconst threshold=Math.max(1,Number(body.threshold??18));\nreturn [{json:{leadId:lead.id??null,score,threshold,qualified:score>=threshold,humanApprovalRequired:true,automatedOutreach:false,components:{budget,urgency,fit},lead}}];"},
+      "id": "f2-score",
+      "name": "Score Lead Deterministically",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [270,0]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict"},"conditions":[{"id":"qualified","leftValue":"={{ $json.qualified }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "f2-if",
+      "name": "Qualified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [530,0]
+    },
+    {
+      "parameters": {"respondWith":"json","responseBody":"={{ { status: 'REVIEW_REQUIRED', leadId: $json.leadId, score: $json.score, threshold: $json.threshold, components: $json.components, humanApprovalRequired: true, automatedOutreach: false } }}","options":{"responseCode":200}},
+      "id": "f2-review",
+      "name": "Return Human Review Queue",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [800,-100]
+    },
+    {
+      "parameters": {"respondWith":"json","responseBody":"={{ { status: 'NOT_QUALIFIED', leadId: $json.leadId, score: $json.score, threshold: $json.threshold, humanApprovalRequired: true, automatedOutreach: false } }}","options":{"responseCode":200}},
+      "id": "f2-no",
+      "name": "Return Not Qualified",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [800,120]
+    }
+  ],
+  "connections": {
+    "Lead Input":{"main":[[{"node":"Score Lead Deterministically","type":"main","index":0}]]},
+    "Score Lead Deterministically":{"main":[[{"node":"Qualified?","type":"main","index":0}]]},
+    "Qualified?":{"main":[[{"node":"Return Human Review Queue","type":"main","index":0}],[{"node":"Return Not Qualified","type":"main","index":0}]]}
+  },
+  "pinData":{},
+  "settings":{"executionOrder":"v1"},
+  "active":false
+}
