@@ -8,6 +8,7 @@ import { analyzeRepositoryTopology } from "../packages/repo-intelligence/src/top
 import { analyzeStructuralRisk } from "../packages/repo-intelligence/src/risk.js";
 import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
 import { diffRepositoryMaps } from "../packages/repo-intelligence/src/diff.js";
+import { renderRepoAtlasHtml } from "../packages/repo-intelligence/src/report.js";
 
 const [command, repoArg = ".", ...flags] = process.argv.slice(2);
 
@@ -61,6 +62,20 @@ try {
       }
     });
     await emit(result, getFlag(flags, "--output="));
+  } else if (command === "report") {
+    const map = await scanRepository(repoArg);
+    const topology = await analyzeRepositoryTopology(repoArg, map);
+    const risk = analyzeStructuralRisk(map, topology, { topN: parseIntegerFlag(flags, "--top=", 25) });
+    const previousMapPath = getFlag(flags, "--previous-map=");
+    const diff = previousMapPath ? diffRepositoryMaps(await readJson(previousMapPath), map) : null;
+    const html = renderRepoAtlasHtml({
+      repoMap: map,
+      topology,
+      risk,
+      diff,
+      title: getFlag(flags, "--title=") ?? undefined
+    });
+    await emitHtml(html, getFlag(flags, "--output="), map.digest);
   } else if (command === "diff") {
     const currentMapPath = flags.find((value) => !value.startsWith("--"));
     if (!currentMapPath) throw commandError("repo_atlas_diff_arguments_required", "diff requires <previous-map.json> <current-map.json>");
@@ -76,6 +91,7 @@ try {
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
       "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
+      "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
       "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
     process.exitCode = 2;
@@ -104,6 +120,17 @@ async function emit(value, outputPath) {
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, serialized, "utf8");
   process.stdout.write(`${JSON.stringify({ ok: true, output: target, schemaVersion: value.schemaVersion, digest: value.digest })}\n`);
+}
+
+async function emitHtml(html, outputPath, repositoryDigest) {
+  if (!outputPath) {
+    process.stdout.write(html);
+    return;
+  }
+  const target = path.resolve(outputPath);
+  await mkdir(path.dirname(target), { recursive: true });
+  await writeFile(target, html, "utf8");
+  process.stdout.write(`${JSON.stringify({ ok: true, output: target, schemaVersion: "repo-report/v1", repositoryDigest })}\n`);
 }
 
 function getFlag(flags, prefix) {
