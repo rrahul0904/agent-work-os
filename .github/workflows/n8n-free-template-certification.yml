@@ -1,0 +1,83 @@
+name: n8n free template certification
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/n8n-free-template-certification.yml'
+      - 'commercialization/n8n/free-templates/**'
+  push:
+    branches:
+      - commercialize/n8n-product-store
+    paths:
+      - '.github/workflows/n8n-free-template-certification.yml'
+      - 'commercialization/n8n/free-templates/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify-free-templates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Static safety and structure checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const files = [
+            'commercialization/n8n/free-templates/webhook-idempotency-dlq-starter/workflow.json',
+            'commercialization/n8n/free-templates/lead-qualification-human-approval/workflow.json',
+            'commercialization/n8n/free-templates/meeting-notes-task-extraction/workflow.json',
+          ];
+          const allowed = new Set([
+            'n8n-nodes-base.webhook',
+            'n8n-nodes-base.code',
+            'n8n-nodes-base.if',
+            'n8n-nodes-base.respondToWebhook',
+          ]);
+          for (const file of files) {
+            const w = JSON.parse(fs.readFileSync(file, 'utf8'));
+            if (!w.name || !Array.isArray(w.nodes) || w.nodes.length < 3) throw new Error(`${file}: invalid workflow structure`);
+            if (w.active !== false) throw new Error(`${file}: workflow must be inactive by default`);
+            const unexpected = w.nodes.filter(n => !allowed.has(n.type));
+            if (unexpected.length) throw new Error(`${file}: unexpected node types ${unexpected.map(n => n.type).join(', ')}`);
+            const credentialNodes = w.nodes.filter(n => n.credentials && Object.keys(n.credentials).length);
+            if (credentialNodes.length) throw new Error(`${file}: credential references are not allowed`);
+            const serialized = JSON.stringify(w).toLowerCase();
+            for (const token of ['sk-proj-', 'apikey=', 'authorization: bearer ', 'password":"']) {
+              if (serialized.includes(token)) throw new Error(`${file}: potential secret token detected`);
+            }
+            console.log(`${file}: STATIC_PASS (${w.nodes.length} nodes)`);
+          }
+          NODE
+
+      - name: Install pinned n8n
+        run: npm install --global --no-audit --no-fund n8n@2.43.5
+
+      - name: Verify pinned version
+        run: test "$(n8n --version)" = "2.43.5"
+
+      - name: Import all three templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            commercialization/n8n/free-templates/webhook-idempotency-dlq-starter/workflow.json
+            commercialization/n8n/free-templates/lead-qualification-human-approval/workflow.json
+            commercialization/n8n/free-templates/meeting-notes-task-extraction/workflow.json
+          )
+          i=0
+          for file in "${files[@]}"; do
+            i=$((i+1))
+            export N8N_USER_FOLDER="${RUNNER_TEMP}/n8n-free-${i}"
+            export N8N_ENCRYPTION_KEY="free-template-certification-${i}"
+            n8n import:workflow --input="${GITHUB_WORKSPACE}/${file}"
+            echo "${file}: IMPORT_PASS"
+          done
