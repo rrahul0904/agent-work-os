@@ -1,0 +1,9 @@
+{
+  "maxChangedFiles": 50,
+  "maxAddedLines": 1500,
+  "maxDeletedLines": 1500,
+  "maxTotalChangedLines": 2500,
+  "minAssertionDelta": 0,
+  "blockOnDeletedTestFile": true,
+  "blockOnBidiControl": true
+}
