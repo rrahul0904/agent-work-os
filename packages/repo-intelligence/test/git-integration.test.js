@@ -11,7 +11,7 @@ import { scanRepository } from "../src/index.js";
 import { analyzeRepositoryTopology } from "../src/topology.js";
 import { analyzeStructuralRisk } from "../src/risk.js";
 import { analyzeGitSignals } from "../src/git-signals.js";
-import { createRepositoryEvidenceBundle } from "../src/evidence.js";
+import { createRepositoryEvidenceBundle, RepoEvidenceError } from "../src/evidence.js";
 import { renderRepoAtlasHtml } from "../src/report.js";
 
 const execFileAsync = promisify(execFile);
@@ -90,7 +90,7 @@ test("Git signals flow through evidence and offline report without identity leak
   });
 });
 
-test("CLI exposes Git signals and can include them in bundles", async () => {
+test("CLI exposes Git signals and can include them in bundles and offline reports", async () => {
   await withFixture(async (root) => {
     await git(root, ["init", "-q"]);
     await put(root, "package.json", JSON.stringify({ name: "git-cli", private: true }));
@@ -113,5 +113,39 @@ test("CLI exposes Git signals and can include them in bundles", async () => {
     assert.ok(bundle.artifacts.some((artifact) => artifact.kind === "repo-git"));
     assert.equal(bundle.summary.gitCommitsAnalyzed, 1);
     assert.equal(JSON.stringify(bundle).includes("cli-secret@example.com"), false);
+
+    const report = (await invoke([
+      "report", root,
+      "--include-git",
+      "--git-max-commits=10",
+      "--title=Git CLI Report"
+    ])).stdout;
+    assert.ok(report.includes("Git CLI Report"));
+    assert.ok(report.includes("Git history signals"));
+    assert.ok(report.includes('"commitsAnalyzed":1'));
+    assert.equal(report.includes("cli-secret@example.com"), false);
+  });
+});
+
+test("evidence bundle rejects Git signals bound to another RepoMap", async () => {
+  await withFixture(async (root) => {
+    const one = path.join(root, "one");
+    const two = path.join(root, "two");
+    await mkdir(one, { recursive: true });
+    await mkdir(two, { recursive: true });
+
+    await git(one, ["init", "-q"]);
+    await put(one, "src/index.js", "export const one = true;\n");
+    await commit(one, "one", "2026-01-01T12:00:00Z", "one@example.com");
+    await put(two, "src/index.js", "export const two = true;\n");
+
+    const mapOne = await scanRepository(one);
+    const mapTwo = await scanRepository(two);
+    const gitSignals = await analyzeGitSignals(one, mapOne);
+
+    assert.throws(
+      () => createRepositoryEvidenceBundle({ repoMap: mapTwo, gitSignals }),
+      (error) => error instanceof RepoEvidenceError && error.code === "repo_git_signals_invalid_digest_mismatch"
+    );
   });
 });
