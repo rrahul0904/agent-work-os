@@ -22,6 +22,42 @@ function requireScore(value) {
   return value;
 }
 
+function payloadFromVerification(verification) {
+  const { receiptSha256: _receiptSha256, ...payload } = verification;
+  return payload;
+}
+
+export function validateClaimVerificationReceipt(verification) {
+  if (!verification || typeof verification !== 'object') return false;
+  if (verification.contractVersion !== RESEARCH_CONTRACT_VERSION) return false;
+  if (!CLAIM_VERIFICATION_STATUSES.includes(verification.status)) return false;
+  if (typeof verification.receiptSha256 !== 'string' || verification.receiptSha256.length !== 64) return false;
+  if (!Array.isArray(verification.evidence) || verification.evidence.length === 0) return false;
+  if (!Array.isArray(verification.reasonCodes)) return false;
+
+  try {
+    requireString(verification.workspaceId, 'verification.workspaceId');
+    requireString(verification.claimId, 'verification.claimId');
+    requireString(verification.claimTextSha256, 'verification.claimTextSha256');
+    requireString(verification.verifierId, 'verification.verifierId');
+    requireString(verification.verifierRevision, 'verification.verifierRevision');
+    requireString(verification.method, 'verification.method');
+    requireScore(verification.score);
+    for (const item of verification.evidence) {
+      requireString(item?.spanId, 'verification.evidence.spanId');
+      requireString(item?.documentId, 'verification.evidence.documentId');
+      requireString(item?.sourceId, 'verification.evidence.sourceId');
+      requireString(item?.revision, 'verification.evidence.revision');
+      requireString(item?.quoteSha256, 'verification.evidence.quoteSha256');
+    }
+    for (const code of verification.reasonCodes) requireString(code, 'verification.reasonCode');
+  } catch {
+    return false;
+  }
+
+  return verification.receiptSha256 === sha256(stableJson(payloadFromVerification(verification)));
+}
+
 export function createClaimVerification({
   workspaceId,
   claim,
@@ -97,21 +133,29 @@ export function evaluateSemanticGate({ workspaceId, claims, verifications }) {
   }
 
   const claimIds = new Set();
+  const claimTextHashes = new Map();
   for (const claim of claims) {
     if (!claim || claim.workspaceId !== workspaceId) {
       throw new Error('every claim must belong to the semantic-gate workspace');
     }
     if (claimIds.has(claim.claimId)) throw new Error(`duplicate claim id: ${claim.claimId}`);
     claimIds.add(claim.claimId);
+    claimTextHashes.set(claim.claimId, sha256(claim.text));
   }
 
   const byClaim = new Map();
   for (const verification of verifications) {
-    if (!verification || verification.workspaceId !== workspaceId) {
+    if (!validateClaimVerificationReceipt(verification)) {
+      throw new Error(`invalid claim verification receipt: ${verification?.claimId ?? 'unknown'}`);
+    }
+    if (verification.workspaceId !== workspaceId) {
       throw new Error('every verification must belong to the semantic-gate workspace');
     }
     if (!claimIds.has(verification.claimId)) {
       throw new Error(`verification references unknown claim: ${verification.claimId}`);
+    }
+    if (verification.claimTextSha256 !== claimTextHashes.get(verification.claimId)) {
+      throw new Error(`verification claim text drift detected: ${verification.claimId}`);
     }
     if (byClaim.has(verification.claimId)) {
       throw new Error(`duplicate verification for claim: ${verification.claimId}`);
