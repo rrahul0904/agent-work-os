@@ -83,10 +83,10 @@ export class TenantCapabilityRegistryRepository {
       (!filters.tag || entry.spec.metadata.tags.includes(filters.tag)) &&
       (!filters.sourceUrl || entry.sourceUrl === filters.sourceUrl)
     );
-    if (filters.allVersions === true) return sortEntries(filtered).map(structuredClone);
+    if (filters.allVersions === true) return sortEntries(filtered).map((entry) => structuredClone(entry));
     const latest = new Map();
     for (const entry of sortEntries(filtered)) if (!latest.has(entry.slug)) latest.set(entry.slug, entry);
-    return [...latest.values()].map(structuredClone);
+    return [...latest.values()].map((entry) => structuredClone(entry));
   }
 
   async #queryEntries(organizationId, filters = {}) {
@@ -96,7 +96,7 @@ export class TenantCapabilityRegistryRepository {
       return (state.organizations[organizationId] ?? [])
         .filter((entry) => !filters.capabilityId || entry.capabilityId === filters.capabilityId)
         .filter((entry) => !filters.slug || entry.slug === filters.slug)
-        .map(structuredClone);
+        .map((entry) => structuredClone(entry));
     }
 
     const values = [organizationId];
