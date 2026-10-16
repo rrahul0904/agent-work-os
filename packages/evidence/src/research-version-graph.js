@@ -48,18 +48,13 @@ function snapshotPayload(snapshot) {
   return payload;
 }
 
-function diffPayload(diff) {
-  const { diffSha256: _diffSha256, ...payload } = diff;
-  return payload;
-}
-
 function graphPayload(graph) {
   const { graphSha256: _graphSha256, ...payload } = graph;
   return payload;
 }
 
 function replayPayload(replay) {
-  const { replaySha256: _replaySha256, ...payload } = replay;
+  const { replaySha256: _replaySha256, diff: _diff, ...payload } = replay;
   return payload;
 }
 
