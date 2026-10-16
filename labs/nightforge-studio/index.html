@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#07090f" />
+  <meta name="description" content="NightForge — a clean-room autonomous browser game studio powered by Agent Work OS." />
+  <title>NightForge — Autonomous Game Studio</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="NightForge home"><span class="brand-mark">NF</span><span><strong>NIGHTFORGE</strong><small>agent game studio</small></span></a>
+    <nav><a href="#shift">Shift</a><a href="#games">Games</a><a href="#crew">Crew</a><a href="#evidence">Evidence</a></nav>
+    <span class="live"><i></i> AUTONOMOUS MODE</span>
+  </header>
+  <main id="top">
+    <section class="hero shell"><div class="eyebrow">CLEAN-ROOM RECONSTRUCTION · AGENT WORK OS</div><h1>Games built while<br><span>everyone sleeps.</span></h1><p class="hero-copy">A governed autonomous studio that researches a theme, pitches a mechanic, builds a playable browser game, iterates it, runs independent QA, and publishes only when the evidence passes.</p><div class="hero-actions"><a class="button primary" href="#shift">Run a studio shift</a><a class="button ghost" href="#games">Play shipped games</a></div><div class="principle"><span>THE BAR</span><q>If the mechanic is not fun before the theme is explained, it does not ship.</q></div></section>
+    <section class="metrics shell" aria-label="Studio metrics"><article><strong id="metricGames">1</strong><span>games shipped</span></article><article><strong id="metricPass">100%</strong><span>QA pass rate</span></article><article><strong id="metricIterations">4</strong><span>iterations / game</span></article><article><strong>0</strong><span>human build steps</span></article></section>
+    <section id="shift" class="section shell">
+      <div class="section-head"><div><span class="kicker">THE NIGHTLY SHIFT</span><h2>One trigger. Eight accountable agents.</h2></div><p>Every lane emits a receipt. Publishing is downstream of QA, never parallel to it.</p></div>
+      <div class="console-grid"><div class="pipeline-card panel"><div class="panel-title"><span>SHIFT CONTROL</span><span id="shiftState" class="state ready">READY</span></div><label class="field-label" for="themeInput">Theme or creative spark</label><div class="prompt-row"><input id="themeInput" maxlength="80" value="a storm-powered courier crossing a floating city" /><button id="runShift" class="button primary">RUN SHIFT</button></div><div class="preset-row"><button data-preset="an abandoned lunar carnival waking after midnight">Lunar carnival</button><button data-preset="a courier racing through a flooded neon megacity">Flooded city</button><button data-preset="tiny forest guardians defending a firefly reactor">Forest reactor</button></div><div id="pipeline" class="pipeline" aria-live="polite"></div></div>
+        <aside class="panel dossier"><div class="panel-title"><span>LIVE DOSSIER</span><span id="dossierHash">—</span></div><div id="dossierEmpty" class="empty-state">Run a shift to produce a new game dossier.</div><div id="dossier" class="dossier-body hidden"><span id="dossierGenre" class="pill"></span><h3 id="dossierTitle"></h3><p id="dossierPitch"></p><div class="scoreline"><span>mechanic</span><b id="scoreMechanic"></b></div><div class="scoreline"><span>controls</span><b id="scoreControls"></b></div><div class="scoreline"><span>stability</span><b id="scoreStability"></b></div><div class="scoreline"><span>mobile</span><b id="scoreMobile"></b></div><div class="gate" id="gateResult"></div></div></aside></div>
+    </section>
+    <section id="games" class="section shell"><div class="section-head"><div><span class="kicker">SHIPPED CATALOG</span><h2>Playable output, not mockups.</h2></div><p>Every card below opens a real canvas game with keyboard, pointer and touch controls.</p></div><div id="gamesGrid" class="games-grid"></div></section>
+    <section id="crew" class="section shell"><div class="section-head"><div><span class="kicker">AGENT ROSTER</span><h2>Small roles. Hard boundaries.</h2></div><p>No agent can approve its own output. The orchestrator moves evidence; it does not waive policy.</p></div><div id="crewGrid" class="crew-grid"></div></section>
+    <section id="evidence" class="section shell evidence-section"><div class="section-head"><div><span class="kicker">REA + EVIDENCE</span><h2>Reverse engineer capabilities, not somebody else’s code.</h2></div><p>Observed behaviors become capability hypotheses. REA supplies evidence; Agent Work OS remains the authority for policy, provenance, verification and shipping.</p></div><div class="evidence-grid"><div class="panel"><div class="panel-title"><span>CAPABILITY MAP</span><span>v0.1</span></div><div class="capability-list"><div><b>01</b><span>Source identity & evidence capture</span><em>PASS</em></div><div><b>02</b><span>Mechanic-first pitch generation</span><em>PASS</em></div><div><b>03</b><span>Deterministic game artifact builder</span><em>PASS</em></div><div><b>04</b><span>Multi-pass improvement gauntlet</span><em>PASS</em></div><div><b>05</b><span>Independent structural QA gate</span><em>PASS</em></div><div><b>06</b><span>Catalog + changelog publication</span><em>PASS</em></div><div><b>07</b><span>Live LLM code-generation provider</span><em class="pending">NEXT</em></div><div><b>08</b><span>Sandboxed worker/container execution</span><em class="pending">NEXT</em></div></div></div><div class="panel ledger-panel"><div class="panel-title"><span>SHIFT RECEIPTS</span><button id="clearLedger">CLEAR</button></div><div id="ledger" class="ledger"><div class="ledger-empty">Receipts will appear here after a shift.</div></div></div></div></section>
+  </main>
+  <footer class="shell footer"><span>NIGHTFORGE · clean-room autonomous game studio</span><span>Agent Work OS authority · REA evidence provider</span></footer>
+  <dialog id="gameDialog" class="game-dialog"><div class="game-frame"><div class="game-toolbar"><div><span id="gameGenre" class="pill"></span><strong id="gameTitle"></strong></div><button id="closeGame" aria-label="Close game">×</button></div><canvas id="gameCanvas" width="960" height="540"></canvas><div class="game-hud"><span id="gameStatus">Move: WASD / arrows / drag · collect cores · avoid hostiles</span><button id="restartGame">RESTART</button></div></div></dialog>
+  <script src="./app.js"></script>
+</body>
+</html>
