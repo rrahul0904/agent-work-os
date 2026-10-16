@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Research Ledger — Agent Work OS</title>
-  <meta name="description" content="Evidence-backed research memory with provenance, decision lineage, drift checks, and Agent Work OS handoff." />
+  <meta name="theme-color" content="#f4f1ea" />
+  <title>Research Ledger — Local-first research workspace</title>
+  <meta name="description" content="Local-first research workspace with document retrieval, citations, study outputs, decision lineage, evidence drift, and Agent Work OS handoff." />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
@@ -16,57 +17,93 @@
       <div class="brand"><span class="brand-mark">RL</span><div><strong>Research Ledger</strong><small>Agent Work OS</small></div></div>
       <button class="new-btn" id="newBrief">＋ New research</button>
       <nav>
-        <a class="active"><span>⌂</span> Research home</a>
-        <a><span>◫</span> Workspaces <b>3</b></a>
-        <a><span>↳</span> Captured inbox <b id="captureCount">0</b></a>
-        <a><span>◌</span> Evidence drift <b id="driftCount">2</b></a>
+        <a class="active" href="#workspace"><span>⌂</span> Research workspace</a>
+        <a href="#documents"><span>▤</span> Local sources <b id="documentCount">0</b></a>
+        <a href="#studio"><span>✦</span> Studio</a>
+        <a href="#lineageCard"><span>↳</span> Decision lineage</a>
+        <a href="#driftCard"><span>◌</span> Evidence drift <b id="driftCount">0</b></a>
       </nav>
-      <div class="sidebar-block"><label>WORKSPACES</label><button>Product research</button><button>Architecture</button><button>Competitive intel</button></div>
-      <div class="sidebar-footer"><span class="dot"></span> Clean-room build <small>v0.1</small></div>
+      <div class="sidebar-block">
+        <label>NOTEBOOK</label>
+        <input id="notebookName" class="notebook-name" value="Product research" maxlength="80" aria-label="Notebook name" />
+        <small id="storageStatus">Browser storage · calculating…</small>
+      </div>
+      <div class="sidebar-footer"><span class="dot"></span> Clean-room build <small>v0.2</small></div>
     </aside>
 
-    <main>
-      <header class="topbar"><div><span class="eyebrow">RESEARCH MEMORY</span><h1>Keep the why, not just the answer.</h1></div><div class="top-actions"><button id="exportJson">Export JSON</button><button class="primary" id="handoff">Send to Work OS ↗</button></div></header>
+    <main id="workspace">
+      <header class="topbar">
+        <div><span class="eyebrow">LOCAL-FIRST RESEARCH MEMORY</span><h1>Ask your sources. Keep the evidence trail.</h1></div>
+        <div class="top-actions"><button id="wipeData" class="danger-ghost">Wipe local data</button><button id="exportJson">Export JSON</button><button class="primary" id="handoff">Send to Work OS ↗</button></div>
+      </header>
+
+      <section class="privacy-banner card">
+        <div><strong>Documents stay in this browser.</strong><span>Indexing and retrieval happen locally. When live AI is configured, only the top retrieved passages are sent for generation.</span></div>
+        <span class="provider-pill" id="providerPill">Checking provider…</span>
+      </section>
+
+      <section class="documents card" id="documents">
+        <div class="section-head">
+          <div><span class="eyebrow">SOURCE NOTEBOOK</span><h2>Build a local evidence set</h2><p>Upload PDF, TXT, Markdown, CSV or HTML. Research Ledger extracts text, chunks it locally, and keeps exact passages available for citations.</p></div>
+          <div class="doc-actions"><input id="fileInput" type="file" multiple accept=".pdf,.txt,.md,.markdown,.csv,.html,.htm,text/plain,text/markdown,text/csv,text/html,application/pdf" hidden><button id="uploadDocs" class="primary">＋ Upload documents</button><button id="addUrl">＋ URL / pasted source</button></div>
+        </div>
+        <div class="capacity-row"><span id="capacityText">0 documents · 0 chunks</span><span class="local-badge">● Local index</span></div>
+        <div id="docList" class="doc-list"><div class="empty-state">No local documents yet. Upload a source or paste text to begin.</div></div>
+        <div class="local-search-row">
+          <input id="localSearch" placeholder="Search this notebook locally…" autocomplete="off" />
+          <button id="runLocalSearch">Search passages</button>
+        </div>
+        <div id="localResults" class="passage-results"></div>
+      </section>
 
       <section class="composer card">
         <div class="mode-row">
-          <div class="segmented" id="modes"><button data-mode="auto" class="selected">Auto</button><button data-mode="summary">Answer</button><button data-mode="compare">Compare</button><button data-mode="recommend">Recommend</button></div>
+          <div class="segmented" id="modes"><button data-mode="answer" class="selected">Ask sources</button><button data-mode="summary">Summary</button><button data-mode="compare">Compare</button><button data-mode="recommend">Recommend</button></div>
           <span class="privacy">◉ Explicit capture only</span>
         </div>
-        <textarea id="question" placeholder="What are you trying to find out or decide?">Should a 20-person engineering team choose Linear or Jira?</textarea>
+        <textarea id="question" placeholder="Ask a question about your sources, compare evidence, or make a decision…">What are the strongest conclusions in this evidence set, and what remains uncertain?</textarea>
         <div id="sourceTray" class="source-tray"></div>
         <div class="composer-actions">
-          <div class="capture-actions"><button id="addUrl">＋ URL</button><button id="pasteSource">▤ Paste source</button><button id="importChat">✦ AI chat</button><button id="importTabs">▣ Browser tabs</button></div>
-          <button class="create-btn" id="createBrief">Create evidence brief <span>↵</span></button>
+          <div class="capture-actions"><button id="pasteSource">▤ Paste source</button><button id="importChat">✦ AI chat</button><button id="importTabs">▣ Browser capture</button><button id="importRea">◇ REA bundle</button></div>
+          <button class="create-btn" id="createBrief">Run grounded research <span>⌘↵</span></button>
         </div>
       </section>
 
-      <section class="statusbar" id="statusbar"><span><i class="pulse"></i> Ready</span><span id="runMode">Demo-safe mode until API key is connected</span></section>
+      <section class="statusbar" id="statusbar"><span><i class="pulse"></i> Ready</span><span id="runMode">Local retrieval is ready</span></section>
 
       <section class="workspace-grid">
         <article class="brief card" id="briefPanel">
-          <div class="brief-head"><div><span class="badge" id="briefType">RECOMMENDATION BRIEF</span><span class="version">V1 · Primary</span></div><button class="ghost" id="copyLink">Copy snapshot</button></div>
-          <h2 id="briefTitle">Linear vs Jira for a 20-person engineering team</h2>
-          <div class="confidence-line"><span id="briefStatus">PROVISIONAL</span><div class="meter"><i id="confidenceMeter" style="width:72%"></i></div><strong id="confidenceText">72%</strong></div>
-          <div class="section"><label>Working conclusion</label><p class="lead" id="overview">The current evidence supports a provisional direction, but the decision should remain reversible until the highest-impact evidence gap is closed.</p></div>
-          <div class="section"><label>Claims & provenance</label><div id="claims"></div></div>
-          <div class="two-col"><div class="section gapbox"><label>Evidence gaps</label><ul id="gaps"></ul></div><div class="section nextbox"><label>Next research moves</label><ol id="nextMoves"></ol></div></div>
+          <div class="brief-head"><div><span class="badge" id="briefType">EVIDENCE BRIEF</span><span class="version" id="briefVersion">V1 · Primary</span></div><button class="ghost" id="copyLink">Copy snapshot</button></div>
+          <h2 id="briefTitle">Your next grounded answer appears here</h2>
+          <div class="confidence-line"><span id="briefStatus">LOCAL READY</span><div class="meter"><i id="confidenceMeter" style="width:0%"></i></div><strong id="confidenceText">—</strong></div>
+          <div class="section"><label>Working conclusion</label><p class="lead" id="overview">Upload sources or paste evidence, then ask a question. Every claim can point back to an exact passage.</p></div>
+          <div class="section"><label>Claims & source passages</label><div id="claims"><div class="empty-state small">No claims yet.</div></div></div>
+          <div class="two-col"><div class="section gapbox"><label>Evidence gaps</label><ul id="gaps"><li>Add sources to expose gaps rather than hide them.</li></ul></div><div class="section nextbox"><label>Next research moves</label><ol id="nextMoves"><li>Upload or capture the first source.</li></ol></div></div>
           <div class="brief-footer"><button id="recheck">↻ Recheck evidence</button><button id="newVariant">＋ Add evidence → new variant</button><button id="downloadMd">↓ Markdown</button></div>
         </article>
 
         <aside class="right-rail">
-          <div class="card rail-card"><div class="rail-title"><span>Sources</span><b id="sourceCount">3</b></div><div id="sources"></div></div>
-          <div class="card rail-card"><div class="rail-title"><span>Decision lineage</span><em>inspectable</em></div><div id="lineage" class="lineage"></div></div>
-          <div class="card rail-card drift-card"><div class="rail-title"><span>Evidence drift</span><em id="driftState">2 unchecked</em></div><p>Re-run source checks later and show which claims may have changed.</p><button id="runDrift">Run drift check</button></div>
+          <div class="card rail-card"><div class="rail-title"><span>Retrieved evidence</span><b id="sourceCount">0</b></div><div id="sources"><div class="empty-state small">Top matching passages will appear here.</div></div></div>
+          <div class="card rail-card" id="lineageCard"><div class="rail-title"><span>Decision lineage</span><em>inspectable</em></div><div id="lineage" class="lineage"><div class="lineage-step"><strong>Question</strong><p>Waiting for your first run.</p></div></div></div>
+          <div class="card rail-card drift-card" id="driftCard"><div class="rail-title"><span>Evidence drift</span><em id="driftState">not checked</em></div><p>Hash the current evidence set and compare it with the previous research snapshot.</p><button id="runDrift">Run local drift check</button></div>
         </aside>
       </section>
 
-      <section class="differentiators card"><span class="eyebrow">OURS ≠ A CLONE</span><h3>Research that can become executable work.</h3><div class="diff-grid"><div><b>01</b><strong>Decision lineage</strong><p>Keep prompts, evidence, claims, assumptions, variants and the exact reason a decision moved.</p></div><div><b>02</b><strong>Evidence drift</strong><p>Revisit old research when sources change, disappear, or contradict the saved conclusion.</p></div><div><b>03</b><strong>Work OS handoff</strong><p>Turn an accepted brief into a governed plan, tasks, diagrams, code work and verification receipts.</p></div></div></section>
+      <section class="studio card" id="studio">
+        <div class="section-head"><div><span class="eyebrow">STUDIO</span><h2>Turn one evidence set into useful outputs</h2><p>Generate a summary, FAQ, study guide or two-host podcast script while preserving citations to the retrieved passages.</p></div></div>
+        <div class="studio-actions"><button data-artifact="summary">Summary</button><button data-artifact="faq">FAQ</button><button data-artifact="study-guide">Study guide</button><button data-artifact="podcast">Two-host podcast</button></div>
+        <article id="artifactPanel" class="artifact-panel"><div class="empty-state">Choose an output after adding sources. Local fallback works without any AI key.</div></article>
+        <div class="podcast-controls" id="podcastControls" hidden><button id="playPodcast">▶ Play locally</button><button id="stopPodcast">■ Stop</button><span>Uses your browser’s speech synthesis; no audio is uploaded.</span></div>
+      </section>
+
+      <section class="differentiators card"><span class="eyebrow">OWNED DIRECTION</span><h3>Notebook-style research plus execution-grade provenance.</h3><div class="diff-grid"><div><b>01</b><strong>Local notebook + exact passages</strong><p>Documents, chunks, retrieval and persistence stay browser-side; citations resolve to the exact text used.</p></div><div><b>02</b><strong>Decision lineage + drift</strong><p>Keep the reasoning history and detect when the evidence set changes after a conclusion was saved.</p></div><div><b>03</b><strong>Work OS handoff</strong><p>Accepted research can become governed plans, tasks, diagrams, implementation work and verification receipts.</p></div></div></section>
     </main>
   </div>
 
-  <dialog id="sourceDialog"><form method="dialog"><h3 id="dialogTitle">Add source</h3><p id="dialogHelp">Add a URL or paste source material. Nothing is captured until you confirm.</p><input id="sourceTitle" placeholder="Source title (optional)"/><input id="sourceUrl" placeholder="https://…"/><textarea id="sourceText" placeholder="Paste text or notes (optional)"></textarea><div class="dialog-actions"><button value="cancel">Cancel</button><button value="default" id="confirmSource" class="primary">Add source</button></div></form></dialog>
+  <dialog id="sourceDialog"><form method="dialog"><h3 id="dialogTitle">Add source</h3><p id="dialogHelp">Add a URL or paste source material. Nothing is captured until you confirm.</p><input id="sourceTitle" placeholder="Source title (optional)"/><input id="sourceUrl" placeholder="https://…"/><textarea id="sourceText" placeholder="Paste text, notes, an AI chat, or an REA evidence bundle"></textarea><div class="dialog-actions"><button value="cancel">Cancel</button><button value="default" id="confirmSource" class="primary">Add source</button></div></form></dialog>
 
-  <script src="/app.js"></script>
+  <dialog id="passageDialog"><form method="dialog"><div class="passage-dialog-head"><div><span class="eyebrow" id="passageId">PASSAGE</span><h3 id="passageTitle">Source passage</h3></div><button value="cancel" class="icon-close" aria-label="Close">×</button></div><pre id="passageText"></pre><div class="dialog-actions"><button value="cancel">Close</button></div></form></dialog>
+
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
