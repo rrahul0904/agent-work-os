@@ -67,6 +67,7 @@ export function renderRepoAtlasHtml({ repoMap, topology = null, risk = null, dif
 
   const data = safeJson(model);
   const pageTitle = escapeHtml(model.title);
+  const staticGitSummary = renderStaticGitSummary(gitSignals);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -85,7 +86,7 @@ export function renderRepoAtlasHtml({ repoMap, topology = null, risk = null, dif
   <div class="two"><section class="panel"><h2>Languages</h2><div id="languages"></div></section><section class="panel"><h2>Largest directories</h2><div id="directories"></div></section></div>
   <section class="panel"><h2>Files</h2><input id="search" class="search" placeholder="Filter by file path or language"><div style="overflow:auto"><table><thead><tr><th>Path</th><th>Language</th><th>Lines</th><th>Est. tokens</th></tr></thead><tbody id="files"></tbody></table></div></section>
   <div class="two"><section class="panel"><h2>Module topology</h2><div id="topology"></div></section><section class="panel"><h2>Structural hotspots</h2><div class="section-note">Heuristic structural signal, not a defect or vulnerability probability.</div><div id="risk"></div></section></div>
-  <div class="two"><section class="panel"><h2>Git history signals</h2><div class="section-note">Contributor identities are opaque hashes; email addresses are not embedded.</div><div id="git"></div></section><section class="panel"><h2>Snapshot drift</h2><div id="diff"></div></section></div>
+  <div class="two"><section class="panel"><h2>Git history signals</h2><div class="section-note">Contributor identities are opaque hashes; email addresses are not embedded.</div>${staticGitSummary}<div id="git"></div></section><section class="panel"><h2>Snapshot drift</h2><div id="diff"></div></section></div>
 </div>
 <script id="repo-atlas-data" type="application/json">${data}</script>
 <script>
@@ -102,6 +103,12 @@ function bar(label,value,max,note){return '<div class="bar-row"><div class="bar-
 </script>
 </body>
 </html>`;
+}
+
+function renderStaticGitSummary(gitSignals) {
+  if (!gitSignals) return "";
+  const state = gitSignals.workingTreeDirty ? "dirty" : "clean";
+  return `<div class="muted" style="margin-bottom:8px">${gitSignals.commitsAnalyzed} commits analyzed · ${gitSignals.contributorCount} contributors · working tree ${state}</div>`;
 }
 
 function flattenDirectories(root) {
