@@ -37,6 +37,21 @@
       "updatedAt": "2026-10-14T05:30:00Z"
     },
     {
+      "id": "cad-agent-studio",
+      "name": "CAD Agent Studio",
+      "repository": "rrahul0904/agent-work-os",
+      "category": "product",
+      "status": "BUILDING",
+      "readiness": 35,
+      "value": 5,
+      "effort": 4,
+      "risk": 3,
+      "blockers": [],
+      "nextAction": "Pass repository CI for P1, then implement the pinned isolated CadQuery/OpenCascade worker, kernel measurements, STEP/STL export and adversarial execution tests.",
+      "evidence": ["Reddit target captured", "SOMA capability and GPL boundary documented", "clean-room architecture recorded", "deterministic P1 CAD core locally passes 6/6 tests", "browser parametric workbench implemented"],
+      "updatedAt": "2026-10-14T15:28:00Z"
+    },
+    {
       "id": "provenance-cleaner",
       "name": "Provenance Cleaner",
       "repository": "rrahul0904/provenance-cleaner",
