@@ -16,6 +16,13 @@ function requireInteger(value, name) {
   return value;
 }
 
+function requireFiniteNumber(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return value;
+}
+
 function stableValue(value) {
   if (Array.isArray(value)) return value.map(stableValue);
   if (value && typeof value === 'object') {
@@ -106,6 +113,52 @@ export function createClaim({ claimId, text, evidenceSpanIds, kind = 'assertion'
     kind,
     text: text.trim(),
     evidenceSpanIds: normalizedSpanIds,
+  });
+}
+
+export function createRetrievalReceipt({
+  workspaceId,
+  queryId,
+  query,
+  indexRevision,
+  retriever,
+  parameters = {},
+  results,
+}) {
+  requireString(workspaceId, 'workspaceId');
+  requireString(queryId, 'queryId');
+  requireString(query, 'query');
+  requireString(indexRevision, 'indexRevision');
+  requireString(retriever, 'retriever');
+  if (!parameters || typeof parameters !== 'object' || Array.isArray(parameters)) {
+    throw new TypeError('parameters must be an object');
+  }
+  if (!Array.isArray(results)) {
+    throw new TypeError('results must be an array');
+  }
+
+  const normalizedResults = results
+    .map((result, index) => ({
+      spanId: requireString(result?.spanId, `results[${index}].spanId`),
+      rank: result?.rank === undefined ? index + 1 : requireInteger(result.rank, `results[${index}].rank`),
+      score: requireFiniteNumber(result?.score, `results[${index}].score`),
+    }))
+    .sort((a, b) => a.rank - b.rank || a.spanId.localeCompare(b.spanId));
+
+  const payload = {
+    contractVersion: RESEARCH_CONTRACT_VERSION,
+    workspaceId,
+    queryId,
+    query: query.trim(),
+    indexRevision,
+    retriever,
+    parameters: stableValue(parameters),
+    results: normalizedResults,
+  };
+
+  return Object.freeze({
+    ...payload,
+    receiptSha256: sha256(stableJson(payload)),
   });
 }
 
