@@ -72,7 +72,7 @@ function fixture() {
   return { manifest, query, lexicalReceipt, vectorReceipt };
 }
 
-test('hybrid retrieval fuses component rankings and binds their receipt hashes', () => {
+test('hybrid retrieval rewards cross-retriever consensus and binds component receipt hashes', () => {
   const { manifest, query, lexicalReceipt, vectorReceipt } = fixture();
   const receipt = fuseHybridRetrieval({
     manifest,
@@ -86,7 +86,10 @@ test('hybrid retrieval fuses component rankings and binds their receipt hashes',
     topK: 3,
   });
 
-  assert.equal(receipt.results[0].spanId, 'span-semantic');
+  // Weighted RRF intentionally rewards evidence seen by both retrievers.
+  assert.equal(receipt.results[0].spanId, 'span-shared');
+  assert.equal(receipt.results[1].spanId, 'span-semantic');
+  assert.equal(receipt.results[2].spanId, 'span-lexical');
   assert.equal(receipt.parameters.algorithm, 'weighted-rrf');
   assert.equal(receipt.parameters.lexicalReceiptSha256, lexicalReceipt.receiptSha256);
   assert.equal(receipt.parameters.vectorReceiptSha256, vectorReceipt.receiptSha256);
