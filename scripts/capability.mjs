@@ -17,6 +17,8 @@ import {
   resolveCapabilityFromFileRegistry,
   rollbackInstall
 } from "../packages/capability-fabric/src/runtime.js";
+import { CodexAdapter } from "../runtime/daemon/src/adapters.js";
+import { verifyCapabilityWithAdapter } from "../runtime/daemon/src/capability-verifier.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -52,6 +54,39 @@ try {
     const plan = createInstallPlan(compilation, targetRoot);
     const installed = await applyInstallPlan(plan, { approveWrite: flags.includes("--approve-write") });
     print({ ok: true, action: "install", harnessId, capabilityId: spec.id, targetRoot: path.resolve(targetRoot), receiptPath: installed.receiptPath, receiptDigest: installed.receipt.receiptDigest });
+  } else if (command === "verify") {
+    const [specPath, harnessId, targetRoot, cwd, ...flags] = args;
+    requireArgs(command, [specPath, harnessId, targetRoot, cwd]);
+    if (harnessId !== "codex") throw new Error("capability_verification_harness_not_implemented");
+    const spec = assertCapabilitySpec(await readJson(specPath));
+    const receiptFlag = flagValue(flags, "--receipt=");
+    const receiptPath = receiptFlag
+      ? path.resolve(receiptFlag)
+      : path.join(path.resolve(targetRoot), ".agent-work-os", "verification-receipts", `${spec.metadata.slug}-${Date.now()}.json`);
+    const result = await verifyCapabilityWithAdapter({
+      spec,
+      harnessId,
+      adapter: new CodexAdapter(),
+      cwd,
+      targetRoot,
+      approveWrite: flags.includes("--approve-write"),
+      allowDegraded: flags.includes("--allow-degraded"),
+      retainInstallation: flags.includes("--retain-installation"),
+      receiptPath
+    });
+    print({
+      ok: result.receipt.passed,
+      action: "verify",
+      harnessId,
+      capabilityId: spec.id,
+      score: result.receipt.score,
+      qualityThreshold: result.receipt.qualityThreshold,
+      verificationMode: result.receipt.verificationMode,
+      receiptPath: result.receiptPath,
+      receiptDigest: result.receipt.receiptDigest,
+      retainedInstallation: !result.receipt.rollback.attempted
+    });
+    if (!result.receipt.passed) process.exitCode = 1;
   } else if (command === "rollback") {
     const [receiptPath, ...flags] = args;
     requireArgs(command, [receiptPath]);
@@ -76,7 +111,7 @@ try {
     requireArgs(command, [previousPath, currentPath]);
     print(createDriftRecord({ previous: assertCapabilitySpec(await readJson(previousPath)), current: assertCapabilitySpec(await readJson(currentPath)) }));
   } else {
-    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n");
+    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- verify <capability.json> codex <target-root> <cwd> --approve-write [--receipt=path] [--retain-installation] [--allow-degraded]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n");
     process.exitCode = 2;
   }
 } catch (error) {
@@ -97,6 +132,10 @@ function safeJoin(root, relative) {
 }
 function requireArgs(commandName, values) { if (values.some((value) => !value)) throw new Error(`${commandName}_arguments_required`); }
 function print(value) { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`); }
+function flagValue(flags, prefix) {
+  const flag = flags.find((entry) => entry.startsWith(prefix));
+  return flag ? flag.slice(prefix.length) : null;
+}
 function parseFilters(flags) {
   const result = {};
   for (const flag of flags) {

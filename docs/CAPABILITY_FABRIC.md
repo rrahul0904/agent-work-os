@@ -57,7 +57,7 @@ The runtime slice also provides a durable local JSON registry for development an
 
 ## Guarded installation and rollback
 
-Capability Fabric can now turn a compilation result into an install plan and apply it to an explicitly selected harness root. Runtime writes require explicit approval. The installer:
+Capability Fabric can turn a compilation result into an install plan and apply it to an explicitly selected harness root. Runtime writes require explicit approval. The installer:
 
 - normalizes and bounds every generated path beneath the target root,
 - refuses symbolic-link traversal,
@@ -71,9 +71,31 @@ Rollback is drift-safe by default: if a generated file changed after installatio
 
 The CLI exposes these flows through `npm run capability -- install ... --approve-write`, `rollback`, `registry-add`, `registry-list`, and `registry-resolve`.
 
-## Verification boundary
+## Runtime verification receipts
 
-The current implementation verifies schema behavior, deterministic compilation, durable local registry behavior, guarded install/rollback, symlink refusal, and drift-safe rollback. Real-harness execution remains a separate gate: generated artifacts should be executed against harness-specific smoke tasks and promoted only after a runtime execution receipt passes policy.
+The first real-harness verification mode is `artifact-context`. It verifies semantic preservation of the exact generated and installed artifact without depending on a harness marketplace implementation:
+
+1. validate the `CapabilitySpec`,
+2. compile it for the requested harness,
+3. install the generated files through the guarded installer,
+4. read the installed artifact bytes back from disk,
+5. execute each declared evaluation case through the existing Agent Work OS adapter,
+6. score normalized harness events against the declared expected result,
+7. compare the aggregate score with `qualityThreshold`,
+8. persist a runtime verification receipt, and
+9. roll the capability back unless the caller explicitly retains a passing installation.
+
+The receipt records the capability/source identity, compilation receipt digest, installation receipt digest, harness executable/version, installed artifact digests, per-case event-trace/output digests, score, threshold, pass/fail state, rollback evidence, and final receipt digest.
+
+Codex is the first wired real adapter because Agent Work OS already executes it through `codex exec --json` and normalizes text, tool, status, usage, log, and error events. Run the gate on a machine with Codex installed and authenticated:
+
+```bash
+npm run capability -- verify capability.json codex /tmp/capability-stage /path/to/workspace --approve-write
+```
+
+A failed threshold exits non-zero and rolls back automatically. Passing verification also rolls back by default so smoke tests do not silently mutate the harness environment. Use `--retain-installation` only when promotion is intentional. `--receipt=/path/to/receipt.json` selects an explicit receipt path.
+
+This mode proves compile/install/readback/execution/evaluation integrity. A stricter future `native-discovery` mode will additionally prove that each harness discovers and invokes the installed capability through its own marketplace/plugin/skill lookup path.
 
 ## Clean-room rule
 
