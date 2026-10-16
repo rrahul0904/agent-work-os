@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "npx vercel dev",
     "test": "node tests.mjs",
-    "check": "node --check v02.js && node --check api/research.js && npm test"
+    "check": "node --check app.js && node --check api/research.js && npm test",
+    "start": "node railway-server.mjs"
   },
-  "engines": { "node": ">=20" }
+  "engines": {
+    "node": ">=20"
+  }
 }

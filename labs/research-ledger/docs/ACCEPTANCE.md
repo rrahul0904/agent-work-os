@@ -2,10 +2,10 @@
 
 ## Functional
 - Upload TXT/MD/CSV/HTML and extract text locally.
-- Upload PDF through a browser PDF.js adapter and index extracted page text.
+- Upload PDF via browser PDF.js adapter and index extracted page text.
 - Persist documents in IndexedDB across reloads.
 - Run local passage search without an API key.
-- Ask a question and get an extractive grounded brief when live synthesis is unavailable.
+- Ask a question and get an extractive grounded brief when live AI is unavailable.
 - In live mode, send only the retrieved passages to `/api/research`.
 - Click evidence IDs to open exact passages.
 - Generate Summary, FAQ, Study Guide and Podcast transcript outputs.
@@ -15,14 +15,12 @@
 
 ## Safety / privacy
 - No passive browsing capture.
-- No whole-notebook provider upload by default.
+- No document upload to provider unless passage retrieval selects bounded text and live generation is configured.
 - No source HTML execution.
-- Server evidence count and passage character sizes are bounded.
-- Live model configuration requires both `OPENAI_API_KEY` and explicit `OPENAI_MODEL`.
+- Server evidence list and per-passage character counts are bounded.
 
 ## Release gate
 - `npm run check` passes.
-- Vercel preview reaches READY.
-- `GET /api/research` returns 200 and a `live` boolean without exposing secrets.
-- Preview home page returns 200 and contains local notebook controls.
-- Deployed source SHA is recorded.
+- Vercel preview is READY.
+- `GET /api/research` returns 200 with `live` boolean.
+- Preview home page returns 200.
