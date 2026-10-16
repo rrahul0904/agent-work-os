@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 
@@ -7,6 +7,7 @@ import { scanRepository, selectRepositoryContext } from "../packages/repo-intell
 import { analyzeRepositoryTopology } from "../packages/repo-intelligence/src/topology.js";
 import { analyzeStructuralRisk } from "../packages/repo-intelligence/src/risk.js";
 import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
+import { diffRepositoryMaps } from "../packages/repo-intelligence/src/diff.js";
 
 const [command, repoArg = ".", ...flags] = process.argv.slice(2);
 
@@ -57,6 +58,13 @@ try {
       }
     });
     await emit(result, getFlag(flags, "--output="));
+  } else if (command === "diff") {
+    const currentMapPath = flags.find((value) => !value.startsWith("--"));
+    if (!currentMapPath) throw commandError("repo_atlas_diff_arguments_required", "diff requires <previous-map.json> <current-map.json>");
+    const previous = await readJson(repoArg);
+    const current = await readJson(currentMapPath);
+    const result = diffRepositoryMaps(previous, current);
+    await emit(result, getFlag(flags, "--output="));
   } else {
     process.stderr.write(
       "Usage:\n" +
@@ -64,7 +72,8 @@ try {
       "  npm run repo:atlas -- topology <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
-      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n"
+      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
+      "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
     process.exitCode = 2;
   }
@@ -76,6 +85,10 @@ try {
     details: error.details ?? undefined
   })}\n`);
   process.exitCode = 1;
+}
+
+async function readJson(filename) {
+  return JSON.parse(await readFile(path.resolve(filename), "utf8"));
 }
 
 async function emit(value, outputPath) {
