@@ -7,6 +7,7 @@ import {
   createClaim,
   createEvidenceSpan,
   createResearchReceipt,
+  createRetrievalReceipt,
   validateResearchBundle,
 } from '../../../packages/evidence/src/research-workspace.js';
 
@@ -97,6 +98,47 @@ test('structural citations never masquerade as semantic verification', () => {
   const result = validateResearchBundle({ documents: [document], spans: [span], claims: [claim] });
   assert.equal(result.gate, 'STRUCTURAL_EVIDENCE_VALID');
   assert.equal(result.semanticVerificationRequired, true);
+});
+
+test('retrieval receipts bind query, index revision, retriever, parameters, ranks, and scores', () => {
+  const first = createRetrievalReceipt({
+    workspaceId: 'workspace-1',
+    queryId: 'query-1',
+    query: ' local evidence ',
+    indexRevision: 'index-sha-1',
+    retriever: 'hybrid-v0',
+    parameters: { topK: 2, alpha: 0.5 },
+    results: [
+      { spanId: 'span-b', rank: 2, score: 0.71 },
+      { spanId: 'span-a', rank: 1, score: 0.88 },
+    ],
+  });
+  const second = createRetrievalReceipt({
+    workspaceId: 'workspace-1',
+    queryId: 'query-1',
+    query: 'local evidence',
+    indexRevision: 'index-sha-1',
+    retriever: 'hybrid-v0',
+    parameters: { alpha: 0.5, topK: 2 },
+    results: [
+      { spanId: 'span-a', rank: 1, score: 0.88 },
+      { spanId: 'span-b', rank: 2, score: 0.71 },
+    ],
+  });
+
+  assert.deepEqual(first.results.map((result) => result.spanId), ['span-a', 'span-b']);
+  assert.equal(first.receiptSha256, second.receiptSha256);
+  assert.throws(
+    () => createRetrievalReceipt({
+      workspaceId: 'workspace-1',
+      queryId: 'query-2',
+      query: 'bad score',
+      indexRevision: 'index-sha-1',
+      retriever: 'hybrid-v0',
+      results: [{ spanId: 'span-a', score: Number.NaN }],
+    }),
+    /finite number/,
+  );
 });
 
 test('research receipts are deterministic regardless of input ordering', () => {
