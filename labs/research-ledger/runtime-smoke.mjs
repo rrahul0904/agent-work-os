@@ -43,14 +43,25 @@ try {
   assert.match(home.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
   assert.ok(homeText.indexOf('src="/db-schema.js"') < homeText.indexOf('src="/app.js"'), 'schema guard must load before app');
 
+  const shippedAssets = [
+    ['/styles.css', /text\/css/],
+    ['/completion.css', /text\/css/],
+    ['/db-schema.js', /javascript/],
+    ['/app.js', /javascript/],
+    ['/completion.js', /javascript/]
+  ];
+  for (const [path, contentType] of shippedAssets) {
+    const asset = await fetch(`${base}${path}`);
+    assert.equal(asset.status, 200, `${path} must be served by the portable runtime`);
+    assert.match(asset.headers.get('content-type') || '', contentType);
+  }
+
   const schema = await fetch(`${base}/db-schema.js`);
-  assert.equal(schema.status, 200);
-  assert.match(schema.headers.get('content-type') || '', /javascript/);
   assert.match(await schema.text(), /const DB_VERSION = 3/);
 
-  const app = await fetch(`${base}/app.js`);
-  assert.equal(app.status, 200);
-  assert.match(app.headers.get('content-type') || '', /javascript/);
+  const head = await fetch(`${base}/completion.css`, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
 
   const packageLeak = await fetch(`${base}/package.json`);
   assert.equal(packageLeak.status, 404);
