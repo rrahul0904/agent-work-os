@@ -4,7 +4,7 @@ import path from "node:path";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
-import { CodexAdapter, EchoAdapter } from "./adapters.js";
+import { ClaudeCodeAdapter, CodexAdapter, EchoAdapter } from "./adapters.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
@@ -26,6 +26,8 @@ if (codex.capability()) {
   adapters.set("codex", codex);
   adapters.set("capability-verify", new CapabilityVerificationAdapter(codex));
 }
+const claudeCode = new ClaudeCodeAdapter();
+if (claudeCode.capability()) adapters.set("claude-code", claudeCode);
 
 let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
 console.log(`[daemon] machine id ${machineId}`);
