@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const RESEARCH_CONTRACT_VERSION = 'research-evidence/v0.1';
+export const RESEARCH_CONTRACT_VERSION = 'research-evidence/v0.2';
 
 function requireString(value, name) {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -49,12 +49,14 @@ export function canonicalizeText(text) {
 }
 
 export function createCanonicalDocument({
+  workspaceId,
   documentId,
   sourceId,
   revision,
   mediaType = 'text/plain',
   text,
 }) {
+  requireString(workspaceId, 'workspaceId');
   requireString(documentId, 'documentId');
   requireString(sourceId, 'sourceId');
   requireString(revision, 'revision');
@@ -63,6 +65,7 @@ export function createCanonicalDocument({
   const canonicalText = canonicalizeText(text);
   return Object.freeze({
     contractVersion: RESEARCH_CONTRACT_VERSION,
+    workspaceId,
     documentId,
     sourceId,
     revision,
@@ -78,6 +81,7 @@ export function createEvidenceSpan({ spanId, document, start, end }) {
   if (!document || document.contractVersion !== RESEARCH_CONTRACT_VERSION) {
     throw new TypeError('document must be a canonical research document');
   }
+  requireString(document.workspaceId, 'document.workspaceId');
   requireInteger(start, 'start');
   requireInteger(end, 'end');
   if (start < 0 || end <= start || end > document.text.length) {
@@ -87,6 +91,7 @@ export function createEvidenceSpan({ spanId, document, start, end }) {
   const quote = document.text.slice(start, end);
   return Object.freeze({
     contractVersion: RESEARCH_CONTRACT_VERSION,
+    workspaceId: document.workspaceId,
     spanId,
     documentId: document.documentId,
     sourceId: document.sourceId,
@@ -98,7 +103,8 @@ export function createEvidenceSpan({ spanId, document, start, end }) {
   });
 }
 
-export function createClaim({ claimId, text, evidenceSpanIds, kind = 'assertion' }) {
+export function createClaim({ workspaceId, claimId, text, evidenceSpanIds, kind = 'assertion' }) {
+  requireString(workspaceId, 'workspaceId');
   requireString(claimId, 'claimId');
   requireString(text, 'text');
   requireString(kind, 'kind');
@@ -109,6 +115,7 @@ export function createClaim({ claimId, text, evidenceSpanIds, kind = 'assertion'
 
   return Object.freeze({
     contractVersion: RESEARCH_CONTRACT_VERSION,
+    workspaceId,
     claimId,
     kind,
     text: text.trim(),
@@ -173,7 +180,8 @@ function indexUnique(items, key, label) {
   return index;
 }
 
-export function validateResearchBundle({ documents, spans, claims }) {
+export function validateResearchBundle({ workspaceId, documents, spans, claims }) {
+  requireString(workspaceId, 'workspaceId');
   if (!Array.isArray(documents) || !Array.isArray(spans) || !Array.isArray(claims)) {
     throw new TypeError('documents, spans, and claims must be arrays');
   }
@@ -184,10 +192,24 @@ export function validateResearchBundle({ documents, spans, claims }) {
 
   const errors = [];
 
+  for (const document of documents) {
+    if (document.workspaceId !== workspaceId) {
+      errors.push({ code: 'WORKSPACE_MISMATCH', entity: 'document', id: document.documentId, workspaceId: document.workspaceId });
+    }
+  }
+
   for (const span of spans) {
+    if (span.workspaceId !== workspaceId) {
+      errors.push({ code: 'WORKSPACE_MISMATCH', entity: 'span', id: span.spanId, workspaceId: span.workspaceId });
+      continue;
+    }
     const document = documentsById.get(span.documentId);
     if (!document) {
       errors.push({ code: 'UNKNOWN_DOCUMENT', spanId: span.spanId, documentId: span.documentId });
+      continue;
+    }
+    if (document.workspaceId !== workspaceId) {
+      errors.push({ code: 'CROSS_WORKSPACE_DOCUMENT', spanId: span.spanId, documentId: span.documentId });
       continue;
     }
     if (span.sourceId !== document.sourceId || span.revision !== document.revision) {
@@ -201,9 +223,18 @@ export function validateResearchBundle({ documents, spans, claims }) {
   }
 
   for (const claim of claims) {
+    if (claim.workspaceId !== workspaceId) {
+      errors.push({ code: 'WORKSPACE_MISMATCH', entity: 'claim', id: claim.claimId, workspaceId: claim.workspaceId });
+      continue;
+    }
     for (const spanId of claim.evidenceSpanIds) {
-      if (!spansById.has(spanId)) {
+      const span = spansById.get(spanId);
+      if (!span) {
         errors.push({ code: 'UNKNOWN_EVIDENCE_SPAN', claimId: claim.claimId, spanId });
+        continue;
+      }
+      if (span.workspaceId !== workspaceId) {
+        errors.push({ code: 'CROSS_WORKSPACE_EVIDENCE', claimId: claim.claimId, spanId });
       }
     }
   }
@@ -211,6 +242,7 @@ export function validateResearchBundle({ documents, spans, claims }) {
   return Object.freeze({
     ok: errors.length === 0,
     gate: errors.length === 0 ? 'STRUCTURAL_EVIDENCE_VALID' : 'STRUCTURAL_EVIDENCE_INVALID',
+    workspaceId,
     semanticVerificationRequired: true,
     errors,
   });
@@ -220,7 +252,7 @@ export function createResearchReceipt({ workspaceId, documents, spans, claims, v
   requireString(workspaceId, 'workspaceId');
   requireString(verifier, 'verifier');
 
-  const validation = validateResearchBundle({ documents, spans, claims });
+  const validation = validateResearchBundle({ workspaceId, documents, spans, claims });
   if (!validation.ok) {
     throw new Error(`cannot create research receipt: ${validation.errors.map((error) => error.code).join(', ')}`);
   }
@@ -231,10 +263,17 @@ export function createResearchReceipt({ workspaceId, documents, spans, claims, v
     verifier,
     semanticVerificationRequired: true,
     documentRevisions: documents
-      .map(({ documentId, sourceId, revision, contentSha256 }) => ({ documentId, sourceId, revision, contentSha256 }))
+      .map(({ workspaceId: documentWorkspaceId, documentId, sourceId, revision, contentSha256 }) => ({
+        workspaceId: documentWorkspaceId,
+        documentId,
+        sourceId,
+        revision,
+        contentSha256,
+      }))
       .sort((a, b) => a.documentId.localeCompare(b.documentId)),
     spans: spans
-      .map(({ spanId, documentId, sourceId, revision, start, end, quoteSha256 }) => ({
+      .map(({ workspaceId: spanWorkspaceId, spanId, documentId, sourceId, revision, start, end, quoteSha256 }) => ({
+        workspaceId: spanWorkspaceId,
         spanId,
         documentId,
         sourceId,
@@ -245,7 +284,13 @@ export function createResearchReceipt({ workspaceId, documents, spans, claims, v
       }))
       .sort((a, b) => a.spanId.localeCompare(b.spanId)),
     claims: claims
-      .map(({ claimId, kind, text, evidenceSpanIds }) => ({ claimId, kind, text, evidenceSpanIds: [...evidenceSpanIds].sort() }))
+      .map(({ workspaceId: claimWorkspaceId, claimId, kind, text, evidenceSpanIds }) => ({
+        workspaceId: claimWorkspaceId,
+        claimId,
+        kind,
+        text,
+        evidenceSpanIds: [...evidenceSpanIds].sort(),
+      }))
       .sort((a, b) => a.claimId.localeCompare(b.claimId)),
   };
 
