@@ -170,7 +170,7 @@ export async function createControlPlane() {
   const replayClient = async (peer, state, cursor) => {
     try {
       const history = await eventFanout.replayAfter(cursor);
-      if (clientSockets.get(peer) === state) return;
+      if (clientSockets.get(peer) !== state) return;
       if (history.gap) return void resyncClient(peer, state);
       if (state.principal.kind === "user") {
         state.principal.organizationIds = (await identities.listMemberships(state.principal.userId)).map((membership) => membership.organizationId);
