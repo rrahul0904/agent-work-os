@@ -45,11 +45,14 @@ try {
           maxEstimatedTokens: parseIntegerFlag(flags, "--max-tokens=", 24_000)
         })
       : null;
+    const previousMapPath = getFlag(flags, "--previous-map=");
+    const diff = previousMapPath ? diffRepositoryMaps(await readJson(previousMapPath), map) : null;
     const result = createRepositoryEvidenceBundle({
       repoMap: map,
       topology,
       risk,
       context,
+      diff,
       provenance: {
         repository: getFlag(flags, "--repository=") ?? undefined,
         ref: getFlag(flags, "--ref=") ?? undefined,
@@ -72,7 +75,7 @@ try {
       "  npm run repo:atlas -- topology <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
-      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
+      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
       "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
     process.exitCode = 2;
