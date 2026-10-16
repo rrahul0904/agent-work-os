@@ -127,6 +127,46 @@ npm run capability -- verify-native capability.json codex /path/to/clean-workspa
 
 The command returns non-zero when the discovery marker is missing or the quality threshold fails and persists a verification receipt unless an explicit `--receipt=` path is supplied.
 
+## Remote verification through Agent Work OS
+
+A daemon that can execute Codex now advertises a built-in `capability-verify` agent alongside `codex`. This intentionally reuses the existing Agent Work OS session path instead of introducing a parallel control protocol. The existing session lifecycle already provides organization membership checks, machine ownership, online/capability checks, transactional daemon delivery in PostgreSQL, durable session events, interruption, and realtime updates.
+
+Start a verification session through the normal `POST /api/sessions` endpoint. The session `cwd` is the write boundary and the `prompt` is a JSON verification request:
+
+```json
+{
+  "organizationId": "org_...",
+  "machineId": "machine_...",
+  "cwd": "/path/to/verification-workspace",
+  "agent": "capability-verify",
+  "prompt": "{\"mode\":\"artifact-context\",\"harnessId\":\"codex\",\"approveWrite\":true,\"spec\":{...}}"
+}
+```
+
+For native discovery use `"mode":"native-discovery"` and a clean session workspace. Remote verification has stricter mutation rules than the local CLI:
+
+- `approveWrite` must be explicitly true,
+- artifact-context `targetRoot` must remain at or beneath the session `cwd`,
+- native-discovery operates exactly at the session `cwd`,
+- remote verification never retains or promotes an installation,
+- verification receipts are not written to arbitrary local paths, and
+- interruption propagates to any nested Codex verification execution.
+
+The daemon emits the full receipt as a structured session event:
+
+```json
+{
+  "kind": "tool",
+  "name": "capability.verification.receipt",
+  "phase": "completed",
+  "payload": { "verificationMode": "artifact-context", "passed": true, "receiptDigest": "sha256:..." }
+}
+```
+
+Because this travels through `daemon.session.event`, the current control plane persists the receipt inside the session event stream and broadcasts it through the existing realtime channel. A short text summary is emitted as well so the verification result is visible in the existing session UI without teaching the UI a new resource type first.
+
+This session-backed orchestration is the compatibility bridge. A later production slice can normalize capability verification runs into their own first-class PostgreSQL resource and API without changing the daemon verifier or receipt contract.
+
 ## Clean-room rule
 
 Capability Fabric may learn from public product behavior, open standards, public documentation, and appropriately licensed source material. It must retain provenance and license data and must not copy third-party branding, private APIs, protected assets, or external marketplace content without an explicit compatible license and a deliberate import decision.
