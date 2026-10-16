@@ -8,7 +8,7 @@ import sourceStatusHandler from './api/source-status.js';
 const port = Number(process.env.PORT || 3000);
 const root = dirname(fileURLToPath(import.meta.url));
 const maxBody = 256 * 1024;
-const staticFiles = new Set(['index.html', 'styles.css', 'db-schema.js', 'app.js', 'completion.js']);
+const staticFiles = new Set(['index.html', 'styles.css', 'completion.css', 'db-schema.js', 'app.js', 'completion.js']);
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
