@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Founder Control Room · Agent Work OS</title>
+  <style>
+    :root{--bg:#07110e;--panel:#0c1814;--panel2:#101f19;--line:#1d3a2e;--text:#ecfff6;--muted:#91b7a5;--mint:#68f0b0;--amber:#ffd27a;--red:#ff8c8c;--blue:#85b7ff;--shadow:0 18px 60px rgba(0,0,0,.28)}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at 15% -10%,#173829 0,transparent 30%),radial-gradient(circle at 90% 0,#122d2f 0,transparent 25%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    button,input,select,textarea{font:inherit} button{cursor:pointer}
+    .shell{max-width:1480px;margin:0 auto;padding:24px}.top{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:22px}.brand{display:flex;align-items:center;gap:12px}.mark{width:40px;height:40px;border-radius:14px;background:linear-gradient(135deg,var(--mint),#5fb1ff);display:grid;place-items:center;color:#04110c;font-weight:900;box-shadow:0 0 40px rgba(104,240,176,.22)}.eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mint)}h1,h2,h3,p{margin-top:0}.brand h1{font-size:20px;margin:0}.subtitle{color:var(--muted);font-size:12px}.status{display:flex;align-items:center;gap:9px;padding:9px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(12,24,20,.8)}.dot{width:8px;height:8px;border-radius:50%;background:var(--mint);box-shadow:0 0 14px var(--mint)}
+    .grid{display:grid;grid-template-columns:260px minmax(0,1fr) 350px;gap:16px}.panel{background:linear-gradient(180deg,rgba(16,31,25,.96),rgba(10,20,17,.96));border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}.nav{padding:14px;position:sticky;top:16px;height:fit-content}.nav button{width:100%;text-align:left;border:0;color:var(--muted);background:transparent;padding:11px 12px;border-radius:12px;margin:2px 0}.nav button.active,.nav button:hover{background:#163127;color:var(--text)}.nav .group{padding:16px 11px 6px;color:#5e8b77;font-size:10px;letter-spacing:.15em;text-transform:uppercase}
+    .main{padding:20px}.hero{padding:22px;border:1px solid #244c3b;border-radius:18px;background:linear-gradient(135deg,#10291f,#0c1e21);display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.hero h2{font-size:28px;line-height:1.15;margin-bottom:9px}.hero p{max-width:700px;color:var(--muted)}.pill{display:inline-flex;gap:7px;align-items:center;padding:6px 9px;border-radius:999px;background:#17372a;color:#b9f9d8;font-size:12px;margin:0 6px 6px 0}.primary,.ghost{border-radius:12px;padding:10px 14px;border:1px solid transparent}.primary{background:var(--mint);color:#04110c;font-weight:800}.primary:hover{filter:brightness(1.05)}.ghost{background:#0b1915;border-color:var(--line);color:var(--text)}.kpirow{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:14px 0}.kpi{padding:15px;border:1px solid var(--line);border-radius:16px;background:#0b1713}.kpi .n{font-size:24px;font-weight:800}.kpi .l{color:var(--muted);font-size:12px}.up{color:var(--mint)}
+    .section{margin-top:18px}.sectionHead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.sectionHead h3{margin:0;font-size:15px}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{padding:15px;border:1px solid var(--line);border-radius:16px;background:#0b1713}.card h4{margin:0 0 7px;font-size:14px}.muted{color:var(--muted)}.mini{font-size:12px}.bar{height:7px;border-radius:999px;background:#13251e;overflow:hidden;margin:10px 0}.bar>span{display:block;height:100%;background:linear-gradient(90deg,var(--mint),#67b8ff)}
+    .signal{display:grid;grid-template-columns:10px 1fr auto;gap:10px;align-items:flex-start;padding:12px 0;border-top:1px solid #173025}.signal:first-child{border-top:0}.score{width:9px;height:9px;border-radius:50%;margin-top:6px;background:var(--amber)}.score.hot{background:var(--mint)}.tag{font-size:10px;padding:4px 7px;border:1px solid var(--line);border-radius:999px;color:#b5d7c7}.right{padding:16px;position:sticky;top:16px;height:fit-content}.right h3{font-size:14px}.action{padding:12px;border:1px solid var(--line);border-radius:14px;margin:9px 0;background:#0a1712}.action strong{display:block;margin-bottom:4px}.gate{font-size:10px;color:var(--amber);text-transform:uppercase;letter-spacing:.09em}.gate.auto{color:var(--mint)}
+    .formgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.field label{display:block;color:var(--muted);font-size:11px;margin-bottom:5px}.field input,.field select,.field textarea{width:100%;background:#08130f;color:var(--text);border:1px solid var(--line);border-radius:11px;padding:10px;outline:none}.field input:focus,.field select:focus,.field textarea:focus{border-color:#4d9d79}.field.full{grid-column:1/-1}.plan{margin-top:12px}.step{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:10px 0;border-top:1px solid #173025}.step:first-child{border-top:0}.num{width:30px;height:30px;border-radius:10px;background:#153026;display:grid;place-items:center;color:var(--mint);font-weight:800}.receipt{padding:9px 0;border-top:1px solid #173025}.receipt code{font-size:10px;color:#7db79d}.empty{padding:18px;text-align:center;border:1px dashed #2b4e40;border-radius:14px;color:var(--muted)}
+    .toast{position:fixed;right:22px;bottom:22px;background:#dfffee;color:#062016;padding:12px 15px;border-radius:12px;font-weight:700;box-shadow:var(--shadow);transform:translateY(120px);opacity:0;transition:.25s}.toast.show{transform:none;opacity:1}.hidden{display:none!important}
+    @media(max-width:1080px){.grid{grid-template-columns:220px 1fr}.right{grid-column:1/-1;position:static}.kpirow{grid-template-columns:repeat(2,1fr)}}@media(max-width:760px){.shell{padding:12px}.top{align-items:flex-start}.grid{display:block}.nav{position:static;margin-bottom:12px;display:flex;gap:6px;overflow:auto}.nav .group{display:none}.nav button{width:auto;white-space:nowrap}.main,.right{margin-bottom:12px}.hero{display:block}.kpirow,.cards,.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}}
+  </style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand"><div class="mark">F</div><div><div class="eyebrow">Agent Work OS</div><h1>Founder Control Room</h1><div class="subtitle">A governed AI business partner for turning an idea into repeatable revenue.</div></div></div>
+    <div class="status"><span class="dot"></span><span>Local-first control plane online</span></div>
+  </header>
+
+  <div class="grid">
+    <nav class="panel nav" id="nav">
+      <div class="group">Operate</div>
+      <button class="active" data-view="overview">⌂ Overview</button>
+      <button data-view="launch">↗ Launch plan</button>
+      <button data-view="signals">⌁ Buyer signals</button>
+      <button data-view="council">◇ AI council</button>
+      <div class="group">System</div>
+      <button data-view="connections">⛓ Connections</button>
+      <button data-view="evidence">✓ Evidence ledger</button>
+    </nav>
+
+    <main class="panel main">
+      <section id="overview" class="view">
+        <div class="hero">
+          <div><div class="eyebrow">Your operating brief</div><h2>Build the smallest business that can produce the next proof.</h2><p>Founder Control Room turns strategy into governed work: choose an outcome, find demand, create a delivery system, and only then scale. Every external action has an approval policy and an evidence receipt.</p><div><span class="pill">Provider-agnostic</span><span class="pill">API / MCP ready</span><span class="pill">Human gates</span><span class="pill">Replayable receipts</span></div></div>
+          <button class="primary" onclick="showView('launch')">Build my plan</button>
+        </div>
+        <div class="kpirow">
+          <div class="kpi"><div class="n" id="readiness">42</div><div class="l">Launch readiness / 100</div></div>
+          <div class="kpi"><div class="n">12</div><div class="l">Signals scored this week</div></div>
+          <div class="kpi"><div class="n">4</div><div class="l">Approved capabilities</div></div>
+          <div class="kpi"><div class="n up" id="receiptsCount">0</div><div class="l">Verified action receipts</div></div>
+        </div>
+        <div class="section"><div class="sectionHead"><h3>What the system wants you to do next</h3><span class="tag">priority order</span></div><div class="cards" id="nextCards"></div></div>
+        <div class="section"><div class="sectionHead"><h3>Revenue operating lanes</h3></div><div class="cards">
+          <div class="card"><h4>1. Validate demand</h4><div class="muted mini">Prove a painful problem exists before building more.</div><div class="bar"><span style="width:72%"></span></div><span class="tag">72% evidence</span></div>
+          <div class="card"><h4>2. Package one outcome</h4><div class="muted mini">One buyer, one measurable result, one repeatable SOP.</div><div class="bar"><span style="width:46%"></span></div><span class="tag">46% complete</span></div>
+          <div class="card"><h4>3. Acquire customers</h4><div class="muted mini">Use signals and research to prioritize warm opportunities.</div><div class="bar"><span style="width:31%"></span></div><span class="tag">31% active</span></div>
+          <div class="card"><h4>4. Deliver + learn</h4><div class="muted mini">Capture delivery proof, margin, objections, and retention signals.</div><div class="bar"><span style="width:18%"></span></div><span class="tag">18% instrumented</span></div>
+        </div></div>
+      </section>
+
+      <section id="launch" class="view hidden">
+        <div class="sectionHead"><div><div class="eyebrow">Guided launch</div><h2 style="margin:4px 0">Turn your constraints into a focused operating plan</h2></div><span class="tag">saved locally</span></div>
+        <div class="card">
+          <div class="formgrid">
+            <div class="field"><label>Business model</label><select id="model"><option>AI automation agency</option><option>SaaS product</option><option>AI agent product</option><option>Affiliate business</option><option>Consulting / service</option></select></div>
+            <div class="field"><label>Cash budget</label><select id="budget"><option value="250">Under $250</option><option value="1000">$250–$1,000</option><option value="5000">$1,000–$5,000</option><option value="10000">$5,000+</option></select></div>
+            <div class="field"><label>Monthly revenue target</label><select id="target"><option value="5000">$5K</option><option value="10000">$10K</option><option value="25000">$25K</option><option value="50000">$50K+</option></select></div>
+            <div class="field"><label>Time available weekly</label><select id="hours"><option>5 hours</option><option selected>10 hours</option><option>20 hours</option><option>40+ hours</option></select></div>
+            <div class="field full"><label>Skills / unfair advantage</label><input id="skills" value="data engineering, AI agents, automation, enterprise architecture" /></div>
+            <div class="field full"><label>Customer / problem you are considering</label><textarea id="problem" rows="3">Small teams need AI systems that find opportunities, execute repeatable work, and show proof without becoming another black-box chatbot.</textarea></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px"><button class="primary" onclick="buildPlan()">Generate governed launch plan</button><button class="ghost" onclick="resetPlan()">Reset</button></div>
+        </div>
+        <div class="plan" id="plan"></div>
+      </section>
+
+      <section id="signals" class="view hidden">
+        <div class="sectionHead"><div><div class="eyebrow">Opportunity engine</div><h2 style="margin:4px 0">Buyer signals, ranked by evidence</h2></div><button class="primary" onclick="runAction('Research 25 matching prospects','AUTO')">Research more</button></div>
+        <div class="card" id="signalsList"></div>
+      </section>
+
+      <section id="council" class="view hidden">
+        <div class="sectionHead"><div><div class="eyebrow">Decision support</div><h2 style="margin:4px 0">One question, five operating perspectives</h2></div></div>
+        <div class="card"><div class="field full"><label>Decision</label><textarea id="decision" rows="3">Should we launch this as a standalone founder product first, or as a capability inside Agent Work OS?</textarea></div><button class="primary" style="margin-top:10px" onclick="runCouncil()">Ask the council</button></div>
+        <div class="cards section" id="councilResults"></div>
+      </section>
+
+      <section id="connections" class="view hidden">
+        <div class="sectionHead"><div><div class="eyebrow">Capability graph</div><h2 style="margin:4px 0">Connect once. Govern every action.</h2></div><span class="tag">no secrets in browser</span></div>
+        <div class="cards" id="connectionsGrid"></div>
+      </section>
+
+      <section id="evidence" class="view hidden">
+        <div class="sectionHead"><div><div class="eyebrow">Verification</div><h2 style="margin:4px 0">Append-only evidence ledger</h2></div><button class="ghost" onclick="clearReceipts()">Clear local demo receipts</button></div>
+        <div class="card" id="ledger"></div>
+      </section>
+    </main>
+
+    <aside class="panel right">
+      <div class="sectionHead"><h3>Governed action queue</h3><span class="tag">policy</span></div>
+      <div class="action"><span class="gate auto">Auto allowed</span><strong>Research target accounts</strong><span class="muted mini">Read-only public research. No external write.</span><button class="ghost" style="margin-top:8px" onclick="runAction('Research target accounts','AUTO')">Run</button></div>
+      <div class="action"><span class="gate">Approval required</span><strong>Draft 10 personalized outreaches</strong><span class="muted mini">Creates drafts only. Sending remains blocked.</span><button class="ghost" style="margin-top:8px" onclick="runAction('Draft 10 personalized outreaches','APPROVAL')">Approve + run</button></div>
+      <div class="action"><span class="gate">Connector required</span><strong>Send outreach</strong><span class="muted mini">Blocked until an email/outbound connector and policy scope are configured.</span><button class="ghost" style="margin-top:8px" onclick="notify('Blocked: connect an outbound provider first')">Review blocker</button></div>
+      <div class="section" style="margin-top:18px"><div class="sectionHead"><h3>REA boundary</h3></div><div class="muted mini">Observed products are evidence providers, not authorities. Agent Work OS owns policy, identity, authorization, receipts, replay, and shipping gates.</div></div>
+    </aside>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const $=id=>document.getElementById(id);
+const state=JSON.parse(localStorage.getItem('founder-control-room')||'{"receipts":[],"plan":null}');
+const next=[
+  {title:'Interview 5 target buyers',copy:'Collect exact pain language and existing workaround evidence before adding another feature.',tag:'Demand proof'},
+  {title:'Package one paid outcome',copy:'Define one deliverable with a measurable result, SLA, exclusions, price, and repeatable delivery path.',tag:'Offer'},
+  {title:'Create a 25-account signal list',copy:'Rank prospects by trigger evidence instead of blasting a generic cold list.',tag:'Acquisition'},
+  {title:'Instrument delivery receipts',copy:'For every customer outcome, record source input, action, result, cost, and verification evidence.',tag:'Trust'}
+];
+const signals=[
+  {hot:true,title:'Agency asking for autonomous lead follow-up',source:'Community post · 2h',why:'Explicit pain + active tool search',fit:94},
+  {hot:true,title:'Founder comparing AI receptionist vendors',source:'Public forum · 5h',why:'Buying intent + budget discussion',fit:89},
+  {hot:false,title:'Local services company hiring a CRM automation specialist',source:'Job board · 1d',why:'Budget proxy + defined workflow',fit:82},
+  {hot:false,title:'SaaS team discussing churn visibility gaps',source:'Community thread · 1d',why:'Problem signal; buyer not yet identified',fit:73}
+];
+const connections=[
+  ['GitHub','Code, issues, PRs','connected','Read + governed writes'],['Vercel','Deployments and runtime','connected','Preview + gated release'],['CRM','Contacts, deals, activities','planned','OAuth / MCP'],['Email','Drafts and outreach','planned','Draft by default; send gated'],['Calendar','Availability and bookings','planned','Scoped scheduling'],['Stripe','Revenue and subscriptions','planned','Read-first; money movement gated'],['Knowledge','Files, notes, transcripts','ready','Local-first + exportable'],['Browser research','Public web evidence','ready','Read-only by default']
+];
+function persist(){localStorage.setItem('founder-control-room',JSON.stringify(state))}
+function showView(id){document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));$(id).classList.remove('hidden');document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===id));window.scrollTo({top:0,behavior:'smooth'})}
+window.showView=showView;document.querySelectorAll('#nav button').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
+function render(){
+  $('nextCards').innerHTML=next.map(x=>`<div class="card"><h4>${x.title}</h4><div class="muted mini">${x.copy}</div><div style="margin-top:9px"><span class="tag">${x.tag}</span></div></div>`).join('');
+  $('signalsList').innerHTML=signals.map(s=>`<div class="signal"><span class="score ${s.hot?'hot':''}"></span><div><strong>${s.title}</strong><div class="muted mini">${s.source} · ${s.why}</div></div><span class="tag">${s.fit}% fit</span></div>`).join('');
+  $('connectionsGrid').innerHTML=connections.map(c=>`<div class="card"><h4>${c[0]}</h4><div class="muted mini">${c[1]}</div><div style="display:flex;justify-content:space-between;gap:8px;margin-top:11px"><span class="tag">${c[2]}</span><span class="mini muted">${c[3]}</span></div></div>`).join('');
+  renderPlan();renderLedger();$('receiptsCount').textContent=state.receipts.length;$('readiness').textContent=Math.min(95,42+(state.plan?18:0)+Math.min(35,state.receipts.length*5));
+}
+function buildPlan(){
+  const model=$('model').value,budget=$('budget').value,target=$('target').value,skills=$('skills').value,problem=$('problem').value;
+  state.plan={model,budget,target,skills,problem,createdAt:new Date().toISOString(),steps:[
+    {t:'Narrow the wedge',d:`Choose one buyer and one painful outcome for the ${model.toLowerCase()}. Use ${skills.split(',')[0]||'your strongest capability'} as the unfair advantage.`},
+    {t:'Collect demand evidence',d:'Run 5 buyer interviews and 25-account signal research. Do not count compliments; count existing spend, urgency, and concrete workaround pain.'},
+    {t:'Create the paid offer',d:`Design a first offer priced so a small number of customers can credibly approach the $${Number(target).toLocaleString()}/mo goal. Include scope, definition of done, exclusions, and margin target.`},
+    {t:'Build the delivery SOP',d:`Stay inside the $${Number(budget).toLocaleString()} initial cash constraint. Prefer reusable workflows, existing connectors, and human approval for irreversible actions.`},
+    {t:'Sell with evidence',d:'Prioritize trigger-based prospects, generate personalized drafts, track replies, and capture why each opportunity advanced or died.'},
+    {t:'Ship, measure, repeat',d:'Record delivery receipts, time-to-value, gross margin, objections, retention risk, and the next productized capability.'}
+  ]};persist();render();notify('Launch plan generated and saved locally');runAction('Generate launch plan','AUTO');
+}
+function resetPlan(){state.plan=null;persist();render();notify('Plan reset')}
+function renderPlan(){
+  const el=$('plan'); if(!state.plan){el.innerHTML='<div class="empty">Your generated plan will appear here. The system will optimize for proof before scale.</div>';return}
+  el.innerHTML=`<div class="card"><div class="sectionHead"><div><h3>${state.plan.model}</h3><div class="muted mini">Constraint-aware plan · target $${Number(state.plan.target).toLocaleString()}/mo</div></div><span class="tag">v1</span></div>${state.plan.steps.map((s,i)=>`<div class="step"><div class="num">${i+1}</div><div><strong>${s.t}</strong><div class="muted mini">${s.d}</div></div></div>`).join('')}</div>`;
+}
+function runCouncil(){
+  const q=$('decision').value.trim(); if(!q)return notify('Add a decision first');
+  const views=[
+    ['Strategist','Prefer the path that compounds reusable capabilities and distribution rather than creating a one-off app.'],
+    ['Sales skeptic','Do not broaden until one buyer segment will pay for one measurable outcome. Demand proof beats architecture elegance.'],
+    ['Operator','Keep the first release as a thin vertical slice with explicit inputs, handoffs, retry behavior, and a definition of done.'],
+    ['Risk officer','Separate read-only research from external writes. Gate outreach, money movement, publishing, and production deployment.'],
+    ['Customer advocate','Make the next recommended action obvious, explain why it matters, and show the evidence used to recommend it.']
+  ];
+  $('councilResults').innerHTML=views.map(v=>`<div class="card"><h4>${v[0]}</h4><div class="muted mini">${v[1]}</div></div>`).join('');runAction('Council decision: '+q.slice(0,54),'AUTO');notify('Council verdict created');
+}
+function runAction(action,policy){
+  const now=new Date(); const id='rcpt_'+now.getTime().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+  state.receipts.unshift({id,action,policy,status:'VERIFIED',at:now.toISOString(),actor:'founder-control-room',evidence:'ui-demo/local-state'});state.receipts=state.receipts.slice(0,30);persist();render();notify('Verified receipt created');
+}
+function renderLedger(){
+  const el=$('ledger'); if(!state.receipts.length){el.innerHTML='<div class="empty">No local demo receipts yet. Run a governed action to create one.</div>';return}
+  el.innerHTML=state.receipts.map(r=>`<div class="receipt"><strong>${r.action}</strong><div class="muted mini">${new Date(r.at).toLocaleString()} · ${r.policy} · ${r.status}</div><code>${r.id}</code></div>`).join('');
+}
+function clearReceipts(){state.receipts=[];persist();render();notify('Local demo receipts cleared')}
+function notify(msg){const t=$('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+window.buildPlan=buildPlan;window.resetPlan=resetPlan;window.runCouncil=runCouncil;window.runAction=runAction;window.clearReceipts=clearReceipts;window.notify=notify;render();
+</script>
+</body>
+</html>
