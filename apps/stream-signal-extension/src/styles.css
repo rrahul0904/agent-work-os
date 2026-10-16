@@ -1,0 +1,41 @@
+.ss-card {
+  position: relative;
+  transition: opacity 120ms ease, filter 120ms ease;
+}
+
+.stream-signal-overlay {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  right: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.stream-signal-chip,
+.stream-signal-confidence {
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.9);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font: 600 12px/1.2 system-ui, sans-serif;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.stream-signal-chip {
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.stream-signal-confidence {
+  opacity: 0.76;
+  font-weight: 500;
+}
+
+.stream-signal-faded {
+  opacity: 0.32;
+  filter: grayscale(0.5);
+}
