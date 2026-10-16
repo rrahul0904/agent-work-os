@@ -10,10 +10,11 @@ export class RepoEvidenceError extends Error {
   }
 }
 
-export function createRepositoryEvidenceBundle({ repoMap, topology = null, context = null, risk = null, diff = null, provenance = {} } = {}) {
+export function createRepositoryEvidenceBundle({ repoMap, topology = null, context = null, risk = null, diff = null, gitSignals = null, provenance = {} } = {}) {
   assertRepoMap(repoMap);
   if (topology) assertArtifact(topology, "repo-topology/v1", repoMap.digest, "repo_topology_invalid");
   if (context) assertArtifact(context, "repo-context-evidence/v1", repoMap.digest, "repo_context_invalid");
+  if (gitSignals) assertArtifact(gitSignals, "repo-git-signals/v1", repoMap.digest, "repo_git_signals_invalid");
   if (risk) {
     assertArtifact(risk, "repo-risk/v1", repoMap.digest, "repo_risk_invalid");
     if (topology && risk.topologyDigest !== topology.digest) {
@@ -34,6 +35,7 @@ export function createRepositoryEvidenceBundle({ repoMap, topology = null, conte
   if (context) artifactRefs.push(artifactRef("repo-context", context));
   if (risk) artifactRefs.push(artifactRef("repo-risk", risk));
   if (diff) artifactRefs.push(artifactRef("repo-diff", diff));
+  if (gitSignals) artifactRefs.push(artifactRef("repo-git", gitSignals));
 
   const payload = {
     schemaVersion: REPO_EVIDENCE_BUNDLE_SCHEMA,
@@ -44,7 +46,7 @@ export function createRepositoryEvidenceBundle({ repoMap, topology = null, conte
     }),
     provenance: normalizeProvenance(provenance),
     artifacts: Object.freeze(artifactRefs),
-    claims: Object.freeze(buildClaims(repoMap, topology, context, risk, diff)),
+    claims: Object.freeze(buildClaims(repoMap, topology, context, risk, diff, gitSignals)),
     selectedPaths: Object.freeze(context?.selected?.map((item) => item.path) ?? []),
     summary: Object.freeze({
       files: repoMap.metrics.files,
@@ -54,14 +56,17 @@ export function createRepositoryEvidenceBundle({ repoMap, topology = null, conte
       dependencyEdges: topology?.metrics?.moduleEdges ?? null,
       contextFiles: context?.selected?.length ?? null,
       highRiskFiles: risk?.metrics?.highRiskFiles ?? null,
-      affectedFiles: diff?.summary?.affectedFiles ?? null
+      affectedFiles: diff?.summary?.affectedFiles ?? null,
+      gitCommitsAnalyzed: gitSignals?.commitsAnalyzed ?? null,
+      trackedFiles: gitSignals?.metrics?.trackedFiles ?? null,
+      gitWorkingTreeDirty: gitSignals?.workingTreeDirty ?? null
     })
   };
 
   return Object.freeze({ ...payload, digest: canonicalDigest(payload) });
 }
 
-function buildClaims(repoMap, topology, context, risk, diff) {
+function buildClaims(repoMap, topology, context, risk, diff, gitSignals) {
   const claims = [
     Object.freeze({
       type: "repository-shape",
@@ -95,6 +100,13 @@ function buildClaims(repoMap, topology, context, risk, diff) {
       type: "repository-drift",
       text: `Repository drift affects ${diff.summary.affectedFiles} files: ${diff.summary.addedFiles} added, ${diff.summary.removedFiles} removed, ${diff.summary.changedFiles} changed.`,
       artifactDigest: diff.digest
+    }));
+  }
+  if (gitSignals) {
+    claims.push(Object.freeze({
+      type: "repository-git-history",
+      text: `Git analysis inspected ${gitSignals.commitsAnalyzed} commits across ${gitSignals.metrics.trackedFiles} tracked recognized files; working tree dirty=${gitSignals.workingTreeDirty}.`,
+      artifactDigest: gitSignals.digest
     }));
   }
   return claims;
