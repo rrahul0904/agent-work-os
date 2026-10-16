@@ -9,6 +9,7 @@ import {
   createDriftRecord,
   importReaCapability
 } from "../packages/capability-fabric/src/index.js";
+import { assessCapabilityDrift, createReverificationPlan } from "../packages/capability-fabric/src/drift.js";
 import {
   addCapabilityToFileRegistry,
   applyInstallPlan,
@@ -141,8 +142,25 @@ try {
     const [previousPath, currentPath] = args;
     requireArgs(command, [previousPath, currentPath]);
     print(createDriftRecord({ previous: assertCapabilitySpec(await readJson(previousPath)), current: assertCapabilitySpec(await readJson(currentPath)) }));
+  } else if (command === "drift-plan") {
+    const [previousPath, currentPath, ...flags] = args;
+    requireArgs(command, [previousPath, currentPath]);
+    const previous = assertCapabilitySpec(await readJson(previousPath));
+    const current = assertCapabilitySpec(await readJson(currentPath));
+    const receiptPath = flagValue(flags, "--receipts=");
+    const receiptsValue = receiptPath ? await readJson(receiptPath) : [];
+    const previousCompilationReceipts = Array.isArray(receiptsValue) ? receiptsValue : [receiptsValue];
+    const explicitHarnesses = flagValues(flags, "--harness=");
+    const harnessIds = explicitHarnesses.length
+      ? explicitHarnesses
+      : [...new Set(previousCompilationReceipts.map((receipt) => receipt?.harnessId).filter(Boolean))];
+    if (!harnessIds.length) harnessIds.push("codex");
+    const assessment = assessCapabilityDrift({ previous, current, harnessIds, previousCompilationReceipts });
+    const plan = createReverificationPlan(assessment);
+    print({ ok: assessment.decision !== "blocked", action: "drift-plan", assessment, plan });
+    if (assessment.decision === "blocked") process.exitCode = 3;
   } else {
-    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- verify <capability.json> codex <target-root> <cwd> --approve-write [--receipt=path] [--retain-installation] [--allow-degraded]\n  npm run capability -- verify-native <capability.json> codex <clean-workspace-root> --approve-write [--receipt=path]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n");
+    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- verify <capability.json> codex <target-root> <cwd> --approve-write [--receipt=path] [--retain-installation] [--allow-degraded]\n  npm run capability -- verify-native <capability.json> codex <clean-workspace-root> --approve-write [--receipt=path]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n  npm run capability -- drift-plan <previous.json> <current.json> [--harness=codex] [--receipts=receipts.json]\n");
     process.exitCode = 2;
   }
 } catch (error) {
@@ -166,6 +184,9 @@ function print(value) { process.stdout.write(`${JSON.stringify(value, null, 2)}\
 function flagValue(flags, prefix) {
   const flag = flags.find((entry) => entry.startsWith(prefix));
   return flag ? flag.slice(prefix.length) : null;
+}
+function flagValues(flags, prefix) {
+  return flags.filter((entry) => entry.startsWith(prefix)).map((entry) => entry.slice(prefix.length)).filter(Boolean);
 }
 function parseFilters(flags) {
   const result = {};
