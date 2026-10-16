@@ -1,0 +1,39 @@
+name: knockdeck-macos
+
+on:
+  push:
+    paths:
+      - 'apps/knockdeck-macos/**'
+      - '.github/workflows/knockdeck-macos.yml'
+  pull_request:
+    paths:
+      - 'apps/knockdeck-macos/**'
+      - '.github/workflows/knockdeck-macos.yml'
+
+jobs:
+  verify:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Unit tests
+        working-directory: apps/knockdeck-macos
+        run: swift test
+
+      - name: Build app bundle
+        working-directory: apps/knockdeck-macos
+        run: bash scripts/build-app.sh
+
+      - name: Inspect signature
+        working-directory: apps/knockdeck-macos
+        run: codesign --display --verbose=4 dist/KnockDeck.app
+
+      - name: Upload development artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KnockDeck-macos-dev
+          path: apps/knockdeck-macos/dist/KnockDeck-0.1.0.zip
+          if-no-files-found: error
