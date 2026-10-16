@@ -15,14 +15,26 @@ function requirePositiveInteger(value, name) {
   return value;
 }
 
-function validateVector(vector, dimensions, name) {
+function requireFiniteNumber(value, name) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`${name} must be a finite number`);
+  }
+  return value;
+}
+
+function validateVector(vector, dimensions, name, { allowZero = false } = {}) {
   if (!Array.isArray(vector) || vector.length !== dimensions) {
     throw new TypeError(`${name} must contain exactly ${dimensions} dimensions`);
   }
+  let magnitudeSquared = 0;
   for (const value of vector) {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       throw new TypeError(`${name} must contain only finite numbers`);
     }
+    magnitudeSquared += value * value;
+  }
+  if (!allowZero && magnitudeSquared === 0) {
+    throw new RangeError(`${name} must not be a zero vector`);
   }
   return vector;
 }
@@ -36,7 +48,6 @@ function cosineSimilarity(left, right) {
     leftMagnitude += left[index] * left[index];
     rightMagnitude += right[index] * right[index];
   }
-  if (leftMagnitude === 0 || rightMagnitude === 0) return 0;
   return dot / Math.sqrt(leftMagnitude * rightMagnitude);
 }
 
@@ -74,6 +85,7 @@ export function retrieveVectorCosine({
   query,
   queryVector,
   topK = 5,
+  minScore = 0,
 }) {
   if (!validateIndexManifestIntegrity(manifest)) {
     throw new TypeError('manifest must be an intact research index manifest');
@@ -89,6 +101,8 @@ export function retrieveVectorCosine({
   requireString(queryId, 'queryId');
   requireString(query, 'query');
   requirePositiveInteger(topK, 'topK');
+  requireFiniteNumber(minScore, 'minScore');
+  if (minScore < -1 || minScore > 1) throw new RangeError('minScore must be between -1 and 1');
   validateVector(queryVector, retriever.dimensions, 'queryVector');
 
   const embeddingBySpan = new Map();
@@ -120,10 +134,10 @@ export function retrieveVectorCosine({
     if (embedding.revision !== record.revision || embedding.quoteSha256 !== record.quoteSha256) {
       throw new Error(`embedding source drift detected: ${record.spanId}`);
     }
-    scored.push({
-      spanId: record.spanId,
-      score: cosineSimilarity(queryVector, embedding.vector),
-    });
+    const score = cosineSimilarity(queryVector, embedding.vector);
+    if (score > minScore) {
+      scored.push({ spanId: record.spanId, score });
+    }
   }
 
   scored.sort((a, b) => b.score - a.score || a.spanId.localeCompare(b.spanId));
@@ -142,6 +156,7 @@ export function retrieveVectorCosine({
     parameters: {
       algorithm: 'exact-cosine',
       topK,
+      minScore,
       embeddingProvider: retriever.embeddingProvider,
       embeddingModel: retriever.embeddingModel,
       dimensions: retriever.dimensions,
