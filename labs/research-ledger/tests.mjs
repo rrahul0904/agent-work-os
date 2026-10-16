@@ -28,9 +28,11 @@ assert.match(wrapper,/v03\.js/);
 assert.match(wrapper,/v03-contract\.js/);
 
 const legacy=await readFile(new URL('./legacy-app.js',import.meta.url),'utf8');
-assert.match(legacy,/LOCAL-FIRST RESEARCH MEMORY/);
+assert.match(legacy,/indexedDB\.open\('research-ledger',2\)/);
 assert.match(legacy,/research-ledger:last-brief/);
 assert.match(legacy,/agent-work-os-research-handoff/);
+assert.match(legacy,/function retrieve\(/);
+assert.match(legacy,/function renderBrief\(/);
 
 const history=await readFile(new URL('./v03.js',import.meta.url),'utf8');
 assert.match(history,/research-ledger-history/);
