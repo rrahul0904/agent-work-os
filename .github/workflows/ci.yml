@@ -32,6 +32,3 @@ jobs:
       - name: Research Ledger v0.3 local acceptance
         working-directory: labs/research-ledger
         run: npm run check
-      - name: REA intake 229 bounded Reddit identity probe
-        continue-on-error: true
-        run: node scripts/resolve-source-identity.mjs rea-229 'https://www.reddit.com/r/BestGitHubRepos/s/EjKhT844dz' || true
