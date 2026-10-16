@@ -35,7 +35,7 @@
         "additionalProperties": false,
         "required": ["kind", "schemaVersion", "digest"],
         "properties": {
-          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk"] },
+          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk", "repo-diff"] },
           "schemaVersion": { "type": "string", "minLength": 1 },
           "digest": { "$ref": "#/$defs/digest" }
         }
@@ -48,7 +48,7 @@
         "additionalProperties": false,
         "required": ["type", "text", "artifactDigest"],
         "properties": {
-          "type": { "enum": ["repository-shape", "repository-topology", "task-context", "structural-hotspots"] },
+          "type": { "enum": ["repository-shape", "repository-topology", "task-context", "structural-hotspots", "repository-drift"] },
           "text": { "type": "string", "minLength": 1 },
           "artifactDigest": { "$ref": "#/$defs/digest" }
         }
@@ -58,7 +58,7 @@
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles"],
+      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles", "affectedFiles"],
       "properties": {
         "files": { "type": "integer", "minimum": 0 },
         "lines": { "type": "integer", "minimum": 0 },
@@ -66,7 +66,8 @@
         "modules": { "type": ["integer", "null"], "minimum": 0 },
         "dependencyEdges": { "type": ["integer", "null"], "minimum": 0 },
         "contextFiles": { "type": ["integer", "null"], "minimum": 0 },
-        "highRiskFiles": { "type": ["integer", "null"], "minimum": 0 }
+        "highRiskFiles": { "type": ["integer", "null"], "minimum": 0 },
+        "affectedFiles": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "digest": { "$ref": "#/$defs/digest" }
