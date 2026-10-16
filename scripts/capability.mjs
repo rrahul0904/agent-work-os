@@ -19,6 +19,7 @@ import {
 } from "../packages/capability-fabric/src/runtime.js";
 import { CodexAdapter } from "../runtime/daemon/src/adapters.js";
 import { verifyCapabilityWithAdapter } from "../runtime/daemon/src/capability-verifier.js";
+import { verifyCodexNativeDiscovery } from "../runtime/daemon/src/codex-native-verifier.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -87,6 +88,36 @@ try {
       retainedInstallation: !result.receipt.rollback.attempted
     });
     if (!result.receipt.passed) process.exitCode = 1;
+  } else if (command === "verify-native") {
+    const [specPath, harnessId, workspaceRoot, ...flags] = args;
+    requireArgs(command, [specPath, harnessId, workspaceRoot]);
+    if (harnessId !== "codex") throw new Error("capability_native_verification_harness_not_implemented");
+    const spec = assertCapabilitySpec(await readJson(specPath));
+    const receiptFlag = flagValue(flags, "--receipt=");
+    const receiptPath = receiptFlag
+      ? path.resolve(receiptFlag)
+      : path.join(path.resolve(workspaceRoot), ".agent-work-os", "verification-receipts", `${spec.metadata.slug}-native-${Date.now()}.json`);
+    const result = await verifyCodexNativeDiscovery({
+      spec,
+      adapter: new CodexAdapter(),
+      workspaceRoot,
+      approveWrite: flags.includes("--approve-write"),
+      receiptPath
+    });
+    print({
+      ok: result.receipt.passed,
+      action: "verify-native",
+      harnessId,
+      capabilityId: spec.id,
+      score: result.receipt.score,
+      qualityThreshold: result.receipt.qualityThreshold,
+      verificationMode: result.receipt.verificationMode,
+      receiptPath: result.receiptPath,
+      receiptDigest: result.receipt.receiptDigest,
+      discoveryMarkerMatched: result.receipt.cases.every((entry) => entry.discoveryMarkerMatched),
+      rolledBack: result.receipt.rollback.ok
+    });
+    if (!result.receipt.passed) process.exitCode = 1;
   } else if (command === "rollback") {
     const [receiptPath, ...flags] = args;
     requireArgs(command, [receiptPath]);
@@ -111,7 +142,7 @@ try {
     requireArgs(command, [previousPath, currentPath]);
     print(createDriftRecord({ previous: assertCapabilitySpec(await readJson(previousPath)), current: assertCapabilitySpec(await readJson(currentPath)) }));
   } else {
-    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- verify <capability.json> codex <target-root> <cwd> --approve-write [--receipt=path] [--retain-installation] [--allow-degraded]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n");
+    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- verify <capability.json> codex <target-root> <cwd> --approve-write [--receipt=path] [--retain-installation] [--allow-degraded]\n  npm run capability -- verify-native <capability.json> codex <clean-workspace-root> --approve-write [--receipt=path]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n");
     process.exitCode = 2;
   }
 } catch (error) {

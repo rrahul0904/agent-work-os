@@ -73,7 +73,9 @@ The CLI exposes these flows through `npm run capability -- install ... --approve
 
 ## Runtime verification receipts
 
-The first real-harness verification mode is `artifact-context`. It verifies semantic preservation of the exact generated and installed artifact without depending on a harness marketplace implementation:
+### Artifact-context verification
+
+`artifact-context` verifies semantic preservation of the exact generated and installed artifact without depending on a harness marketplace implementation:
 
 1. validate the `CapabilitySpec`,
 2. compile it for the requested harness,
@@ -95,7 +97,35 @@ npm run capability -- verify capability.json codex /tmp/capability-stage /path/t
 
 A failed threshold exits non-zero and rolls back automatically. Passing verification also rolls back by default so smoke tests do not silently mutate the harness environment. Use `--retain-installation` only when promotion is intentional. `--receipt=/path/to/receipt.json` selects an explicit receipt path.
 
-This mode proves compile/install/readback/execution/evaluation integrity. A stricter future `native-discovery` mode will additionally prove that each harness discovers and invokes the installed capability through its own marketplace/plugin/skill lookup path.
+### Codex native-discovery verification
+
+`native-discovery` adds a stricter Codex-specific proof that the harness discovered and invoked the installed skill through its own plugin lookup path. The verification bundle follows the current portable OpenAI plugin layout:
+
+```text
+<workspace>/
+├── .agents/plugins/marketplace.json
+├── .codex/config.toml
+└── plugins/<capability-slug>/
+    ├── plugin.json
+    └── skills/<capability-slug>/SKILL.md
+```
+
+The smoke package is intentionally instrumented with a one-run discovery marker that is appended to the installed `SKILL.md` but never included in the user prompt. The Codex request explicitly invokes `$<capability-slug>` and asks the discovered skill to return its marker before performing the declared test input. A case passes only when both the hidden marker and the expected semantic result appear in a completed, error-free harness execution.
+
+This separates two proofs:
+
+- `artifact-context` proves the exact production artifact preserves the intended behavior when executed by the harness.
+- `native-discovery` proves Codex can discover and invoke the skill using the real plugin/marketplace mechanism.
+
+The native-discovery package is always rolled back because it contains temporary verification instrumentation. It also fails closed when `.agents/plugins/marketplace.json`, `.codex/config.toml`, or the target plugin directory already exist; use a clean verification worktree or scratch workspace instead of overwriting project plugin configuration.
+
+Run it with:
+
+```bash
+npm run capability -- verify-native capability.json codex /path/to/clean-workspace --approve-write
+```
+
+The command returns non-zero when the discovery marker is missing or the quality threshold fails and persists a verification receipt unless an explicit `--receipt=` path is supplied.
 
 ## Clean-room rule
 
