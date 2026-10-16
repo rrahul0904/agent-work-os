@@ -19,14 +19,15 @@ export class CapabilityVerificationRepository {
     this.store = store;
     this.localPath = `${store.filePath}.capability-verification-runs.json`;
     this.localWriteChain = Promise.resolve();
+    this.migrationPromise = null;
   }
 
   async initialize() {
-    if (this.store.pool) await this.store.pool.query(await readFile(MIGRATION_URL, "utf8"));
-    else await this.#readLocalState();
+    if (!this.store.pool) await this.#readLocalState();
   }
 
   async createWithSession(runInput, session, command) {
+    await this.#ensurePostgresStore();
     const run = validateRun(runInput);
     if (!session?.id || session.organizationId !== run.organizationId || session.machineId !== run.machineId) {
       throw new CapabilityVerificationStoreError("capability_verification_session_scope_invalid");
@@ -79,6 +80,7 @@ export class CapabilityVerificationRepository {
   }
 
   async get(id, organizationId) {
+    await this.#ensurePostgresStore();
     if (!id || !organizationId) return null;
     if (this.store.pool) {
       const result = await this.store.pool.query(
@@ -93,6 +95,7 @@ export class CapabilityVerificationRepository {
   }
 
   async listByOrganization(organizationId) {
+    await this.#ensurePostgresStore();
     if (this.store.pool) {
       const result = await this.store.pool.query(
         "SELECT record FROM agent_work_os_capability_verification_runs_v1 WHERE organization_id = $1 ORDER BY updated_at DESC, run_id",
@@ -108,6 +111,7 @@ export class CapabilityVerificationRepository {
   }
 
   async updateFromSessionEvent(sessionId, event) {
+    await this.#ensurePostgresStore();
     if (!sessionId || !event) return null;
     if (this.store.pool) {
       const client = await this.store.pool.connect();
@@ -150,6 +154,19 @@ export class CapabilityVerificationRepository {
     state.runs[entry.id] = updated;
     await this.#writeLocalState(state);
     return structuredClone(updated);
+  }
+
+  async #ensurePostgresStore() {
+    if (!this.store.pool) return;
+    if (!this.migrationPromise) {
+      this.migrationPromise = readFile(MIGRATION_URL, "utf8")
+        .then((migration) => this.store.pool.query(migration))
+        .catch((error) => {
+          this.migrationPromise = null;
+          throw error;
+        });
+    }
+    await this.migrationPromise;
   }
 
   async #readLocalState() {
