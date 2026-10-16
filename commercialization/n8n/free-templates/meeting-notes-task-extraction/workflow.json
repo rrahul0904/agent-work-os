@@ -1,0 +1,36 @@
+{
+  "name": "Meeting Notes + Task Extraction Starter",
+  "nodes": [
+    {
+      "parameters": {"httpMethod":"POST","path":"meeting-notes-task-starter","responseMode":"responseNode","options":{}},
+      "id": "f3-webhook",
+      "name": "Meeting Transcript Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0,0]
+    },
+    {
+      "parameters": {"jsCode":"const body=$json.body??$json;\nconst transcript=String(body.transcript??'').trim();\nif(!transcript) throw new Error('transcript is required');\nif(transcript.length>200000) throw new Error('transcript exceeds 200,000 character starter limit');\nconst lines=transcript.split(/\\r?\\n/).map(v=>v.trim()).filter(Boolean);\nconst taskPrefixes=['todo:','action:','task:'];\nconst tasks=[];\nfor(const line of lines){\n  const lower=line.toLowerCase();\n  const prefix=taskPrefixes.find(p=>lower.startsWith(p));\n  if(prefix){\n    const text=line.slice(prefix.length).trim();\n    if(text) tasks.push({text,status:'OPEN'});\n  }\n}\nconst summary=lines.filter(line=>!taskPrefixes.some(p=>line.toLowerCase().startsWith(p))).join(' ').slice(0,1000);\nreturn [{json:{meetingId:body.meetingId??null,summary,taskCount:tasks.length,tasks:tasks.slice(0,50),humanReviewRecommended:true,source:'provided-transcript'}}];"},
+      "id": "f3-extract",
+      "name": "Extract Summary + Explicit Tasks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300,0]
+    },
+    {
+      "parameters": {"respondWith":"json","responseBody":"={{ $json }}","options":{"responseCode":200}},
+      "id": "f3-response",
+      "name": "Return Meeting Notes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [600,0]
+    }
+  ],
+  "connections": {
+    "Meeting Transcript Input":{"main":[[{"node":"Extract Summary + Explicit Tasks","type":"main","index":0}]]},
+    "Extract Summary + Explicit Tasks":{"main":[[{"node":"Return Meeting Notes","type":"main","index":0}]]}
+  },
+  "pinData":{},
+  "settings":{"executionOrder":"v1"},
+  "active":false
+}
