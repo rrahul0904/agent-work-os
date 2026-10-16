@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/source-access-context-v1.schema.json",
+  "title": "Agent Work OS Source Access Context v1",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/observation" }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "postId", "subreddit", "canonicalUrl"],
+      "properties": {
+        "kind": { "const": "reddit-post" },
+        "postId": { "type": "string", "minLength": 1 },
+        "subreddit": { "type": ["string", "null"] },
+        "canonicalUrl": { "type": "string", "format": "uri", "pattern": "^https://(www\\.)?reddit\\.com/" }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "requestId", "sourceId", "requestedUrl", "blocker", "requiredCapability", "requestedAt", "status", "requestSha256"],
+      "properties": {
+        "contractVersion": { "const": "source-access-request/v1" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "requestedUrl": { "type": "string", "format": "uri" },
+        "blocker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["receiptSha256", "errorCode"],
+          "properties": {
+            "receiptSha256": { "$ref": "#/$defs/sha256" },
+            "errorCode": { "const": "ACCESS_CONTEXT_REQUIRED" }
+          }
+        },
+        "requiredCapability": { "type": "string", "minLength": 1 },
+        "requestedAt": { "type": "string", "format": "date-time" },
+        "status": { "const": "pending" },
+        "requestSha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractVersion", "requestId", "requestSha256", "blockerReceiptSha256", "sourceId", "requestedUrl", "provider", "providerCapability", "observedAt", "evidenceRef", "target", "status", "observationSha256"],
+      "properties": {
+        "contractVersion": { "const": "source-access-observation/v1" },
+        "requestId": { "type": "string", "minLength": 1 },
+        "requestSha256": { "$ref": "#/$defs/sha256" },
+        "blockerReceiptSha256": { "$ref": "#/$defs/sha256" },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "requestedUrl": { "type": "string", "format": "uri" },
+        "provider": { "enum": ["reddit-authenticated-read", "browser-read"] },
+        "providerCapability": { "enum": ["reddit-authenticated-read", "browser-read"] },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "evidenceRef": { "type": "string", "minLength": 1 },
+        "target": { "$ref": "#/$defs/target" },
+        "status": { "const": "observed" },
+        "observationSha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}
