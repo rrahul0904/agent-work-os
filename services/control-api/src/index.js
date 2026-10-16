@@ -9,7 +9,9 @@ import { digestShippingContract, validateShippingContract } from "./shipping-con
 import { buildProductSummary, listReceipts, loadPortfolio, rankPortfolio } from "./product-state.js";
 import { JsonStore } from "./store.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
+import { assertCapabilitySpec } from "../../../packages/capability-fabric/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
+import { CapabilityVerificationRepository } from "./capability-verification-store.js";
 import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
@@ -40,6 +42,8 @@ export async function createControlPlane() {
   await store.load();
   const workItems = createWorkItemRepository(store);
   if (typeof workItems.initialize === "function") await workItems.initialize();
+  const capabilityVerifications = new CapabilityVerificationRepository(store);
+  await capabilityVerifications.initialize();
   if (isProduction && !store.pool) throw new Error("DATABASE_URL_required_in_production");
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
@@ -61,7 +65,8 @@ export async function createControlPlane() {
         machines: (await Promise.all(principal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
         sessions: (await Promise.all(principal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
         shippingRuns: (await Promise.all(principal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
-        workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
+        workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat(),
+        capabilityVerificationRuns: (await Promise.all(principal.organizationIds.map((organizationId) => capabilityVerifications.listByOrganization(organizationId)))).flat()
       };
     }
     return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
@@ -114,7 +119,7 @@ export async function createControlPlane() {
     });
     for (const [peer, state] of clientSockets) {
       const principal = state.principal;
-      const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
+      const organizationId = event.workItem?.organizationId ?? event.capabilityVerification?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
       if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) {
         if (eventId !== null && state.lastSentEventId !== null && eventId <= state.lastSentEventId) continue;
         if (state.resyncing) {
@@ -141,8 +146,11 @@ export async function createControlPlane() {
       if (command.action === "session.start") {
         const session = await store.getSession(command.sessionId);
         if (!session) return;
-        const updated = await store.addEvent(session.id, { kind: "status", status: "failed", error, commandId: command.commandId, at: new Date().toISOString() });
+        const failureEvent = { kind: "status", status: "failed", error, message: error, commandId: command.commandId, at: new Date().toISOString() };
+        const updated = await store.addEvent(session.id, failureEvent);
         if (updated) broadcast({ type: "session.updated", session: updated });
+        const verification = await capabilityVerifications.updateFromSessionEvent(session.id, failureEvent);
+        if (verification) broadcast({ type: "capability.verification.updated", capabilityVerification: verification });
       } else if (command.action === "session.message" || command.action === "session.interrupt") {
         const session = await store.getSession(command.sessionId);
         if (!session) return;
@@ -162,13 +170,13 @@ export async function createControlPlane() {
   const replayClient = async (peer, state, cursor) => {
     try {
       const history = await eventFanout.replayAfter(cursor);
-      if (clientSockets.get(peer) !== state) return;
+      if (clientSockets.get(peer) === state) return;
       if (history.gap) return void resyncClient(peer, state);
       if (state.principal.kind === "user") {
         state.principal.organizationIds = (await identities.listMemberships(state.principal.userId)).map((membership) => membership.organizationId);
       }
       for (const { eventId, event } of history.rows) {
-        const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
+        const organizationId = event.workItem?.organizationId ?? event.capabilityVerification?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
         if (state.principal.kind === "legacy" || (organizationId && state.principal.organizationIds?.includes(organizationId))) {
           if (eventId <= state.lastSentEventId) continue;
           peer.send(encodeMessage({ ...event, eventId: cursorCodec.eventTag(eventId), cursor: cursorCodec.encode(eventId) }));
@@ -319,6 +327,105 @@ export async function createControlPlane() {
       }
 
       if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        return json(res, 200, { runs: await capabilityVerifications.listByOrganization(organizationId) });
+      }
+      if (req.method === "POST" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
+        const body = await readJson(req);
+        if (!body.organizationId || !body.machineId || !body.cwd || !body.spec) return json(res, 400, { error: "organizationId, machineId, cwd and spec are required" });
+        if (body.approveWrite !== true) return json(res, 400, { error: "approveWrite_true_required" });
+        const membership = await identities.getMembership(principal.userId, body.organizationId);
+        if (!membership) return json(res, 404, { error: "organization_not_found" });
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const machine = await store.getMachine(body.machineId);
+        if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
+        if (!machine.capabilities?.some((capability) => capability.name === "capability-verify")) return json(res, 400, { error: "capability_verification_not_available" });
+        const spec = assertCapabilitySpec(body.spec);
+        const harnessId = body.harnessId ?? "codex";
+        const mode = body.mode ?? "artifact-context";
+        if (harnessId !== "codex") return json(res, 400, { error: "capability_verification_harness_not_supported" });
+        if (!["artifact-context", "native-discovery"].includes(mode)) return json(res, 400, { error: "capability_verification_mode_invalid" });
+        const now = new Date().toISOString();
+        const sessionId = crypto.randomUUID();
+        const runId = `run_${crypto.randomUUID()}`;
+        const prompt = JSON.stringify({
+          mode,
+          harnessId,
+          approveWrite: true,
+          spec,
+          ...(body.targetRoot ? { targetRoot: body.targetRoot } : {}),
+          ...(body.allowDegraded === true ? { allowDegraded: true } : {})
+        });
+        const session = {
+          id: sessionId,
+          organizationId: body.organizationId,
+          createdBy: principal.userId,
+          machineId: body.machineId,
+          cwd: body.cwd,
+          agent: "capability-verify",
+          status: "queued",
+          createdAt: now,
+          updatedAt: now,
+          messages: [{ id: crypto.randomUUID(), role: "user", text: `Verify ${spec.metadata.slug}@${spec.version} on ${harnessId} using ${mode}`, createdAt: now }],
+          events: []
+        };
+        const run = {
+          id: runId,
+          organizationId: body.organizationId,
+          machineId: body.machineId,
+          sessionId,
+          createdBy: principal.userId,
+          capabilityId: spec.id,
+          capabilityVersion: spec.version,
+          capabilitySlug: spec.metadata.slug,
+          harnessId,
+          mode,
+          cwd: body.cwd,
+          status: "queued",
+          receipt: null,
+          createdAt: now,
+          updatedAt: now
+        };
+        const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId, action: "session.start", payload: { cwd: body.cwd, agent: "capability-verify", prompt } };
+        const created = await capabilityVerifications.createWithSession(run, session, command);
+        if (!commandRouter) {
+          try { await sendCommand(body.machineId, command); }
+          catch (error) {
+            const failureEvent = { kind: "status", status: "failed", message: error.message, at: new Date().toISOString() };
+            const failedSession = await store.addEvent(sessionId, failureEvent);
+            const failedRun = await capabilityVerifications.updateFromSessionEvent(sessionId, failureEvent);
+            if (failedSession) broadcast({ type: "session.updated", session: failedSession });
+            if (failedRun) broadcast({ type: "capability.verification.updated", capabilityVerification: failedRun });
+            return json(res, 409, { error: error.message, run: failedRun ?? created });
+          }
+        }
+        broadcast({ type: "session.updated", session });
+        broadcast({ type: "capability.verification.updated", capabilityVerification: created });
+        return json(res, 202, created);
+      }
+      const capabilityVerificationInterruptMatch = url.pathname.match(/^\/api\/capability-verifications\/([^/]+)\/interrupt$/);
+      if (req.method === "POST" && capabilityVerificationInterruptMatch && principal.kind === "user") {
+        const body = await readJson(req);
+        const organizationId = body.organizationId;
+        if (!organizationId || !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "capability_verification_not_found" });
+        const membership = await identities.getMembership(principal.userId, organizationId);
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const run = await capabilityVerifications.get(decodeURIComponent(capabilityVerificationInterruptMatch[1]), organizationId);
+        if (!run) return json(res, 404, { error: "capability_verification_not_found" });
+        try { await sendCommand(run.machineId, { type: "server.command", commandId: crypto.randomUUID(), sessionId: run.sessionId, action: "session.interrupt" }); }
+        catch (error) { return json(res, 409, { error: error.message }); }
+        return json(res, 202, { ok: true, runId: run.id, sessionId: run.sessionId });
+      }
+      const capabilityVerificationMatch = url.pathname.match(/^\/api\/capability-verifications\/([^/]+)$/);
+      if (req.method === "GET" && capabilityVerificationMatch && principal.kind === "user") {
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId || !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "capability_verification_not_found" });
+        const run = await capabilityVerifications.get(decodeURIComponent(capabilityVerificationMatch[1]), organizationId);
+        return run ? json(res, 200, run) : json(res, 404, { error: "capability_verification_not_found" });
+      }
       if (req.method === "GET" && url.pathname === "/api/work-items") {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
@@ -690,7 +797,11 @@ export async function createControlPlane() {
           if (msg.type === "daemon.session.event") {
             const current = await store.getSession(msg.sessionId);
             if (!current || current.machineId !== machineId || (daemonPrincipal.kind === "machine" && current.organizationId !== daemonPrincipal.organizationId)) return;
-            const session = await store.addEvent(msg.sessionId, msg.event); broadcast({ type: "session.updated", session }); return;
+            const session = await store.addEvent(msg.sessionId, msg.event);
+            broadcast({ type: "session.updated", session });
+            const verification = await capabilityVerifications.updateFromSessionEvent(msg.sessionId, msg.event);
+            if (verification) broadcast({ type: "capability.verification.updated", capabilityVerification: verification });
+            return;
           }
           if (msg.type === "daemon.shipping.run") {
             const run = { ...msg.run, machineId, ...(daemonPrincipal.kind === "machine" ? { organizationId: daemonPrincipal.organizationId } : {}) };
@@ -757,6 +868,7 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/organizations" || /^\/api\/organizations\/[^/]+\/invitations$/.test(pathname)
     || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
+    || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
     || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
 }
