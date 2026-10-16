@@ -12,10 +12,18 @@ import { createCapabilitySpec } from "../../../packages/capability-fabric/src/in
 import { PROTOCOL_VERSION, encodeMessage } from "../../../packages/protocol/src/index.js";
 
 const { Pool } = pg;
-const databaseUrl = process.env.AGENT_WORK_OS_TEST_DATABASE_URL;
+const baseDatabaseUrl = process.env.AGENT_WORK_OS_TEST_DATABASE_URL;
 const root = path.resolve(new URL("../../..", import.meta.url).pathname);
 
-test("tenant capability verification API creates atomic run/session/outbox and persists daemon receipt", { skip: !databaseUrl }, async () => {
+test("tenant capability verification API creates atomic run/session/outbox and persists daemon receipt", { skip: !baseDatabaseUrl }, async () => {
+  await waitForPostgres(baseDatabaseUrl);
+  const databaseName = `awos_cap_${crypto.randomUUID().replaceAll("-", "")}`;
+  const adminPool = new Pool({ connectionString: baseDatabaseUrl, max: 1 });
+  await adminPool.query(`CREATE DATABASE "${databaseName}"`);
+  const isolatedUrl = new URL(baseDatabaseUrl);
+  isolatedUrl.pathname = `/${databaseName}`;
+  const databaseUrl = isolatedUrl.toString();
+
   const temp = await mkdtemp(path.join(os.tmpdir(), "agent-work-os-capability-api-"));
   const port = await getAvailablePort();
   const origin = `http://127.0.0.1:${port}`;
@@ -45,7 +53,7 @@ test("tenant capability verification API creates atomic run/session/outbox and p
   };
 
   try {
-    await waitForPostgres();
+    await waitForPostgres(databaseUrl);
     await waitFor(async () => {
       try { return (await fetch(`${origin}/readyz`)).ok; } catch { return false; }
     }, 15_000, "capability API readiness");
@@ -161,6 +169,8 @@ test("tenant capability verification API creates atomic run/session/outbox and p
   } finally {
     await stopServer();
     await databaseInspector.end();
+    await adminPool.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+    await adminPool.end();
   }
 });
 
@@ -262,8 +272,8 @@ async function waitFor(check, timeoutMs, label) {
   throw new Error(`timed out waiting for ${label}${lastError ? `: ${lastError.message}` : ""}`);
 }
 
-async function waitForPostgres() {
-  const pool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 1_000 });
+async function waitForPostgres(connectionString) {
+  const pool = new Pool({ connectionString, connectionTimeoutMillis: 1_000 });
   try {
     await waitFor(async () => {
       try { await pool.query("SELECT 1"); return true; } catch { return false; }
