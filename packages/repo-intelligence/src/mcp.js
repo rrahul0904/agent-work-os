@@ -8,6 +8,7 @@ import * as z from "zod/v4";
 import { scanRepository, selectRepositoryContext } from "./index.js";
 import { analyzeRepositoryTopology } from "./topology.js";
 import { analyzeStructuralRisk } from "./risk.js";
+import { analyzeGitSignals } from "./git-signals.js";
 import { createRepositoryEvidenceBundle } from "./evidence.js";
 import { diffRepositoryMaps } from "./diff.js";
 
@@ -34,9 +35,7 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
     {
       title: "Repo Atlas Overview",
       description: "Return a compact, metadata-only repository overview bounded to the server root.",
-      inputSchema: z.object({
-        path: relativePathSchema.optional()
-      })
+      inputSchema: z.object({ path: relativePathSchema.optional() })
     },
     async ({ path: relativePath = "." }) => safeToolCall(async () => {
       const repoPath = await resolveWithinRoot(root, relativePath, "directory");
@@ -101,6 +100,25 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
   );
 
   server.registerTool(
+    "repo_atlas_git_signals",
+    {
+      title: "Repo Atlas Git Signals",
+      description: "Return bounded privacy-preserving Git churn and ownership signals. Contributor identities are opaque hashes.",
+      inputSchema: z.object({
+        path: relativePathSchema.optional(),
+        maxCommits: z.number().int().min(1).max(5_000).optional(),
+        top: z.number().int().min(1).max(100).optional()
+      })
+    },
+    async ({ path: relativePath = ".", maxCommits = 500, top = 25 }) => safeToolCall(async () => {
+      const repoPath = await resolveWithinRoot(root, relativePath, "directory");
+      const map = await scanRepository(repoPath);
+      const signals = await analyzeGitSignals(repoPath, map, { maxCommits });
+      return compactGitSignals(signals, top);
+    })
+  );
+
+  server.registerTool(
     "repo_atlas_drift",
     {
       title: "Repo Atlas Drift",
@@ -124,13 +142,15 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
     "repo_atlas_bundle",
     {
       title: "Repo Atlas Evidence Bundle",
-      description: "Create a compact content-addressed repository evidence bundle, optionally including task context and drift.",
+      description: "Create a compact content-addressed repository evidence bundle, optionally including task context, drift, and Git signals.",
       inputSchema: z.object({
         path: relativePathSchema.optional(),
         task: z.string().min(1).max(20_000).optional(),
         maxFiles: z.number().int().min(1).max(100).optional(),
         maxEstimatedTokens: z.number().int().min(1).max(100_000).optional(),
         previousMapPath: relativePathSchema.optional(),
+        includeGit: z.boolean().optional(),
+        gitMaxCommits: z.number().int().min(1).max(5_000).optional(),
         repository: z.string().min(1).max(2_000).optional(),
         ref: z.string().min(1).max(2_000).optional(),
         commit: z.string().min(1).max(2_000).optional()
@@ -142,6 +162,8 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
       maxFiles = 24,
       maxEstimatedTokens = 24_000,
       previousMapPath,
+      includeGit = false,
+      gitMaxCommits = 500,
       repository,
       ref,
       commit
@@ -153,18 +175,15 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
       const context = task ? selectRepositoryContext(map, { task, maxFiles, maxEstimatedTokens }) : null;
       const previous = previousMapPath ? await readJsonWithinRoot(root, previousMapPath) : null;
       const diff = previous ? diffRepositoryMaps(previous, map) : null;
+      const gitSignals = includeGit ? await analyzeGitSignals(repoPath, map, { maxCommits: gitMaxCommits }) : null;
       return createRepositoryEvidenceBundle({
         repoMap: map,
         topology,
         risk,
         context,
         diff,
-        provenance: {
-          repository,
-          ref,
-          commit,
-          source: "mcp-local-root"
-        }
+        gitSignals,
+        provenance: { repository, ref, commit, source: "mcp-local-root" }
       });
     })
   );
@@ -179,21 +198,14 @@ const relativePathSchema = z.string().min(1).max(2_000).refine((value) => !path.
 async function safeToolCall(work) {
   try {
     const value = await work();
-    return {
-      content: [{ type: "text", text: JSON.stringify(value) }],
-      structuredContent: value
-    };
+    return { content: [{ type: "text", text: JSON.stringify(value) }], structuredContent: value };
   } catch (error) {
     const payload = {
       ok: false,
       error: typeof error?.code === "string" ? error.code : error?.name ?? "repo_atlas_mcp_failed",
       message: error?.message ?? String(error)
     };
-    return {
-      isError: true,
-      content: [{ type: "text", text: JSON.stringify(payload) }],
-      structuredContent: payload
-    };
+    return { isError: true, content: [{ type: "text", text: JSON.stringify(payload) }], structuredContent: payload };
   }
 }
 
@@ -243,7 +255,7 @@ async function readJsonWithinRoot(root, relativePath) {
   }
   try {
     return JSON.parse(text);
-  } catch (error) {
+  } catch {
     throw new RepoAtlasMcpError("repo_atlas_artifact_invalid_json", `Artifact is not valid JSON: ${relativePath}`);
   }
 }
@@ -295,6 +307,22 @@ function compactTopology(topology, limit) {
       totalModules: topology.modules.length,
       totalModuleEdges: topology.moduleEdges.length
     })
+  });
+}
+
+function compactGitSignals(signals, top) {
+  return Object.freeze({
+    schemaVersion: "repo-atlas-git-summary/v1",
+    repositoryDigest: signals.repositoryDigest,
+    gitSignalsDigest: signals.digest,
+    headCommit: signals.headCommit,
+    workingTreeDirty: signals.workingTreeDirty,
+    historyLimit: signals.historyLimit,
+    commitsAnalyzed: signals.commitsAnalyzed,
+    contributorCount: signals.contributorCount,
+    metrics: signals.metrics,
+    hotspots: Object.freeze(signals.hotspots.slice(0, top)),
+    truncation: Object.freeze({ requestedTop: top, returned: Math.min(top, signals.hotspots.length) })
   });
 }
 
