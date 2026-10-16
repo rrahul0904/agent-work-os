@@ -95,6 +95,9 @@ export function validateSourceIdentityResolutionReceipt(receipt) {
     requireString(receipt.requestedUrl, 'receipt.requestedUrl');
     requireString(receipt.resolvedAt, 'receipt.resolvedAt');
     if (receipt.finalUrl !== null) requireString(receipt.finalUrl, 'receipt.finalUrl');
+    if (receipt.requiredCapability !== null) {
+      requireString(receipt.requiredCapability, 'receipt.requiredCapability');
+    }
     if (receipt.state === 'resolved') {
       requireString(receipt.target?.postId, 'receipt.target.postId');
       requireString(receipt.target?.canonicalUrl, 'receipt.target.canonicalUrl');
@@ -137,7 +140,7 @@ export function createSourceIdentityResolver({
     const redirects = [];
     const resolvedAddresses = [];
 
-    const finish = ({ state, target = null, errorCode = null }) => {
+    const finish = ({ state, target = null, errorCode = null, requiredCapability = null }) => {
       const payload = {
         contractVersion: SOURCE_IDENTITY_RESOLUTION_VERSION,
         profile,
@@ -150,6 +153,7 @@ export function createSourceIdentityResolver({
         redirects,
         resolvedAddresses: [...new Set(resolvedAddresses)].sort(),
         errorCode,
+        requiredCapability,
       };
       return Object.freeze({ ...payload, receiptSha256: sha256(stableJson(payload)) });
     };
@@ -193,7 +197,16 @@ export function createSourceIdentityResolver({
 
         const target = parseCanonicalRedditPostUrl(current.href);
         if (response.ok && target) return finish({ state: 'resolved', target });
-        if (!response.ok) return finish({ state: 'unresolved', errorCode: `HTTP_${response.status}` });
+        if (!response.ok) {
+          if (response.status === 401 || response.status === 403) {
+            return finish({
+              state: 'unresolved',
+              errorCode: 'ACCESS_CONTEXT_REQUIRED',
+              requiredCapability: 'reddit-authenticated-or-browser-read',
+            });
+          }
+          return finish({ state: 'unresolved', errorCode: `HTTP_${response.status}` });
+        }
         return finish({ state: 'unresolved', errorCode: 'NON_CANONICAL_FINAL_URL' });
       }
       return finish({ state: 'unresolved', errorCode: 'REDIRECT_LIMIT_EXCEEDED' });
