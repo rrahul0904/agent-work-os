@@ -9,6 +9,7 @@ import {
   blockWorkItemForSourceAccess,
   createSourceIntakeWorkItemReason,
   parseSourceIntakeWorkItemReason,
+  resumePersistedWorkItemAfterSourceAccess,
   resumeWorkItemAfterSourceAccess,
 } from '../src/source-intake-work-item.js';
 
@@ -39,9 +40,9 @@ function runningWorkItem() {
 }
 
 class MemoryRepository {
-  constructor(item) {
+  constructor(item, events = []) {
     this.item = structuredClone(item);
-    this.events = [];
+    this.events = structuredClone(events);
   }
   async transition(id, command) {
     assert.equal(id, this.item.id);
@@ -97,16 +98,17 @@ async function sourceTransitions() {
     accessObservation: observation,
     transitionedAt: '2026-10-16T19:41:00.000Z',
   });
-  return { blockedTransition, resolvedTransition };
+  return { accessRequest, blockedTransition, observation, resolvedTransition };
 }
 
-test('source access blocker durably transitions a running WorkItem to blocked with an integrity envelope', async () => {
+test('source access blocker durably persists the full restart-resume state inside the WorkItem event', async () => {
   const repository = new MemoryRepository(runningWorkItem());
-  const { blockedTransition } = await sourceTransitions();
+  const { accessRequest, blockedTransition } = await sourceTransitions();
   const result = await blockWorkItemForSourceAccess({
     repository,
     workItem: runningWorkItem(),
     transition: blockedTransition,
+    accessRequest,
     organizationId: ids.organizationId,
     actorId: ids.actorId,
     commandId: ids.blockCommandId,
@@ -116,20 +118,24 @@ test('source access blocker durably transitions a running WorkItem to blocked wi
   assert.equal(result.workItem.status, 'blocked');
   assert.equal(result.workItem.version, 4);
   const events = await repository.listEvents(ids.workItemId, ids.organizationId);
+  assert.ok(events[0].reason.length < 2_000);
   const reason = parseSourceIntakeWorkItemReason(events[0].reason);
   assert.equal(reason.phase, 'blocked');
-  assert.equal(reason.transitionSha256, blockedTransition.transitionSha256);
-  assert.equal(reason.requiredCapability, 'reddit-authenticated-or-browser-read');
-  assert.equal(reason.nextAction, 'ACQUIRE_SOURCE_ACCESS_CONTEXT');
+  assert.equal(reason.transition.transitionSha256, blockedTransition.transitionSha256);
+  assert.equal(reason.transition.requiredCapability, 'reddit-authenticated-or-browser-read');
+  assert.equal(reason.transition.nextAction, 'ACQUIRE_SOURCE_ACCESS_CONTEXT');
+  assert.equal(reason.accessRequest.requestSha256, accessRequest.requestSha256);
+  assert.equal(reason.accessRequest.blocker.receiptSha256, blockedTransition.resolutionReceiptSha256);
 });
 
 test('matching trusted source observation resumes the exact blocked WorkItem to ready for REA discovery', async () => {
   const repository = new MemoryRepository(runningWorkItem());
-  const { blockedTransition, resolvedTransition } = await sourceTransitions();
+  const { accessRequest, blockedTransition, resolvedTransition } = await sourceTransitions();
   const blocked = await blockWorkItemForSourceAccess({
     repository,
     workItem: runningWorkItem(),
     transition: blockedTransition,
+    accessRequest,
     organizationId: ids.organizationId,
     actorId: ids.actorId,
     commandId: ids.blockCommandId,
@@ -153,9 +159,91 @@ test('matching trusted source observation resumes the exact blocked WorkItem to 
   assert.equal(events.length, 2);
   const reason = parseSourceIntakeWorkItemReason(events[1].reason);
   assert.equal(reason.phase, 'resumed');
-  assert.equal(reason.transitionSha256, resolvedTransition.transitionSha256);
-  assert.equal(reason.accessObservationSha256, resolvedTransition.accessObservationSha256);
-  assert.equal(reason.nextAction, 'REA_EVIDENCE_DISCOVERY');
+  assert.equal(reason.transition.transitionSha256, resolvedTransition.transitionSha256);
+  assert.equal(reason.transition.accessObservationSha256, resolvedTransition.accessObservationSha256);
+  assert.equal(reason.transition.nextAction, 'REA_EVIDENCE_DISCOVERY');
+});
+
+test('persisted blocker can resume after repository restart without the in-memory blocked transition', async () => {
+  const initialRepository = new MemoryRepository(runningWorkItem());
+  const { accessRequest, blockedTransition, observation } = await sourceTransitions();
+  const blocked = await blockWorkItemForSourceAccess({
+    repository: initialRepository,
+    workItem: runningWorkItem(),
+    transition: blockedTransition,
+    accessRequest,
+    organizationId: ids.organizationId,
+    actorId: ids.actorId,
+    commandId: ids.blockCommandId,
+    at: now,
+  });
+  const persistedEvents = await initialRepository.listEvents(ids.workItemId, ids.organizationId);
+
+  // Simulate a control-plane restart: only durable WorkItem state + event history survive.
+  const restartedRepository = new MemoryRepository(blocked.workItem, persistedEvents);
+  const resumed = await resumePersistedWorkItemAfterSourceAccess({
+    repository: restartedRepository,
+    workItem: blocked.workItem,
+    accessObservation: observation,
+    organizationId: ids.organizationId,
+    actorId: ids.actorId,
+    commandId: ids.resumeCommandId,
+    at: '2026-10-16T19:42:00.000Z',
+  });
+
+  assert.equal(resumed.workItem.status, 'ready');
+  assert.equal(resumed.sourceIntakeTransition.gate, 'TARGET_IDENTITY_RESOLVED');
+  assert.equal(resumed.sourceIntakeTransition.nextAction, 'REA_EVIDENCE_DISCOVERY');
+  assert.equal(resumed.sourceIntakeTransition.target.postId, '1abc234');
+  assert.equal(resumed.sourceIntakeTransition.accessRequestSha256, accessRequest.requestSha256);
+  assert.equal(resumed.sourceIntakeTransition.accessObservationSha256, observation.observationSha256);
+});
+
+test('restart resume rejects an observation from another access request and leaves the WorkItem blocked', async () => {
+  const repository = new MemoryRepository(runningWorkItem());
+  const first = await sourceTransitions();
+  const blocked = await blockWorkItemForSourceAccess({
+    repository,
+    workItem: runningWorkItem(),
+    transition: first.blockedTransition,
+    accessRequest: first.accessRequest,
+    organizationId: ids.organizationId,
+    actorId: ids.actorId,
+    commandId: ids.blockCommandId,
+    at: now,
+  });
+
+  const resolveOther = createSourceIdentityResolver({
+    resolveHost: async () => [{ address: '151.101.73.140' }],
+    fetchImpl: async () => new Response('blocked', { status: 403 }),
+  });
+  const otherReceipt = await resolveOther({
+    sourceId: 'rea-other',
+    url: shareUrl,
+    resolvedAt: '2026-10-16T19:43:00.000Z',
+  });
+  const otherRequest = createSourceAccessRequest({ blockedResolution: otherReceipt, requestedAt: '2026-10-16T19:43:00.000Z' });
+  const otherObservation = createSourceAccessObservation({
+    request: otherRequest,
+    provider: 'browser-read',
+    canonicalUrl,
+    observedAt: '2026-10-16T19:43:00.000Z',
+    evidenceRef: 'browser-session:other',
+  });
+
+  await assert.rejects(
+    () => resumePersistedWorkItemAfterSourceAccess({
+      repository,
+      workItem: blocked.workItem,
+      accessObservation: otherObservation,
+      organizationId: ids.organizationId,
+      actorId: ids.actorId,
+      commandId: ids.resumeCommandId,
+      at: '2026-10-16T19:44:00.000Z',
+    }),
+    /not bound to the persisted source access request/,
+  );
+  assert.equal(repository.item.status, 'blocked');
 });
 
 test('resume rejects a resolved transition from another blocker before changing WorkItem state', async () => {
@@ -165,6 +253,7 @@ test('resume rejects a resolved transition from another blocker before changing 
     repository,
     workItem: runningWorkItem(),
     transition: first.blockedTransition,
+    accessRequest: first.accessRequest,
     organizationId: ids.organizationId,
     actorId: ids.actorId,
     commandId: ids.blockCommandId,
@@ -213,11 +302,12 @@ test('resume rejects a resolved transition from another blocker before changing 
 
 test('resume refuses a blocked WorkItem whose latest durable event is not the matching source blocker', async () => {
   const repository = new MemoryRepository(runningWorkItem());
-  const { blockedTransition, resolvedTransition } = await sourceTransitions();
+  const { accessRequest, blockedTransition, resolvedTransition } = await sourceTransitions();
   const blocked = await blockWorkItemForSourceAccess({
     repository,
     workItem: runningWorkItem(),
     transition: blockedTransition,
+    accessRequest,
     organizationId: ids.organizationId,
     actorId: ids.actorId,
     commandId: ids.blockCommandId,
@@ -238,6 +328,40 @@ test('resume refuses a blocked WorkItem whose latest durable event is not the ma
       actorId: ids.actorId,
       commandId: ids.resumeCommandId,
       at: '2026-10-16T19:45:00.000Z',
+    }),
+    /not a persisted source-access blocker/,
+  );
+  assert.equal(repository.item.status, 'blocked');
+});
+
+test('tampered persisted access request is rejected during parsing and cannot resume', async () => {
+  const repository = new MemoryRepository(runningWorkItem());
+  const { accessRequest, blockedTransition, observation } = await sourceTransitions();
+  const blocked = await blockWorkItemForSourceAccess({
+    repository,
+    workItem: runningWorkItem(),
+    transition: blockedTransition,
+    accessRequest,
+    organizationId: ids.organizationId,
+    actorId: ids.actorId,
+    commandId: ids.blockCommandId,
+    at: now,
+  });
+
+  const envelope = JSON.parse(repository.events[0].reason);
+  envelope.accessRequest.requiredCapability = 'browser-read';
+  repository.events[0].reason = JSON.stringify(envelope);
+  assert.equal(parseSourceIntakeWorkItemReason(repository.events[0].reason), null);
+
+  await assert.rejects(
+    () => resumePersistedWorkItemAfterSourceAccess({
+      repository,
+      workItem: blocked.workItem,
+      accessObservation: observation,
+      organizationId: ids.organizationId,
+      actorId: ids.actorId,
+      commandId: ids.resumeCommandId,
+      at: '2026-10-16T19:46:00.000Z',
     }),
     /not a persisted source-access blocker/,
   );
