@@ -1,0 +1,72 @@
+{
+  "version": "companion-os/v1",
+  "product": {
+    "id": "companion-os",
+    "name": "Companion OS",
+    "surface": "/companion-os/",
+    "cleanRoom": true
+  },
+  "capabilities": [
+    {
+      "id": "capture",
+      "modes": ["text", "url", "file", "share", "message", "cli"],
+      "prototype": ["text", "url"]
+    },
+    {
+      "id": "memory",
+      "features": ["store", "retrieve", "labels", "portable-export"],
+      "prototype": ["store", "keyword-retrieve", "labels", "portable-export"]
+    },
+    {
+      "id": "tasks",
+      "features": ["create", "complete", "due-at", "recurrence", "delivery-receipts"],
+      "prototype": ["create", "complete", "due-at"]
+    },
+    {
+      "id": "thinking",
+      "features": ["brainstorm", "synthesize", "draft", "research"],
+      "runtime": "agent-work-os-session"
+    },
+    {
+      "id": "actions",
+      "features": ["classify-risk", "request-approval", "standing-instruction", "execute", "receipt"],
+      "prototype": ["classify-risk", "request-approval", "approval-simulation"]
+    }
+  ],
+  "policy": {
+    "default": "deny-external-write",
+    "approvalRequired": [
+      "send",
+      "book",
+      "order",
+      "buy",
+      "purchase",
+      "call",
+      "publish",
+      "delete"
+    ],
+    "prototypeExternalWrites": false,
+    "standingInstructions": false
+  },
+  "data": {
+    "prototypePersistence": "browser-localStorage",
+    "targetPersistence": "postgres",
+    "portableExport": "markdown",
+    "targetRetrieval": ["full-text", "metadata", "vector", "recency", "graph", "user-corrections"]
+  },
+  "verification": {
+    "goldenPaths": [
+      "capture-memory",
+      "capture-url",
+      "recall-keywords",
+      "create-task",
+      "create-relative-reminder",
+      "complete-task",
+      "approval-intercept",
+      "portable-export",
+      "optional-runtime-session",
+      "mobile-responsive",
+      "refresh-persistence"
+    ]
+  }
+}

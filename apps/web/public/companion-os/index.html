@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Companion OS — Personal Operations</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">C</div>
+        <div>
+          <strong>Companion OS</strong>
+          <span>Personal operations</span>
+        </div>
+      </div>
+
+      <nav id="nav" class="nav" aria-label="Primary navigation">
+        <button class="nav-item active" data-view="today">Today <span id="todayCount" class="badge">0</span></button>
+        <button class="nav-item" data-view="inbox">Inbox <span id="inboxCount" class="badge">0</span></button>
+        <button class="nav-item" data-view="memory">Memory <span id="memoryCount" class="badge">0</span></button>
+        <button class="nav-item" data-view="tasks">Tasks <span id="taskCount" class="badge">0</span></button>
+        <button class="nav-item" data-view="approvals">Approvals <span id="approvalCount" class="badge warn">0</span></button>
+        <button class="nav-item" data-view="settings">Runtime</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="exportBtn" class="ghost full">Export markdown</button>
+        <p>Local-first prototype. Irreversible actions require approval.</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ONE ASSISTANT · SPECIALIZED CAPABILITIES</p>
+          <h1 id="viewTitle">Today</h1>
+        </div>
+        <div class="status-pill"><span class="status-dot"></span><span id="runtimeStatus">Local mode</span></div>
+      </header>
+
+      <section id="todayView" class="view active">
+        <div class="hero-grid">
+          <article class="card hero-card">
+            <div class="card-kicker">Quick capture</div>
+            <h2>Put it here. Companion will route it.</h2>
+            <p class="muted">A thought, link, task, reminder, or question. The UI stays simple while capabilities route underneath.</p>
+            <form id="captureForm" class="composer">
+              <textarea id="captureInput" rows="4" placeholder="Try: Remember the article about retrieval quality, task review Q4 roadmap, or find vector search notes"></textarea>
+              <div class="composer-row">
+                <div class="chips" aria-label="Capture examples">
+                  <button type="button" class="chip" data-example="remember Build a provider-neutral memory layer">Remember</button>
+                  <button type="button" class="chip" data-example="task Review the deployment checklist">Task</button>
+                  <button type="button" class="chip" data-example="find agent memory">Find</button>
+                </div>
+                <button class="primary" type="submit">Send</button>
+              </div>
+            </form>
+          </article>
+
+          <article class="card pulse-card">
+            <div class="card-kicker">Daily pulse</div>
+            <div class="metric"><strong id="openTasksMetric">0</strong><span>open tasks</span></div>
+            <div class="metric"><strong id="savedMetric">0</strong><span>saved memories</span></div>
+            <div class="metric"><strong id="pendingMetric">0</strong><span>pending approvals</span></div>
+          </article>
+        </div>
+
+        <div class="section-head"><div><p class="eyebrow">FOCUS</p><h2>What needs attention</h2></div><button id="seedDemoBtn" class="ghost">Load demo data</button></div>
+        <div id="focusList" class="stack"></div>
+
+        <div class="section-head"><div><p class="eyebrow">ASSISTANT</p><h2>Conversation</h2></div><span class="muted small">Routes to memory, planning, retrieval, or connected runtime.</span></div>
+        <div class="chat card">
+          <div id="chatLog" class="chat-log" aria-live="polite"></div>
+          <form id="chatForm" class="chat-form">
+            <input id="chatInput" autocomplete="off" placeholder="Ask Companion anything about what you saved or need to do…" />
+            <button class="primary" type="submit">Ask</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="inboxView" class="view">
+        <div class="section-head"><div><p class="eyebrow">CAPTURE STREAM</p><h2>Unprocessed items</h2></div></div>
+        <div id="inboxList" class="stack"></div>
+      </section>
+
+      <section id="memoryView" class="view">
+        <div class="section-head">
+          <div><p class="eyebrow">SECOND MEMORY</p><h2>Saved knowledge</h2></div>
+          <input id="memorySearch" class="search" placeholder="Search words, source, tags, context…" />
+        </div>
+        <div id="memoryList" class="grid"></div>
+      </section>
+
+      <section id="tasksView" class="view">
+        <div class="section-head"><div><p class="eyebrow">EXECUTION</p><h2>Tasks & reminders</h2></div><button id="addTaskBtn" class="primary">New task</button></div>
+        <div id="taskList" class="stack"></div>
+      </section>
+
+      <section id="approvalsView" class="view">
+        <div class="section-head"><div><p class="eyebrow">HUMAN GATE</p><h2>Approval-required actions</h2></div></div>
+        <div class="card policy-note"><strong>Policy:</strong> sending, booking, ordering, purchasing, calling, publishing, deleting, or other irreversible actions never execute silently in this prototype.</div>
+        <div id="approvalList" class="stack"></div>
+      </section>
+
+      <section id="settingsView" class="view">
+        <div class="settings-grid">
+          <article class="card">
+            <p class="eyebrow">AGENT WORK OS</p>
+            <h2>Connected runtime</h2>
+            <p class="muted">Optional. When configured, open-ended chat can create a session on the existing Agent Work OS control plane. Capture, memory, tasks, and approvals remain usable locally.</p>
+            <form id="settingsForm" class="settings-form">
+              <label>Control API URL<input id="runtimeUrl" placeholder="http://127.0.0.1:8787" /></label>
+              <label>API token<input id="runtimeToken" type="password" placeholder="dev-token" /></label>
+              <label>Machine ID<input id="runtimeMachine" placeholder="machine id" /></label>
+              <label>Agent capability<input id="runtimeAgent" placeholder="codex or echo" value="echo" /></label>
+              <label>Working directory<input id="runtimeCwd" placeholder="/workspace/project" /></label>
+              <div class="form-actions"><button class="primary" type="submit">Save runtime</button><button id="clearRuntimeBtn" type="button" class="ghost">Use local only</button></div>
+            </form>
+          </article>
+          <article class="card">
+            <p class="eyebrow">DESIGN PRINCIPLE</p>
+            <h2>Capabilities, not characters</h2>
+            <ul class="principles">
+              <li><strong>Capture & memory</strong><span>URLs, notes, metadata, tags, retrieval, corrections.</span></li>
+              <li><strong>Planning & execution</strong><span>Goals, tasks, reminders, progress, summaries.</span></li>
+              <li><strong>Thinking & composition</strong><span>Brainstorming, synthesis, drafting, research.</span></li>
+              <li><strong>Policy & approvals</strong><span>Explicit human gates for consequential actions.</span></li>
+            </ul>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="taskDialog">
+    <form method="dialog" id="taskDialogForm" class="dialog-form">
+      <h2>Create task</h2>
+      <label>Task<input id="taskTitleInput" required /></label>
+      <label>Due date<input id="taskDueInput" type="datetime-local" /></label>
+      <label>Priority<select id="taskPriorityInput"><option>medium</option><option>high</option><option>low</option></select></label>
+      <div class="form-actions"><button value="cancel" class="ghost">Cancel</button><button id="saveTaskBtn" value="default" class="primary">Create</button></div>
+    </form>
+  </dialog>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -37,6 +37,21 @@
       "updatedAt": "2026-10-14T05:30:00Z"
     },
     {
+      "id": "companion-os",
+      "name": "Companion OS",
+      "repository": "rrahul0904/agent-work-os",
+      "category": "product",
+      "status": "BUILDING",
+      "readiness": 42,
+      "value": 5,
+      "effort": 3,
+      "risk": 2,
+      "blockers": [],
+      "nextAction": "Run CI and browser verification for the local-first vertical slice, then implement durable Postgres memory and the timezone-aware recurrence scheduler before any external action connectors are enabled.",
+      "evidence": ["Abhidu public-source REA dossier captured", "clean-room capability and policy contract added", "responsive Companion OS web slice implemented", "local memory/tasks/approval/export flows implemented", "optional Agent Work OS session bridge implemented"],
+      "updatedAt": "2026-10-14T15:30:00Z"
+    },
+    {
       "id": "provenance-cleaner",
       "name": "Provenance Cleaner",
       "repository": "rrahul0904/provenance-cleaner",
