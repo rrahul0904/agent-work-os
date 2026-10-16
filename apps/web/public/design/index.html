@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="color-scheme" content="dark" />
+  <title>Collaborative Design OS — Phase A</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark">◆</span><div><strong>Design OS</strong><small>Phase A · governed canvas</small></div></div>
+      <div class="document-title"><input id="document-name" value="Agent Canvas" aria-label="Document name" /></div>
+      <div class="top-actions">
+        <span class="presence"><i></i>Alice</span><span class="presence remote"><i></i>Bob</span>
+        <button id="undo" title="Undo (⌘/Ctrl+Z)">↶</button><button id="redo" title="Redo">↷</button>
+        <button id="export">Export</button><label class="button" for="import-file">Import</label><input id="import-file" type="file" accept="application/json" hidden />
+      </div>
+    </header>
+
+    <aside class="left-panel">
+      <div class="panel-heading"><span>Layers</span><button id="collapse-all" title="Clear selection">×</button></div>
+      <div id="layers" class="layers"></div>
+      <div class="panel-heading assets-heading"><span>Insert</span></div>
+      <div class="asset-grid">
+        <button data-insert="frame"><b>F</b><span>Frame</span></button>
+        <button data-insert="rect"><b>R</b><span>Shape</span></button>
+        <button data-insert="text"><b>T</b><span>Text</span></button>
+        <button data-insert="sticky"><b>N</b><span>Sticky</span></button>
+      </div>
+    </aside>
+
+    <main class="stage" id="stage">
+      <div class="toolbar" role="toolbar" aria-label="Design tools">
+        <button class="active" data-tool="select" title="Select (V)">↖</button>
+        <button data-tool="hand" title="Pan (H)">✋</button><span></span>
+        <button data-insert="frame" title="Frame (F)">▣</button><button data-insert="rect" title="Rectangle (R)">□</button><button data-insert="text" title="Text (T)">T</button><button data-insert="sticky" title="Sticky note (N)">▰</button><button id="connect" title="Connect selected nodes">↗</button>
+      </div>
+      <div id="canvas-viewport" class="canvas-viewport"><svg id="connector-layer" class="connector-layer" aria-hidden="true"></svg><div id="world" class="world"></div></div>
+      <div class="zoom-controls"><button id="zoom-out">−</button><button id="zoom-label">100%</button><button id="zoom-in">+</button><button id="fit">Fit</button></div>
+      <div class="status-pill"><span id="status-dot"></span><span id="status-text">Local-first · saved</span><code id="receipt-digest"></code></div>
+    </main>
+
+    <aside class="right-panel">
+      <div class="tabs"><button class="active">Design</button><button disabled>Prototype</button><button disabled>Inspect</button></div>
+      <div id="inspector-empty" class="empty-state"><div>◇</div><strong>Select an object</strong><span>Properties and layout controls appear here.</span></div>
+      <div id="inspector" class="inspector hidden">
+        <section><h3>Position</h3><div class="field-grid four"><label>X<input data-prop="x" type="number" /></label><label>Y<input data-prop="y" type="number" /></label><label>W<input data-prop="width" type="number" min="1" /></label><label>H<input data-prop="height" type="number" min="1" /></label></div></section>
+        <section><h3>Appearance</h3><label class="color-row">Fill<input data-prop="fill" type="color" /></label><label class="text-row">Name<input data-prop="name" /></label><label id="text-field" class="text-row hidden">Text<textarea data-prop="text" rows="4"></textarea></label></section>
+        <section id="layout-section" class="hidden"><h3>Auto layout <button id="apply-layout" class="mini">Apply</button></h3><div class="segmented"><button data-layout="free">Free</button><button data-layout="horizontal">Row</button><button data-layout="vertical">Column</button></div><div class="field-grid two"><label>Gap<input data-prop="gap" type="number" min="0" /></label><label>Padding<input data-prop="padding" type="number" min="0" /></label></div></section>
+        <section><h3>Object</h3><div class="object-actions"><button id="duplicate">Duplicate</button><button id="delete" class="danger">Delete</button></div></section>
+      </div>
+      <div class="evidence-card"><div><span>Operation ledger</span><strong id="op-count">0</strong></div><small>Every mutation emits a deterministic receipt. Remote operations are de-duplicated by operation id.</small><button id="simulate-remote">Simulate Bob edit</button></div>
+    </aside>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
