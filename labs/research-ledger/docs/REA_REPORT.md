@@ -41,31 +41,34 @@ Canonical ownership:
 
 ## Donor-to-owned capability matrix
 
-| Public donor pattern | Research Ledger owned implementation | v0.2 status |
+| Public donor pattern | Research Ledger owned implementation | v0.3 status |
 |---|---|---|
 | Browser-first source library | IndexedDB source notebook | Implemented |
 | PDF/TXT/MD ingestion | Browser extraction + PDF.js runtime adapter | Implemented |
 | Chunk/index locally | Deterministic browser chunker | Implemented |
-| Semantic retrieval | Local lexical/hybrid relevance retrieval; semantic embeddings remain a later lane | Partial / honest label |
+| Semantic retrieval | Governed lexical, vector and receipt-bound hybrid retrieval primitives | Implemented kernel; local browser embedding adapter still planned |
 | Source-grounded Q&A | Top-passage retrieval + exact evidence IDs | Implemented |
 | Click citation → passage | Passage dialog bound to local chunk ID | Implemented |
 | Summary / FAQ / study guide | Studio output contract with local fallback + optional live generation | Implemented |
-| Two-host podcast | Cited two-host transcript + local SpeechSynthesis playback | Implemented (audio download later) |
+| Two-host podcast | Cited two-host transcript + local SpeechSynthesis playback | Implemented; audio download later |
 | BYO/provider generation | Server-side provider adapter with local-only fallback | Implemented, different security model |
-| Persistence | IndexedDB docs + local research snapshots | Implemented |
-| Full semantic embedding model | Web worker / local model | Planned |
+| Persistence | IndexedDB docs + durable browser snapshot history | Implemented |
+| Version / replay | Integrity-bound snapshots, DAG lineage, deterministic diffs, replay receipts | Implemented in v0.3 |
+| Remote freshness | Bounded HTTPS freshness checker with content hashes, redirect provenance and SSRF refusal | Kernel implemented; scheduler/UI wiring next |
+| Agent handoff | Canonical `agent-work-os/research-handoff/v1` contract with execution approval gates | Implemented in v0.3 |
+| Full local semantic embedding model | Web worker / local model | Planned |
 | Downloadable rendered podcast audio | Local render/encoder pipeline | Planned |
-| Large automated test matrix | API smoke + syntax checks now; browser/E2E/security matrix next | Partial |
+| Large automated test matrix | Repository CI + integrity/adversarial tests; browser E2E/security matrix next | Partial |
 
 ## Owned differentiation
 
 Research Ledger is intentionally more than a NotebookLM-style notebook:
 
 - **Decision Lineage:** prompt → retrieved passages → claims → gaps → decision state.
-- **Evidence Drift:** local evidence hashes and future remote freshness/contradiction revalidation.
-- **Research Contract:** machine-readable artifact for downstream agents.
-- **Agent Work OS handoff:** accepted research becomes governed plans, tasks, diagrams, code changes, tests and receipts.
-- **Replay:** future runs can compare an older decision against a changed evidence set.
+- **Evidence Drift:** content-hashed local evidence plus bounded remote-source freshness receipts.
+- **Research Contract:** machine-readable snapshot/version graph for downstream agents.
+- **Agent Work OS handoff:** accepted research becomes governed plans, tasks, diagrams, code changes, tests and receipts without bypassing irreversible-action gates.
+- **Replay:** older decisions can be compared against changed evidence and replay receipts bind the exact lineage.
 - **REA bundle ingestion:** reverse-engineering evidence can enter the same provenance-aware notebook without being confused with independent verification.
 
 ## Canonical architecture
@@ -77,14 +80,17 @@ flowchart LR
   B[Explicit browser capture] --> X
   R[REA evidence bundle] --> X
   X --> IDB[(IndexedDB)]
-  IDB --> RET[Local retrieval]
+  IDB --> RET[Local / governed retrieval]
   RET --> C[Exact passage IDs]
   C -->|local fallback| G[Grounded brief / Studio]
   C -->|top passages only| API[Optional provider API]
   API --> G
-  G --> L[Decision lineage]
-  L --> D[Drift / Replay]
-  L --> H[Agent Work OS handoff]
+  G --> S[Integrity snapshot]
+  S --> VG[Version graph]
+  VG --> RP[Replay / diff receipt]
+  VG --> H[Governed Agent Work OS handoff]
+  URL[Remote public HTTPS source] --> FR[Bounded freshness checker]
+  FR --> VG
 ```
 
 ## Security / privacy contract
@@ -97,25 +103,26 @@ flowchart LR
 - No credential scraping or hidden capture.
 - Untrusted source text is rendered as text, not executable HTML.
 - Input size and evidence-count limits are enforced at the server boundary.
+- Remote freshness is HTTPS-only, refuses credential-bearing/non-default-port URLs, revalidates redirects, rejects localhost/private/reserved network targets, and records upstream failure as `unreachable` rather than “unchanged.”
+- Research handoff may auto-advance reversible work but cannot authorize external writes, merge, production deployment, credential changes or billing changes.
 
-## Verification gates for this convergence
+## v0.3 verification gates
 
-v0.2 acceptance requires:
+1. Repository-root `npm test` passes, including integrity/adversarial coverage for research snapshots, replay, handoff and source freshness.
+2. Repository-root `npm run acceptance` passes.
+3. Research Ledger local syntax/API smoke gate passes.
+4. Browser history persists and can branch from an older snapshot without overwriting lineage.
+5. Browser export uses the same canonical graph/handoff versions as the control-plane kernel.
+6. Exact PR head SHA is green in CI.
+7. Preview deployment must be built from that exact SHA and home + provider-status endpoint verified before a live deployment is claimed.
+8. Production promotion remains a separate Shipping OS decision.
 
-1. Static JS and API syntax checks pass.
-2. API local-mode smoke tests pass.
-3. Vercel preview build reaches READY.
-4. `GET /api/research` returns provider status without exposing secrets.
-5. Main page returns 200 and includes local notebook controls.
-6. The deployed source SHA is recorded.
-7. Production promotion is a separate gate after preview verification.
+## Roadmap status after v0.3
 
-## Next lanes
-
-1. Local multilingual embedding model in a Web Worker, benchmarked against lexical retrieval.
-2. Page-aware PDF citation geometry/highlighting instead of text-only passage dialogs.
-3. Audio rendering/encoding worker for downloadable podcasts.
-4. Durable notebook/version graph with explicit variants and replay diffs.
-5. Remote URL freshness fetcher and scheduled drift checks.
-6. Playwright E2E, accessibility, CSP/security and capacity benchmarks.
-7. Native import/export contract shared with Learn Anything Studio and the wider Agent Work OS capability registry.
+1. **Local multilingual embedding model in a Web Worker, benchmarked against lexical retrieval** — kernel vector/hybrid contracts exist; production browser embedding adapter still open.
+2. **Page-aware PDF citation geometry/highlighting** — open.
+3. **Audio rendering/encoding worker for downloadable podcasts** — open.
+4. **Durable notebook/version graph with explicit variants and replay diffs** — implemented in v0.3; browser E2E remains.
+5. **Remote URL freshness fetcher and scheduled drift checks** — bounded freshness kernel implemented in v0.3; scheduler/control-plane job + browser status projection remain.
+6. **Playwright E2E, accessibility, CSP/security and capacity benchmarks** — open and now the main shipping-quality lane.
+7. **Native import/export contract shared with Learn Anything Studio and wider Agent Work OS capability registry** — governed Research Ledger → Agent Work OS handoff implemented; Learn Anything bidirectional import and capability-registry registration remain.
