@@ -73,7 +73,9 @@ The CLI exposes these flows through `npm run capability -- install ... --approve
 
 ## Runtime verification receipts
 
-The first real-harness verification mode is `artifact-context`. It verifies semantic preservation of the exact generated and installed artifact without depending on a harness marketplace implementation:
+### Artifact-context verification
+
+`artifact-context` verifies semantic preservation of the exact generated and installed artifact without depending on a harness marketplace implementation:
 
 1. validate the `CapabilitySpec`,
 2. compile it for the requested harness,
@@ -95,7 +97,75 @@ npm run capability -- verify capability.json codex /tmp/capability-stage /path/t
 
 A failed threshold exits non-zero and rolls back automatically. Passing verification also rolls back by default so smoke tests do not silently mutate the harness environment. Use `--retain-installation` only when promotion is intentional. `--receipt=/path/to/receipt.json` selects an explicit receipt path.
 
-This mode proves compile/install/readback/execution/evaluation integrity. A stricter future `native-discovery` mode will additionally prove that each harness discovers and invokes the installed capability through its own marketplace/plugin/skill lookup path.
+### Codex native-discovery verification
+
+`native-discovery` adds a stricter Codex-specific proof that the harness discovered and invoked the installed skill through its own plugin lookup path. The verification bundle follows the current portable OpenAI plugin layout:
+
+```text
+<workspace>/
+├── .agents/plugins/marketplace.json
+├── .codex/config.toml
+└── plugins/<capability-slug>/
+    ├── plugin.json
+    └── skills/<capability-slug>/SKILL.md
+```
+
+The smoke package is intentionally instrumented with a one-run discovery marker that is appended to the installed `SKILL.md` but never included in the user prompt. The Codex request explicitly invokes `$<capability-slug>` and asks the discovered skill to return its marker before performing the declared test input. A case passes only when both the hidden marker and the expected semantic result appear in a completed, error-free harness execution.
+
+This separates two proofs:
+
+- `artifact-context` proves the exact production artifact preserves the intended behavior when executed by the harness.
+- `native-discovery` proves Codex can discover and invoke the skill using the real plugin/marketplace mechanism.
+
+The native-discovery package is always rolled back because it contains temporary verification instrumentation. It also fails closed when `.agents/plugins/marketplace.json`, `.codex/config.toml`, or the target plugin directory already exist; use a clean verification worktree or scratch workspace instead of overwriting project plugin configuration.
+
+Run it with:
+
+```bash
+npm run capability -- verify-native capability.json codex /path/to/clean-workspace --approve-write
+```
+
+The command returns non-zero when the discovery marker is missing or the quality threshold fails and persists a verification receipt unless an explicit `--receipt=` path is supplied.
+
+## Remote verification through Agent Work OS
+
+A daemon that can execute Codex now advertises a built-in `capability-verify` agent alongside `codex`. This intentionally reuses the existing Agent Work OS session path instead of introducing a parallel control protocol. The existing session lifecycle already provides organization membership checks, machine ownership, online/capability checks, transactional daemon delivery in PostgreSQL, durable session events, interruption, and realtime updates.
+
+Start a verification session through the normal `POST /api/sessions` endpoint. The session `cwd` is the write boundary and the `prompt` is a JSON verification request:
+
+```json
+{
+  "organizationId": "org_...",
+  "machineId": "machine_...",
+  "cwd": "/path/to/verification-workspace",
+  "agent": "capability-verify",
+  "prompt": "{\"mode\":\"artifact-context\",\"harnessId\":\"codex\",\"approveWrite\":true,\"spec\":{...}}"
+}
+```
+
+For native discovery use `"mode":"native-discovery"` and a clean session workspace. Remote verification has stricter mutation rules than the local CLI:
+
+- `approveWrite` must be explicitly true,
+- artifact-context `targetRoot` must remain at or beneath the session `cwd`,
+- native-discovery operates exactly at the session `cwd`,
+- remote verification never retains or promotes an installation,
+- verification receipts are not written to arbitrary local paths, and
+- interruption propagates to any nested Codex verification execution.
+
+The daemon emits the full receipt as a structured session event:
+
+```json
+{
+  "kind": "tool",
+  "name": "capability.verification.receipt",
+  "phase": "completed",
+  "payload": { "verificationMode": "artifact-context", "passed": true, "receiptDigest": "sha256:..." }
+}
+```
+
+Because this travels through `daemon.session.event`, the current control plane persists the receipt inside the session event stream and broadcasts it through the existing realtime channel. A short text summary is emitted as well so the verification result is visible in the existing session UI without teaching the UI a new resource type first.
+
+This session-backed orchestration is the compatibility bridge. A later production slice can normalize capability verification runs into their own first-class PostgreSQL resource and API without changing the daemon verifier or receipt contract.
 
 ## Clean-room rule
 
