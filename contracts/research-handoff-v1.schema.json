@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/research-handoff-v1.schema.json",
+  "title": "Agent Work OS Research Handoff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "researchVersionGraphContract", "workspaceId", "handoffId", "source", "research", "requestedOutcome", "constraints", "executionPolicy", "handoffSha256"],
+  "properties": {
+    "contractVersion": { "const": "agent-work-os/research-handoff/v1" },
+    "researchVersionGraphContract": { "const": "research-version-graph/v1" },
+    "workspaceId": { "type": "string", "minLength": 1 },
+    "handoffId": { "type": "string", "minLength": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshotId", "snapshotSha256", "graphSha256", "replaySha256", "evidenceSetSha256", "semanticGate"],
+      "properties": {
+        "snapshotId": { "type": "string", "minLength": 1 },
+        "snapshotSha256": { "$ref": "#/$defs/sha256" },
+        "graphSha256": { "$ref": "#/$defs/sha256" },
+        "replaySha256": { "anyOf": [{ "$ref": "#/$defs/sha256" }, { "type": "null" }] },
+        "evidenceSetSha256": { "$ref": "#/$defs/sha256" },
+        "semanticGate": { "type": "string", "minLength": 1 }
+      }
+    },
+    "research": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["question", "mode", "acceptedConclusion", "status", "confidence", "claimIds", "openGaps", "nextMoves"],
+      "properties": {
+        "question": { "type": "string", "minLength": 1 },
+        "mode": { "type": "string", "minLength": 1 },
+        "acceptedConclusion": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "claimIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "openGaps": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "nextMoves": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+      }
+    },
+    "requestedOutcome": { "type": "string", "minLength": 1 },
+    "constraints": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "executionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidencePolicy", "networkPolicy", "approvalGates", "autoAdvanceAllowed", "irreversibleActionsRequireApproval"],
+      "properties": {
+        "evidencePolicy": { "type": "string", "minLength": 1 },
+        "networkPolicy": { "type": "string", "minLength": 1 },
+        "approvalGates": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "autoAdvanceAllowed": { "type": "boolean" },
+        "irreversibleActionsRequireApproval": { "const": true }
+      }
+    },
+    "handoffSha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}
