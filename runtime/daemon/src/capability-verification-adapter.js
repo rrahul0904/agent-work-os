@@ -1,6 +1,7 @@
 import path from "node:path";
 import { verifyCapabilityWithAdapter } from "./capability-verifier.js";
 import { verifyCodexNativeDiscovery } from "./codex-native-verifier.js";
+import { verifyClaudeNativeDiscovery } from "./claude-native-verifier.js";
 
 export class CapabilityVerificationAdapter {
   name = "capability-verify";
@@ -19,12 +20,12 @@ export class CapabilityVerificationAdapter {
     if (!available.length) return null;
     const harnessModes = Object.fromEntries(available.map(({ harnessId }) => [
       harnessId,
-      harnessId === "codex" ? ["artifact-context", "native-discovery"] : ["artifact-context"]
+      ["artifact-context", "native-discovery"]
     ]));
     return {
       name: this.name,
       executable: "builtin",
-      version: "2",
+      version: "3",
       harnesses: available.map((entry) => entry.harnessId),
       modes: [...new Set(Object.values(harnessModes).flat())],
       harnessModes,
@@ -75,18 +76,31 @@ export class CapabilityVerificationAdapter {
           receiptPath: null,
           sessionIdFactory
         });
-      } else if (harnessId === "codex" && mode === "native-discovery") {
+      } else if (mode === "native-discovery") {
         if (payload.workspaceRoot && path.resolve(payload.workspaceRoot) !== workspace) {
           throw new Error("native-discovery workspaceRoot must match the session cwd");
         }
-        result = await verifyCodexNativeDiscovery({
-          spec: payload.spec,
-          adapter: nestedAdapter,
-          workspaceRoot: workspace,
-          approveWrite: true,
-          receiptPath: null,
-          sessionIdFactory
-        });
+        if (harnessId === "codex") {
+          result = await verifyCodexNativeDiscovery({
+            spec: payload.spec,
+            adapter: nestedAdapter,
+            workspaceRoot: workspace,
+            approveWrite: true,
+            receiptPath: null,
+            sessionIdFactory
+          });
+        } else if (harnessId === "claude-code") {
+          result = await verifyClaudeNativeDiscovery({
+            spec: payload.spec,
+            adapter: nestedAdapter,
+            workspaceRoot: workspace,
+            approveWrite: true,
+            receiptPath: null,
+            sessionIdFactory
+          });
+        } else {
+          throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
+        }
       } else {
         throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
       }
