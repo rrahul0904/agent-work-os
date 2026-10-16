@@ -13,6 +13,7 @@ import { createWorkItemRepository } from "./work-item-store.js";
 import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
+import { PostgresTaskRunRepository } from "./task-run-store.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -40,6 +41,8 @@ export async function createControlPlane() {
   await store.load();
   const workItems = createWorkItemRepository(store);
   if (typeof workItems.initialize === "function") await workItems.initialize();
+  const taskRuns = store.pool ? new PostgresTaskRunRepository(store.pool) : null;
+  await taskRuns?.initialize();
   if (isProduction && !store.pool) throw new Error("DATABASE_URL_required_in_production");
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
@@ -61,7 +64,9 @@ export async function createControlPlane() {
         machines: (await Promise.all(principal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
         sessions: (await Promise.all(principal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
         shippingRuns: (await Promise.all(principal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
-        workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat()
+        workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat(),
+        tasks: taskRuns ? (await Promise.all(principal.organizationIds.map((organizationId) => taskRuns.listTasksByOrganization(organizationId)))).flat() : [],
+        runs: taskRuns ? (await Promise.all(principal.organizationIds.map((organizationId) => taskRuns.listRunsByOrganization(organizationId)))).flat() : []
       };
     }
     return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
@@ -114,7 +119,7 @@ export async function createControlPlane() {
     });
     for (const [peer, state] of clientSockets) {
       const principal = state.principal;
-      const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
+      const organizationId = event.workItem?.organizationId ?? event.task?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
       if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) {
         if (eventId !== null && state.lastSentEventId !== null && eventId <= state.lastSentEventId) continue;
         if (state.resyncing) {
@@ -168,7 +173,7 @@ export async function createControlPlane() {
         state.principal.organizationIds = (await identities.listMemberships(state.principal.userId)).map((membership) => membership.organizationId);
       }
       for (const { eventId, event } of history.rows) {
-        const organizationId = event.workItem?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
+        const organizationId = event.workItem?.organizationId ?? event.task?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
         if (state.principal.kind === "legacy" || (organizationId && state.principal.organizationIds?.includes(organizationId))) {
           if (eventId <= state.lastSentEventId) continue;
           peer.send(encodeMessage({ ...event, eventId: cursorCodec.eventTag(eventId), cursor: cursorCodec.encode(eventId) }));
@@ -385,6 +390,117 @@ export async function createControlPlane() {
         const item = await workItems.get(decodeURIComponent(workItemMatch[1]), organizationId);
         return item ? json(res, 200, item) : json(res, 404, { error: "work_item_not_found" });
       }
+      if (req.method === "GET" && url.pathname === "/api/tasks") {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        return json(res, 200, { tasks: await taskRuns.listTasksByOrganization(organizationId) });
+      }
+      const workItemTasksMatch = url.pathname.match(/^\/api\/work-items\/([^/]+)\/tasks$/);
+      if (req.method === "POST" && workItemTasksMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const body = await readJson(req);
+        if (!body.organizationId || !body.commandId || !body.id || !body.title) return json(res, 400, { error: "organizationId, id, commandId and title are required" });
+        const membership = principal.kind === "user" ? await identities.getMembership(principal.userId, body.organizationId) : null;
+        if (principal.kind === "user" && !membership) return json(res, 404, { error: "organization_not_found" });
+        if (membership?.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const actorId = principal.kind === "user" ? principal.userId : CONTROL_PLANE_ACTOR_ID;
+        const workItemId = decodeURIComponent(workItemTasksMatch[1]);
+        const parent = await workItems.get(workItemId, body.organizationId);
+        if (!parent) return json(res, 404, { error: "work_item_not_found" });
+        const result = await taskRuns.createTask({
+          id: body.id, organizationId: body.organizationId, workItemId,
+          title: body.title, description: body.description ?? "", createdBy: actorId
+        }, { commandId: body.commandId, actorId });
+        broadcast({ type: "task.updated", task: result.task });
+        return json(res, result.replayed ? 200 : 201, result);
+      }
+      const taskMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)$/);
+      if (req.method === "GET" && taskMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        const task = await taskRuns.getTask(decodeURIComponent(taskMatch[1]), organizationId);
+        return task ? json(res, 200, task) : json(res, 404, { error: "task_not_found" });
+      }
+      const taskEventsMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/events$/);
+      if (req.method === "GET" && taskEventsMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        const taskId = decodeURIComponent(taskEventsMatch[1]);
+        if (!(await taskRuns.getTask(taskId, organizationId))) return json(res, 404, { error: "task_not_found" });
+        return json(res, 200, { events: await taskRuns.listTaskEvents(taskId, organizationId) });
+      }
+      const taskRunsMatch = url.pathname.match(/^\/api\/tasks\/([^/]+)\/runs$/);
+      if (req.method === "GET" && taskRunsMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        const taskId = decodeURIComponent(taskRunsMatch[1]);
+        if (!(await taskRuns.getTask(taskId, organizationId))) return json(res, 404, { error: "task_not_found" });
+        return json(res, 200, { runs: await taskRuns.listRunsByTask(taskId, organizationId) });
+      }
+      if (req.method === "POST" && taskRunsMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const body = await readJson(req);
+        if (!body.organizationId || !body.commandId || !body.runId) return json(res, 400, { error: "organizationId, runId and commandId are required" });
+        const membership = principal.kind === "user" ? await identities.getMembership(principal.userId, body.organizationId) : null;
+        if (principal.kind === "user" && !membership) return json(res, 404, { error: "organization_not_found" });
+        if (membership?.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const actorId = principal.kind === "user" ? principal.userId : CONTROL_PLANE_ACTOR_ID;
+        const result = await taskRuns.createRun(decodeURIComponent(taskRunsMatch[1]), {
+          organizationId: body.organizationId, runId: body.runId, commandId: body.commandId, actorId
+        });
+        if (!result) return json(res, 404, { error: "task_not_found" });
+        broadcast({ type: "task.updated", task: result.task });
+        broadcast({ type: "run.updated", run: result.run });
+        return json(res, result.replayed ? 200 : 201, result);
+      }
+      const runMatch = url.pathname.match(/^\/api\/runs\/([^/]+)$/);
+      if (req.method === "GET" && runMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        const run = await taskRuns.getRun(decodeURIComponent(runMatch[1]), organizationId);
+        return run ? json(res, 200, run) : json(res, 404, { error: "run_not_found" });
+      }
+      const runEventsMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/events$/);
+      if (req.method === "GET" && runEventsMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const organizationId = url.searchParams.get("organizationId");
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+        const runId = decodeURIComponent(runEventsMatch[1]);
+        if (!(await taskRuns.getRun(runId, organizationId))) return json(res, 404, { error: "run_not_found" });
+        return json(res, 200, { events: await taskRuns.listRunEvents(runId, organizationId) });
+      }
+      const runTransitionMatch = url.pathname.match(/^\/api\/runs\/([^/]+)\/transitions$/);
+      if (req.method === "POST" && runTransitionMatch) {
+        if (!taskRuns) return json(res, 503, { error: "task_run_store_requires_postgres" });
+        const body = await readJson(req);
+        if (!body.organizationId || !body.commandId || !Number.isSafeInteger(body.expectedVersion) || !body.to) {
+          return json(res, 400, { error: "organizationId, commandId, expectedVersion and to are required" });
+        }
+        const membership = principal.kind === "user" ? await identities.getMembership(principal.userId, body.organizationId) : null;
+        if (principal.kind === "user" && !membership) return json(res, 404, { error: "organization_not_found" });
+        if (membership?.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        if (body.to !== "CANCELLED") return json(res, 403, { error: "run_state_worker_managed" });
+        const actorId = principal.kind === "user" ? principal.userId : CONTROL_PLANE_ACTOR_ID;
+        const result = await taskRuns.transitionRun(decodeURIComponent(runTransitionMatch[1]), {
+          organizationId: body.organizationId, commandId: body.commandId, actorId,
+          expectedVersion: body.expectedVersion, to: body.to, allowedFrom: ["QUEUED"]
+        });
+        if (!result) return json(res, 404, { error: "run_not_found" });
+        broadcast({ type: "run.updated", run: result.run });
+        broadcast({ type: "task.updated", task: result.task });
+        return json(res, 200, result);
+      }
       if (req.method === "GET" && url.pathname === "/api/product") {
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
         const [runs, machines, sessions] = await Promise.all([Promise.resolve(store.listShippingRuns()), store.listMachines(), store.listSessions()]);
@@ -598,7 +714,7 @@ export async function createControlPlane() {
       return json(res, 404, { error: "not_found" });
     } catch (error) {
       const status = error instanceof IdentityError ? error.status
-        : error.code === "work_item_version_conflict" || error.code === "idempotency_key_conflict" || error.code === "work_item_already_exists" ? 409
+        : error.code === "work_item_version_conflict" || error.code === "idempotency_key_conflict" || error.code === "work_item_already_exists" || error.code === "run_version_conflict" ? 409
         : error instanceof DomainValidationError ? 400
           : error instanceof SyntaxError ? 400
             : error.statusCode ?? 500;
@@ -758,7 +874,9 @@ function isUserScopedRoute(pathname) {
     || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
-    || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
+    || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions|\/tasks)?$/.test(pathname)
+    || pathname === "/api/tasks" || /^\/api\/tasks\/[^/]+(?:\/events|\/runs)?$/.test(pathname)
+    || /^\/api\/runs\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
 }
 function isMachineScopedRoute(method, pathname) {
   return method === "GET" && /^\/api\/sessions\/[^/]+$/.test(pathname);

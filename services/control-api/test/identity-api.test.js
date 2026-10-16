@@ -170,6 +170,41 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.equal(created.status, 201, JSON.stringify(createdBody));
     assert.equal(createdBody.workItem.createdBy, owner.body.user.id);
 
+    const taskResponse = await api(owner.cookies, owner.body.csrfToken, `/api/work-items/${encodeURIComponent(workItemId)}/tasks`, {
+      method: "POST", body: { id: createCanonicalId("task"), organizationId: alphaId, commandId: createCanonicalId("command"), title: "Run a coding task", description: "Persist one execution attempt" }
+    });
+    const createdTask = await taskResponse.json();
+    assert.equal(taskResponse.status, 201, JSON.stringify(createdTask));
+    assert.equal(createdTask.task.status, "READY");
+    const foreignTaskRead = await api(otherTenant.cookies, null, `/api/tasks/${encodeURIComponent(createdTask.task.id)}?organizationId=${encodeURIComponent(alphaId)}`);
+    assert.equal(foreignTaskRead.status, 404, "a different organization cannot read the Task");
+    const taskRunCommandId = createCanonicalId("command");
+    const taskRunId = createCanonicalId("run");
+    const taskRunResponse = await api(owner.cookies, owner.body.csrfToken, `/api/tasks/${encodeURIComponent(createdTask.task.id)}/runs`, {
+      method: "POST", body: { organizationId: alphaId, runId: taskRunId, commandId: taskRunCommandId }
+    });
+    const createdTaskRun = await taskRunResponse.json();
+    assert.equal(taskRunResponse.status, 201, JSON.stringify(createdTaskRun));
+    assert.equal(createdTaskRun.run.attempt, 1);
+    assert.equal(createdTaskRun.run.status, "QUEUED");
+    assert.equal(createdTaskRun.task.status, "READY", "a queued Run has not been claimed by a worker");
+    const duplicateTaskRun = await api(owner.cookies, owner.body.csrfToken, `/api/tasks/${encodeURIComponent(createdTask.task.id)}/runs`, {
+      method: "POST", body: { organizationId: alphaId, runId: taskRunId, commandId: taskRunCommandId }
+    });
+    assert.equal(duplicateTaskRun.status, 200, "repeated Run command returns its stored outcome");
+    assert.equal((await duplicateTaskRun.json()).run.id, createdTaskRun.run.id);
+    const forgedTaskRunCompletion = await api(owner.cookies, owner.body.csrfToken, `/api/runs/${encodeURIComponent(createdTaskRun.run.id)}/transitions`, {
+      method: "POST", body: { organizationId: alphaId, commandId: createCanonicalId("command"), expectedVersion: 1, to: "SUCCEEDED" }
+    });
+    assert.equal(forgedTaskRunCompletion.status, 403, "users cannot fabricate worker-managed Run lifecycle transitions");
+    const cancelTaskRun = await api(owner.cookies, owner.body.csrfToken, `/api/runs/${encodeURIComponent(createdTaskRun.run.id)}/transitions`, {
+      method: "POST", body: { organizationId: alphaId, commandId: createCanonicalId("command"), expectedVersion: 1, to: "CANCELLED" }
+    });
+    assert.equal(cancelTaskRun.status, 200);
+    assert.equal((await cancelTaskRun.json()).run.status, "CANCELLED");
+    const taskRunEvents = await api(owner.cookies, null, `/api/runs/${encodeURIComponent(createdTaskRun.run.id)}/events?organizationId=${encodeURIComponent(alphaId)}`);
+    assert.equal((await taskRunEvents.json()).events.length, 2);
+
     const machineId = crypto.randomUUID();
     const credentialResponse = await api(owner.cookies, owner.body.csrfToken, `/api/organizations/${alphaId}/machine-credentials`, {
       method: "POST", body: { machineId, name: "Alpha executor" }
@@ -415,6 +450,18 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         assert.equal(replayCursor.type, "realtime.cursor");
         assert.match(replayCursor.cursor, /^[A-Za-z0-9_-]{40,128}$/);
         await assert.rejects(fanoutClient.readMessage(250), /timed out/, "listener catch-up does not duplicate the replayed event");
+
+        const replayTaskId = createCanonicalId("task");
+        const replayTaskResponse = await api(owner.cookies, owner.body.csrfToken, `/api/work-items/${encodeURIComponent(workItemId)}/tasks`, {
+          method: "POST", body: { id: replayTaskId, organizationId: alphaId, commandId: createCanonicalId("command"), title: "Replay task event" }
+        });
+        assert.equal(replayTaskResponse.status, 201);
+        fanoutClient.close();
+        fanoutClient = await openClientSocket(replicaPort, owner.cookies, replicatedEvent.cursor);
+        const replayedTaskEvent = await readUntilMessage(fanoutClient, (message) => message.type === "task.updated");
+        assert.equal(replayedTaskEvent.task.id, replayTaskId, "reconnect replays tenant-scoped Task updates");
+        assert.equal(replayedTaskEvent.task.organizationId, alphaId);
+        await assert.rejects(otherOrgFanoutClient.readMessage(250), /timed out/, "Task replay does not disclose another organization's event");
 
         await databaseInspector.query("DELETE FROM agent_work_os_realtime_events_v1");
         await databaseInspector.query(
