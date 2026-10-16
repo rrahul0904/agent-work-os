@@ -22,12 +22,11 @@ const shippingRuns = new Set();
 const commandReceipts = createCommandReceiptCache();
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter();
-if (codex.capability()) {
-  adapters.set("codex", codex);
-  adapters.set("capability-verify", new CapabilityVerificationAdapter(codex));
-}
+if (codex.capability()) adapters.set("codex", codex);
 const claudeCode = new ClaudeCodeAdapter();
 if (claudeCode.capability()) adapters.set("claude-code", claudeCode);
+const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode);
+if (capabilityVerification.capability()) adapters.set("capability-verify", capabilityVerification);
 
 let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
 console.log(`[daemon] machine id ${machineId}`);
