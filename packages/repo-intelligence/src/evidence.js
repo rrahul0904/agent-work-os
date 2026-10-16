@@ -10,7 +10,7 @@ export class RepoEvidenceError extends Error {
   }
 }
 
-export function createRepositoryEvidenceBundle({ repoMap, topology = null, context = null, risk = null, provenance = {} } = {}) {
+export function createRepositoryEvidenceBundle({ repoMap, topology = null, context = null, risk = null, diff = null, provenance = {} } = {}) {
   assertRepoMap(repoMap);
   if (topology) assertArtifact(topology, "repo-topology/v1", repoMap.digest, "repo_topology_invalid");
   if (context) assertArtifact(context, "repo-context-evidence/v1", repoMap.digest, "repo_context_invalid");
@@ -20,11 +20,20 @@ export function createRepositoryEvidenceBundle({ repoMap, topology = null, conte
       throw new RepoEvidenceError("repo_risk_topology_mismatch", "Risk artifact is not bound to the supplied topology");
     }
   }
+  if (diff) {
+    if (diff.schemaVersion !== "repo-diff/v1" || typeof diff.digest !== "string") {
+      throw new RepoEvidenceError("repo_diff_invalid", "Expected repo-diff/v1");
+    }
+    if (diff.currentDigest !== repoMap.digest) {
+      throw new RepoEvidenceError("repo_diff_current_mismatch", "Diff currentDigest does not match the supplied repository map");
+    }
+  }
 
   const artifactRefs = [artifactRef("repo-map", repoMap)];
   if (topology) artifactRefs.push(artifactRef("repo-topology", topology));
   if (context) artifactRefs.push(artifactRef("repo-context", context));
   if (risk) artifactRefs.push(artifactRef("repo-risk", risk));
+  if (diff) artifactRefs.push(artifactRef("repo-diff", diff));
 
   const payload = {
     schemaVersion: REPO_EVIDENCE_BUNDLE_SCHEMA,
@@ -35,7 +44,7 @@ export function createRepositoryEvidenceBundle({ repoMap, topology = null, conte
     }),
     provenance: normalizeProvenance(provenance),
     artifacts: Object.freeze(artifactRefs),
-    claims: Object.freeze(buildClaims(repoMap, topology, context, risk)),
+    claims: Object.freeze(buildClaims(repoMap, topology, context, risk, diff)),
     selectedPaths: Object.freeze(context?.selected?.map((item) => item.path) ?? []),
     summary: Object.freeze({
       files: repoMap.metrics.files,
@@ -44,14 +53,15 @@ export function createRepositoryEvidenceBundle({ repoMap, topology = null, conte
       modules: topology?.metrics?.modules ?? null,
       dependencyEdges: topology?.metrics?.moduleEdges ?? null,
       contextFiles: context?.selected?.length ?? null,
-      highRiskFiles: risk?.metrics?.highRiskFiles ?? null
+      highRiskFiles: risk?.metrics?.highRiskFiles ?? null,
+      affectedFiles: diff?.summary?.affectedFiles ?? null
     })
   };
 
   return Object.freeze({ ...payload, digest: canonicalDigest(payload) });
 }
 
-function buildClaims(repoMap, topology, context, risk) {
+function buildClaims(repoMap, topology, context, risk, diff) {
   const claims = [
     Object.freeze({
       type: "repository-shape",
@@ -78,6 +88,13 @@ function buildClaims(repoMap, topology, context, risk) {
       type: "structural-hotspots",
       text: `Structural analysis scored ${risk.metrics.filesScored} files and identified ${risk.metrics.highRiskFiles} high-risk hotspots.`,
       artifactDigest: risk.digest
+    }));
+  }
+  if (diff) {
+    claims.push(Object.freeze({
+      type: "repository-drift",
+      text: `Repository drift affects ${diff.summary.affectedFiles} files: ${diff.summary.addedFiles} added, ${diff.summary.removedFiles} removed, ${diff.summary.changedFiles} changed.`,
+      artifactDigest: diff.digest
     }));
   }
   return claims;
