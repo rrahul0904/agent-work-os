@@ -1,0 +1,59 @@
+{
+  "version": "autonomy-contract/v1",
+  "project": {
+    "id": "agent-work-os",
+    "repository": "rrahul0904/agent-work-os",
+    "baseBranch": "main"
+  },
+  "mandate": {
+    "goal": "Continuously improve Agent Work OS through low-risk, evidence-backed work while keeping reserved decisions human-controlled.",
+    "allowedWorkKinds": ["bug", "test", "docs", "feature", "performance", "reliability"]
+  },
+  "execution": {
+    "implementerProviders": ["codex"],
+    "isolatedWorktree": true
+  },
+  "review": {
+    "independentFromAuthor": true,
+    "lenses": [
+      { "id": "correctness", "required": true },
+      { "id": "does-it-work", "required": true },
+      { "id": "security", "required": true }
+    ]
+  },
+  "merge": {
+    "requiredChecks": ["test", "acceptance"],
+    "exactHeadSha": true,
+    "latestReviewRecordOnly": true
+  },
+  "reserved": {
+    "paths": [
+      ".github/**",
+      "scripts/**",
+      "migrations/**",
+      "services/control-api/src/identity-store.js",
+      "package.json",
+      "Dockerfile",
+      "Dockerfile.vercel",
+      "vercel.json"
+    ],
+    "actions": [
+      "production-deploy",
+      "destructive-migration",
+      "auth-or-permission-change",
+      "major-dependency-bump",
+      "secret-or-credential-change",
+      "merge-or-push-main"
+    ]
+  },
+  "budgets": {
+    "maxTasksPerRun": 3,
+    "maxFixAttempts": 3,
+    "maxMergesPerRun": 2,
+    "maxCostUsd": 25
+  },
+  "learning": {
+    "journalRequired": true,
+    "promoteFailuresToGuards": true
+  }
+}

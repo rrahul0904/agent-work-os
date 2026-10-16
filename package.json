@@ -18,6 +18,7 @@
     "test:capabilities": "node --test packages/capability-fabric/test/*.test.js",
     "acceptance": "node scripts/acceptance.mjs",
     "check": "npm test && npm run acceptance",
+    "autonomy": "node scripts/autonomy.mjs",
     "ship": "node scripts/ship.mjs run",
     "ship:validate": "node scripts/ship.mjs validate"
   }

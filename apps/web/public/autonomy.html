@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Agent Work OS — Autonomous Maintainer</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(circle at 20% 0%, #17332d 0, #0a1110 35%, #060908 100%); color: #eff7f4; min-height: 100vh; }
+    a { color: inherit; }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 64px; }
+    .nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 34px; }
+    .brand { font-weight: 760; letter-spacing: -0.02em; }
+    .brand span { color: #8ff0c4; }
+    .tag { border: 1px solid #28483e; background: #10201b; color: #a9c9be; padding: 7px 10px; border-radius: 999px; font-size: 12px; }
+    .hero { display: grid; grid-template-columns: 1.5fr .8fr; gap: 24px; align-items: end; margin-bottom: 30px; }
+    h1 { font-size: clamp(38px, 6vw, 72px); line-height: .96; letter-spacing: -.055em; margin: 0 0 18px; max-width: 900px; }
+    .lead { font-size: 18px; line-height: 1.6; color: #a8bbb4; max-width: 760px; margin: 0; }
+    .status { border: 1px solid #2f5045; background: rgba(16, 33, 28, .8); border-radius: 20px; padding: 18px; }
+    .status strong { display:block; font-size: 13px; color:#8ff0c4; margin-bottom:6px; text-transform:uppercase; letter-spacing:.1em; }
+    .status div { font-size:24px; font-weight:700; }
+    .grid { display:grid; grid-template-columns: repeat(12, 1fr); gap:16px; }
+    .card { border:1px solid #233a33; background:rgba(10,17,15,.84); border-radius:18px; padding:20px; box-shadow:0 20px 60px rgba(0,0,0,.18); }
+    .pipeline { grid-column: span 8; }
+    .gate { grid-column: span 4; }
+    .full { grid-column: 1 / -1; }
+    .half { grid-column: span 6; }
+    .eyebrow { color:#7ea599; font-size:12px; text-transform:uppercase; letter-spacing:.12em; margin-bottom:12px; }
+    h2 { margin:0 0 16px; font-size:22px; letter-spacing:-.02em; }
+    .steps { display:grid; gap:10px; }
+    .step { display:grid; grid-template-columns:36px 1fr auto; gap:12px; align-items:center; border:1px solid #20362f; border-radius:14px; padding:12px; background:#0b1512; }
+    .num { width:30px; height:30px; display:grid; place-items:center; border-radius:9px; background:#163028; color:#8ff0c4; font-weight:800; }
+    .step b { display:block; font-size:14px; margin-bottom:3px; }
+    .step small { color:#799289; }
+    .pill { font-size:11px; padding:5px 8px; border-radius:999px; background:#14231f; color:#91aa9f; white-space:nowrap; }
+    .checks { display:grid; gap:10px; }
+    label { display:flex; align-items:center; justify-content:space-between; gap:16px; border-bottom:1px solid #1c2b26; padding:10px 0; color:#cfe0da; font-size:14px; }
+    input[type="checkbox"] { width:19px; height:19px; accent-color:#78ddb2; }
+    .result { margin-top:16px; padding:14px; border-radius:14px; border:1px solid #31594b; background:#10261f; }
+    .result .state { font-size:20px; font-weight:800; }
+    .result p { margin:6px 0 0; color:#8fa79e; font-size:13px; line-height:1.45; }
+    .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+    .metric { padding:14px; background:#0b1512; border:1px solid #1e332c; border-radius:13px; }
+    .metric strong { display:block; font-size:26px; }
+    .metric span { color:#758e85; font-size:12px; }
+    .matrix { width:100%; border-collapse: collapse; font-size:13px; }
+    .matrix th,.matrix td { text-align:left; padding:11px 10px; border-bottom:1px solid #1d302a; vertical-align:top; }
+    .matrix th { color:#78958b; font-weight:600; }
+    .matrix td:last-child { color:#a4bbb3; }
+    .next { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+    .idea { border:1px solid #20372f; border-radius:14px; padding:14px; background:#0a1411; }
+    .idea b { display:block; margin-bottom:6px; }
+    .idea span { color:#789188; font-size:13px; line-height:1.45; }
+    .footer { margin-top:18px; color:#607c72; font-size:12px; text-align:center; }
+    @media (max-width: 820px) { .hero { grid-template-columns:1fr; } .pipeline,.gate,.half { grid-column:1/-1; } .metrics,.next { grid-template-columns:1fr 1fr; } }
+    @media (max-width: 520px) { .shell { width:min(100% - 20px,1180px); } .metrics,.next { grid-template-columns:1fr; } .step { grid-template-columns:34px 1fr; } .step .pill { grid-column:2; justify-self:start; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <nav class="nav">
+      <div class="brand">Agent Work <span>OS</span></div>
+      <div class="tag">Autonomous Maintainer · v0.1 preview</div>
+    </nav>
+
+    <section class="hero">
+      <div>
+        <h1>Self-working repos, governed by evidence.</h1>
+        <p class="lead">REA discovers what is worth building. Agents implement and challenge it in isolation. The policy gate binds every decision to the exact candidate SHA. Shipping OS—not the builder—owns release truth.</p>
+      </div>
+      <div class="status"><strong>Current autonomy level</strong><div>L2 · PR-only foundation</div></div>
+    </section>
+
+    <section class="grid">
+      <article class="card pipeline">
+        <div class="eyebrow">Owned control loop</div>
+        <h2>Evidence → work → challenge → ship</h2>
+        <div class="steps">
+          <div class="step"><div class="num">1</div><div><b>REA intake</b><small>Source identity, public evidence, capability extraction, clean-room decision.</small></div><span class="pill">discovery</span></div>
+          <div class="step"><div class="num">2</div><div><b>Canonical WorkItem</b><small>Ranked by value, confidence, risk and effort; bounded by a project charter.</small></div><span class="pill">planning</span></div>
+          <div class="step"><div class="num">3</div><div><b>Isolated implementer</b><small>One task, one worktree; provider-neutral execution with bounded retries.</small></div><span class="pill">build</span></div>
+          <div class="step"><div class="num">4</div><div><b>Independent challenge</b><small>Correctness, does-it-work and security lenses tied to head + base SHAs.</small></div><span class="pill">review</span></div>
+          <div class="step"><div class="num">5</div><div><b>Autonomy gate</b><small>Required CI, latest reviews, reserved paths/actions, human approvals.</small></div><span class="pill">policy</span></div>
+          <div class="step"><div class="num">6</div><div><b>Shipping OS</b><small>Preview, UAT, production, deployed-SHA proof and tamper-evident receipt.</small></div><span class="pill">release</span></div>
+        </div>
+      </article>
+
+      <aside class="card gate">
+        <div class="eyebrow">Gate simulator</div>
+        <h2>Would this candidate progress?</h2>
+        <div class="checks">
+          <label>Required CI green <input id="ci" type="checkbox" checked></label>
+          <label>Exact-SHA reviews current <input id="sha" type="checkbox" checked></label>
+          <label>Independent reviewers <input id="review" type="checkbox" checked></label>
+          <label>Reserved surface touched <input id="reserved" type="checkbox"></label>
+          <label>Human approval recorded <input id="approval" type="checkbox"></label>
+        </div>
+        <div class="result" id="result"><div class="state">READY_TO_SHIP</div><p>Autonomy gate is satisfied. Shipping OS still owns deployment and release completion.</p></div>
+      </aside>
+
+      <article class="card full">
+        <div class="eyebrow">Why this is more than the donor</div>
+        <div class="metrics">
+          <div class="metric"><strong>4+</strong><span>agent/provider adapters planned</span></div>
+          <div class="metric"><strong>SHA</strong><span>review + CI + approval binding</span></div>
+          <div class="metric"><strong>REA</strong><span>evidence-backed market-to-code intake</span></div>
+          <div class="metric"><strong>OS</strong><span>shipping authority stays outside the model</span></div>
+        </div>
+      </article>
+
+      <article class="card half">
+        <div class="eyebrow">Autonomy ladder</div>
+        <h2>Widen authority only after proof</h2>
+        <table class="matrix">
+          <tr><th>Level</th><th>Authority</th></tr>
+          <tr><td>L0</td><td>Observe and recommend only</td></tr>
+          <tr><td>L1</td><td>Plan bounded work + acceptance criteria</td></tr>
+          <tr><td>L2</td><td>Build/test/review/open PR; human merge</td></tr>
+          <tr><td>L3</td><td>Auto-merge pre-approved low-risk classes</td></tr>
+          <tr><td>L4</td><td>Automatic isolated preview + UAT</td></tr>
+          <tr><td>L5</td><td>Reversible production canary under SLO policy</td></tr>
+          <tr><td>L6</td><td>Budgeted autonomy across a repo portfolio</td></tr>
+        </table>
+      </article>
+
+      <article class="card half">
+        <div class="eyebrow">Expansion map</div>
+        <h2>Products we can spin out</h2>
+        <div class="next">
+          <div class="idea"><b>Repo Autopilot</b><span>Continuous low-risk maintenance with explicit autonomy levels.</span></div>
+          <div class="idea"><b>Agent Benchmark Lab</b><span>Replay the same tasks across models and compare quality, risk and cost.</span></div>
+          <div class="idea"><b>Market-to-Code</b><span>REA turns public/customer demand into clean-room, evidence-backed work.</span></div>
+          <div class="idea"><b>Failure Guard Factory</b><span>Convert real CI/review/incidents into durable regression controls.</span></div>
+          <div class="idea"><b>Policy Compiler</b><span>Natural-language charter to testable machine policy and approval gates.</span></div>
+          <div class="idea"><b>Portfolio Maintainer</b><span>Allocate a bounded engineering budget across many repositories.</span></div>
+        </div>
+      </article>
+    </section>
+    <div class="footer">Operator preview · no production mutation is triggered from this page.</div>
+  </main>
+  <script>
+    const ids = ["ci","sha","review","reserved","approval"];
+    const controls = Object.fromEntries(ids.map(id => [id, document.getElementById(id)]));
+    const result = document.getElementById("result");
+    function render() {
+      let state = "READY_TO_SHIP";
+      let text = "Autonomy gate is satisfied. Shipping OS still owns deployment and release completion.";
+      if (!controls.ci.checked || !controls.sha.checked || !controls.review.checked) {
+        state = "BLOCKED";
+        text = "A deterministic or independent evidence gate is missing. The candidate must return to implementation/review.";
+      } else if (controls.reserved.checked && !controls.approval.checked) {
+        state = "HUMAN_APPROVAL_REQUIRED";
+        text = "A reserved surface is touched. Approval must be explicit and bound to this exact head SHA.";
+      }
+      result.querySelector(".state").textContent = state;
+      result.querySelector("p").textContent = text;
+    }
+    ids.forEach(id => controls[id].addEventListener("change", render));
+    render();
+  </script>
+</body>
+</html>

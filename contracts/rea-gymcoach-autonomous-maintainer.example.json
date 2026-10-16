@@ -1,0 +1,116 @@
+[
+  {
+    "version": "rea-finding/v1",
+    "id": "exact-sha-review-gate",
+    "sourceUrl": "https://github.com/gymcoach-app/gymcoach",
+    "sourceIdentity": "gymcoach-app/gymcoach",
+    "capability": "Bind review and required CI evidence to the exact candidate head SHA before merge",
+    "cleanRoomDecision": "adopt_pattern",
+    "evidence": [
+      {
+        "url": "https://github.com/gymcoach-app/gymcoach/blob/main/docs/loops/evidence.md",
+        "claim": "Public evidence describes a merge gate that requires structured review and CI checks on the reviewed head SHA."
+      }
+    ],
+    "value": 5,
+    "confidence": 5,
+    "risk": 1,
+    "effort": 2,
+    "constraints": ["Implement independently; do not copy donor source or review-record format."]
+  },
+  {
+    "version": "rea-finding/v1",
+    "id": "multi-lens-independent-review",
+    "sourceUrl": "https://github.com/gymcoach-app/gymcoach",
+    "sourceIdentity": "gymcoach-app/gymcoach",
+    "capability": "Require independent reviewer identities across correctness, runtime and security lenses",
+    "cleanRoomDecision": "adopt_pattern",
+    "evidence": [
+      {
+        "url": "https://github.com/gymcoach-app/gymcoach/blob/main/docs/loops/07-autonomy.md",
+        "claim": "The public autonomy charter requires adversarial subagent challenge and multiple review lenses for higher-risk changes."
+      }
+    ],
+    "value": 5,
+    "confidence": 5,
+    "risk": 1,
+    "effort": 2,
+    "constraints": ["Provider-neutral reviewers; author identity cannot satisfy independent review."]
+  },
+  {
+    "version": "rea-finding/v1",
+    "id": "reserved-human-decisions",
+    "sourceUrl": "https://github.com/gymcoach-app/gymcoach",
+    "sourceIdentity": "gymcoach-app/gymcoach",
+    "capability": "Machine-enforced reserved-path and reserved-action approval gates",
+    "cleanRoomDecision": "adopt_pattern",
+    "evidence": [
+      {
+        "url": "https://github.com/gymcoach-app/gymcoach/blob/main/docs/loops/07-autonomy.md",
+        "claim": "The public charter reserves destructive migrations, auth/security changes, major dependency changes and ambiguous product decisions for a human."
+      }
+    ],
+    "value": 5,
+    "confidence": 5,
+    "risk": 1,
+    "effort": 2,
+    "constraints": ["Approval must be bound to the exact candidate SHA and explicit subject."]
+  },
+  {
+    "version": "rea-finding/v1",
+    "id": "failure-to-guard-memory",
+    "sourceUrl": "https://github.com/gymcoach-app/gymcoach",
+    "sourceIdentity": "gymcoach-app/gymcoach",
+    "capability": "Promote observed failures into durable tests, policies and guardrails",
+    "cleanRoomDecision": "adopt_pattern",
+    "evidence": [
+      {
+        "url": "https://github.com/gymcoach-app/gymcoach/blob/main/docs/loops/evidence.md",
+        "claim": "The evidence page maps multiple real failures to controls later encoded in tests, hooks and gates."
+      }
+    ],
+    "value": 5,
+    "confidence": 5,
+    "risk": 1,
+    "effort": 3,
+    "constraints": ["Store original evidence and distinguish observed facts from inferred causes."]
+  },
+  {
+    "version": "rea-finding/v1",
+    "id": "contained-maintainer-evals",
+    "sourceUrl": "https://github.com/gymcoach-app/gymcoach",
+    "sourceIdentity": "gymcoach-app/gymcoach",
+    "capability": "Replay maintainer tasks in credential-free contained environments with tamper canaries",
+    "cleanRoomDecision": "adopt_pattern",
+    "evidence": [
+      {
+        "url": "https://github.com/gymcoach-app/gymcoach/blob/main/docs/loops/evidence.md",
+        "claim": "The donor documents restricted-network eval runs, throwaway grading containers, file allowlists and tamper detection, while also disclosing remaining bypasses."
+      }
+    ],
+    "value": 5,
+    "confidence": 5,
+    "risk": 3,
+    "effort": 5,
+    "constraints": ["Keep paid/self-modifying eval agents disabled until containment acceptance tests pass."]
+  },
+  {
+    "version": "rea-finding/v1",
+    "id": "claude-specific-hooks",
+    "sourceUrl": "https://github.com/gymcoach-app/gymcoach",
+    "sourceIdentity": "gymcoach-app/gymcoach",
+    "capability": "Claude-Code-specific hook implementation details",
+    "cleanRoomDecision": "compare_only",
+    "evidence": [
+      {
+        "url": "https://github.com/gymcoach-app/gymcoach/blob/main/docs/loops/evidence.md",
+        "claim": "The donor uses Claude-Code hooks for git guarding, usage capture and subagent dispatch limits."
+      }
+    ],
+    "value": 3,
+    "confidence": 5,
+    "risk": 2,
+    "effort": 2,
+    "constraints": ["Agent Work OS should own a provider-neutral policy/adaptor interface rather than clone Claude-specific hooks."]
+  }
+]
