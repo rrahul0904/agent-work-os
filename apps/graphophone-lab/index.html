@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Explore equations as animated sound. A browser-first sonic mathematics laboratory." />
+  <title>Sonic Math Lab</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">SONIC MATHEMATICS STUDIO</p>
+      <h1>Sonic Math Lab</h1>
+    </div>
+    <div class="top-actions">
+      <button id="themeBtn" class="ghost" type="button">Theme</button>
+      <button id="shareBtn" class="ghost" type="button">Copy share link</button>
+      <button id="recordBtn" class="primary" type="button">Export video</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="stage-card">
+      <div class="stage-head">
+        <div>
+          <span id="lessonTag" class="pill">Frequency explorer</span>
+          <p id="lessonText">Change <strong>a</strong> and listen to the graph speed up or slow down.</p>
+        </div>
+        <div class="readout"><span id="coordReadout">x 0.00 · y 0.00</span><strong id="hzReadout">220 Hz</strong></div>
+      </div>
+      <canvas id="graph" width="1200" height="700" aria-label="Animated mathematical graph"></canvas>
+      <div class="transport">
+        <button id="playBtn" class="play" type="button">▶ Play</button>
+        <input id="timeline" type="range" min="0" max="1000" value="0" aria-label="Playback position" />
+        <span id="timeReadout">00:00 / 00:06</span>
+      </div>
+    </section>
+
+    <aside class="control-card">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-mode="cartesian" type="button">Graph</button>
+        <button class="tab" data-mode="parametric" type="button">Parametric</button>
+      </div>
+
+      <section class="panel formula-panel">
+        <div id="cartesianEditor">
+          <label for="formula">Formula y = f(x)</label>
+          <div class="formula-row"><span>ƒ</span><input id="formula" value="a*sin(b*x)+c" spellcheck="false" /><button id="applyBtn" type="button">Apply</button></div>
+        </div>
+        <div id="parametricEditor" hidden>
+          <label>Parametric curve</label>
+          <div class="formula-stack"><input id="xFormula" value="a*cos(t)" spellcheck="false" aria-label="x of t" /><input id="yFormula" value="a*sin(t)" spellcheck="false" aria-label="y of t" /><button id="paramApplyBtn" type="button">Apply</button></div>
+        </div>
+        <p id="error" class="error" role="alert"></p>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><h2>Live parameters</h2><span>Drag while playing</span></div>
+        <label class="slider-label">a <output id="aOut">1.0</output><input id="aSlider" type="range" min="0.2" max="5" value="1" step="0.1" /></label>
+        <label class="slider-label">b <output id="bOut">1.0</output><input id="bSlider" type="range" min="0.2" max="8" value="1" step="0.1" /></label>
+        <label class="slider-label">c <output id="cOut">0.0</output><input id="cSlider" type="range" min="-4" max="4" value="0" step="0.1" /></label>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><h2>Learning presets</h2><span>Start here</span></div>
+        <div id="presetGrid" class="preset-grid"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><h2>Sound</h2><span id="audioStatus">Ready</span></div>
+        <div class="two-col">
+          <label>Voice<select id="voice"><option>sine</option><option>triangle</option><option>square</option><option>sawtooth</option></select></label>
+          <label>Mapping<select id="mapping"><option value="pitch">Y → pitch</option><option value="pan">X → stereo</option><option value="both">X + Y</option></select></label>
+        </div>
+        <label class="slider-label">Volume <output id="volumeOut">35%</output><input id="volume" type="range" min="0" max="1" value="0.35" step="0.01" /></label>
+        <label class="slider-label">Echo <output id="echoOut">12%</output><input id="echo" type="range" min="0" max="0.7" value="0.12" step="0.01" /></label>
+      </section>
+
+      <section class="panel save-panel">
+        <div class="panel-title"><h2>Creations</h2><button id="saveBtn" class="ghost small" type="button">Save current</button></div>
+        <div id="savedList" class="saved-list"><p class="muted">Nothing saved yet.</p></div>
+      </section>
+    </aside>
+  </main>
+
+  <footer><span>Everything runs locally in your browser.</span><span>No microphone, account, or upload required.</span></footer>
+  <script type="module" src="./app.mjs"></script>
+</body>
+</html>
