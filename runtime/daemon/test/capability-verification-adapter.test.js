@@ -18,13 +18,23 @@ class FakeHarnessAdapter {
   async run(request, emit) {
     emit({ kind: "status", status: "running", at: "2026-10-16T00:00:00Z" });
     if (request.prompt.includes("Agent Work OS capability discovery marker")) {
-      const slug = request.prompt.match(/Use the \$([a-z0-9-]+) skill/)?.[1];
-      assert.ok(slug);
-      const skill = await readFile(path.join(request.cwd, "plugins", slug, "skills", slug, "SKILL.md"), "utf8");
-      const marker = skill.match(/AWOS_DISCOVERY_[A-F0-9]+/)?.[0];
-      assert.ok(marker);
-      assert.equal(request.prompt.includes(marker), false);
-      emit({ kind: "text", text: `${marker}\nREADY`, at: "2026-10-16T00:00:01Z" });
+      if (this.name === "codex") {
+        const slug = request.prompt.match(/Use the \$([a-z0-9-]+) skill/)?.[1];
+        assert.ok(slug);
+        const skill = await readFile(path.join(request.cwd, "plugins", slug, "skills", slug, "SKILL.md"), "utf8");
+        const marker = skill.match(/AWOS_DISCOVERY_[A-F0-9]+/)?.[0];
+        assert.ok(marker);
+        assert.equal(request.prompt.includes(marker), false);
+        emit({ kind: "text", text: `${marker}\nREADY`, at: "2026-10-16T00:00:01Z" });
+      } else if (this.name === "claude-code") {
+        const slug = request.prompt.match(/^\/([a-z0-9-]+)\s/m)?.[1];
+        assert.ok(slug);
+        const skill = await readFile(path.join(request.cwd, ".claude", "skills", slug, "SKILL.md"), "utf8");
+        const marker = skill.match(/AWOS_CLAUDE_DISCOVERY_[A-F0-9]+/)?.[0];
+        assert.ok(marker);
+        assert.equal(request.prompt.includes(marker), false);
+        emit({ kind: "text", text: `${marker}\nREADY`, at: "2026-10-16T00:00:01Z" });
+      }
     } else {
       emit({ kind: "text", text: "READY", at: "2026-10-16T00:00:01Z" });
     }
@@ -78,11 +88,11 @@ test("adapter advertises only available nested harnesses and per-harness modes",
   assert.equal(both.capability().name, "capability-verify");
   assert.deepEqual(both.capability().harnesses, ["codex", "claude-code"]);
   assert.deepEqual(both.capability().harnessModes.codex, ["artifact-context", "native-discovery"]);
-  assert.deepEqual(both.capability().harnessModes["claude-code"], ["artifact-context"]);
+  assert.deepEqual(both.capability().harnessModes["claude-code"], ["artifact-context", "native-discovery"]);
 
   const claudeOnly = new CapabilityVerificationAdapter(new FakeCodexAdapter({ available: false }), new FakeClaudeAdapter());
   assert.deepEqual(claudeOnly.capability().harnesses, ["claude-code"]);
-  assert.deepEqual(claudeOnly.capability().modes, ["artifact-context"]);
+  assert.deepEqual(claudeOnly.capability().modes, ["artifact-context", "native-discovery"]);
 
   const unavailable = new CapabilityVerificationAdapter(new FakeCodexAdapter({ available: false }), new FakeClaudeAdapter({ available: false }));
   assert.equal(unavailable.capability(), null);
@@ -147,17 +157,25 @@ test("remote Codex native-discovery verification proves hidden probe and rolls b
   await assert.rejects(readFile(path.join(root, "plugins", "remote-verify", "plugin.json"), "utf8"), { code: "ENOENT" });
 });
 
-test("Claude native discovery fails closed until its native gate exists", async () => {
+test("remote Claude native-discovery verification proves project skill discovery and rolls back", async () => {
   const root = await tempRoot();
   const adapter = new CapabilityVerificationAdapter(null, new FakeClaudeAdapter());
-  await assert.rejects(
-    adapter.run({
-      sessionId: "outer-claude-native",
-      cwd: root,
-      prompt: requestPayload(makeSpec(), { harnessId: "claude-code", mode: "native-discovery" })
-    }, () => {}),
-    /unsupported capability verification mode native-discovery for harness claude-code/
-  );
+  const events = [];
+  await adapter.run({
+    sessionId: "outer-claude-native",
+    cwd: root,
+    prompt: requestPayload(makeSpec(), { harnessId: "claude-code", mode: "native-discovery" })
+  }, (event) => events.push(event));
+
+  const receipt = events.find((event) => event.name === "capability.verification.receipt")?.payload;
+  assert.ok(receipt);
+  assert.equal(receipt.harnessId, "claude-code");
+  assert.equal(receipt.verificationMode, "native-discovery");
+  assert.equal(receipt.passed, true);
+  assert.equal(receipt.cases[0].discoveryMarkerMatched, true);
+  assert.equal(receipt.skill.invocation, "/remote-verify");
+  assert.equal(receipt.rollback.ok, true);
+  await assert.rejects(readFile(path.join(root, ".claude", "skills", "remote-verify", "SKILL.md"), "utf8"), { code: "ENOENT" });
 });
 
 test("remote verification requires explicit write approval", async () => {
