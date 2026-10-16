@@ -29,7 +29,7 @@ async function invoke(args) {
   return execFileAsync(process.execPath, [CLI, ...args], { encoding: "utf8" });
 }
 
-test("repo-atlas CLI emits map, topology and context JSON", async () => {
+test("repo-atlas CLI emits map, topology, context, risk and evidence bundle JSON", async () => {
   await withFixture(async (root) => {
     await put(root, "package.json", JSON.stringify({ name: "cli-fixture", dependencies: { zod: "^4.0.0" } }));
     await put(root, "src/billing.ts", "export const billing = true;\n");
@@ -56,6 +56,27 @@ test("repo-atlas CLI emits map, topology and context JSON", async () => {
     assert.equal(context.schemaVersion, "repo-context-evidence/v1");
     assert.equal(context.selected.length, 1);
     assert.equal(context.selected[0].path, "src/billing.ts");
+
+    const riskResult = await invoke(["risk", root, "--top=2"]);
+    const risk = JSON.parse(riskResult.stdout);
+    assert.equal(risk.schemaVersion, "repo-risk/v1");
+    assert.ok(risk.hotspots.length <= 2);
+
+    const bundleResult = await invoke([
+      "bundle", root,
+      "--task=billing change",
+      "--repository=example/cli-fixture",
+      "--ref=main",
+      "--commit=abc123"
+    ]);
+    const bundle = JSON.parse(bundleResult.stdout);
+    assert.equal(bundle.schemaVersion, "repo-evidence-bundle/v1");
+    assert.equal(bundle.provenance.repository, "example/cli-fixture");
+    assert.equal(bundle.provenance.ref, "main");
+    assert.equal(bundle.provenance.commit, "abc123");
+    assert.ok(bundle.artifacts.some((artifact) => artifact.kind === "repo-risk"));
+    assert.ok(bundle.artifacts.some((artifact) => artifact.kind === "repo-context"));
+    assert.ok(bundle.selectedPaths.includes("src/billing.ts"));
   });
 });
 
