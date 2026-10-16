@@ -38,8 +38,15 @@ try {
 
   const home = await fetch(`${base}/`);
   assert.equal(home.status, 200);
-  assert.match(await home.text(), /Research Ledger/);
+  const homeText = await home.text();
+  assert.match(homeText, /Research Ledger/);
   assert.match(home.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
+  assert.ok(homeText.indexOf('src="/db-schema.js"') < homeText.indexOf('src="/app.js"'), 'schema guard must load before app');
+
+  const schema = await fetch(`${base}/db-schema.js`);
+  assert.equal(schema.status, 200);
+  assert.match(schema.headers.get('content-type') || '', /javascript/);
+  assert.match(await schema.text(), /const DB_VERSION = 3/);
 
   const app = await fetch(`${base}/app.js`);
   assert.equal(app.status, 200);
