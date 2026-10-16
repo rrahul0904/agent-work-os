@@ -8,6 +8,7 @@ import pg from "pg";
 import { createCapabilitySpec } from "../../../packages/capability-fabric/src/index.js";
 import { JsonStore } from "../src/store.js";
 import { IdentityRepository } from "../src/identity-store.js";
+import { createWorkItemRepository } from "../src/work-item-store.js";
 import { TenantCapabilityRegistryRepository } from "../src/capability-registry-store.js";
 
 const { Pool } = pg;
@@ -28,6 +29,8 @@ test("PostgreSQL capability registry persists tenant versions and provenance", {
   try {
     store = new JsonStore(path.join(temp, "state.json"));
     await store.load();
+    const workItems = createWorkItemRepository(store);
+    if (typeof workItems.initialize === "function") await workItems.initialize();
     const identities = new IdentityRepository(store.pool);
     await identities.initialize();
     const account = await identities.register({
