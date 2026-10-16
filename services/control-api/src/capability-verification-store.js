@@ -1,4 +1,5 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { insertDaemonCommand } from "./daemon-command-outbox.js";
 
 const MIGRATION_URL = new URL("../../../migrations/009_capability_verification_runs.sql", import.meta.url);
@@ -16,11 +17,13 @@ export class CapabilityVerificationStoreError extends Error {
 export class CapabilityVerificationRepository {
   constructor(store) {
     this.store = store;
+    this.localPath = `${store.filePath}.capability-verification-runs.json`;
+    this.localWriteChain = Promise.resolve();
   }
 
   async initialize() {
     if (this.store.pool) await this.store.pool.query(await readFile(MIGRATION_URL, "utf8"));
-    else this.store.state.capabilityVerificationRuns ??= {};
+    else await this.#readLocalState();
   }
 
   async createWithSession(runInput, session, command) {
@@ -34,12 +37,11 @@ export class CapabilityVerificationRepository {
     }
 
     if (!this.store.pool) {
-      if (this.store.state.capabilityVerificationRuns[run.id]) {
-        throw new CapabilityVerificationStoreError("capability_verification_run_exists", undefined, 409);
-      }
+      const state = await this.#readLocalState();
+      if (state.runs[run.id]) throw new CapabilityVerificationStoreError("capability_verification_run_exists", undefined, 409);
       await this.store.createSession(session);
-      this.store.state.capabilityVerificationRuns[run.id] = structuredClone(run);
-      await this.store.persistCompatibilityState();
+      state.runs[run.id] = structuredClone(run);
+      await this.#writeLocalState(state);
       return structuredClone(run);
     }
 
@@ -56,9 +58,7 @@ export class CapabilityVerificationRepository {
         [session.id, session.organizationId, session.machineId, session.createdBy ?? null, session.status,
           JSON.stringify(session), session.createdAt, session.updatedAt]
       );
-      if (!savedSession.rowCount) {
-        throw new CapabilityVerificationStoreError("machine_not_available_in_organization", undefined, 409);
-      }
+      if (!savedSession.rowCount) throw new CapabilityVerificationStoreError("machine_not_available_in_organization", undefined, 409);
       await client.query(
         `INSERT INTO agent_work_os_capability_verification_runs_v1
            (run_id, organization_id, machine_id, session_id, created_by, status, record, created_at, updated_at)
@@ -71,9 +71,7 @@ export class CapabilityVerificationRepository {
       return structuredClone(run);
     } catch (error) {
       try { await client.query("ROLLBACK"); } catch {}
-      if (error?.code === "23505") {
-        throw new CapabilityVerificationStoreError("capability_verification_run_exists", undefined, 409);
-      }
+      if (error?.code === "23505") throw new CapabilityVerificationStoreError("capability_verification_run_exists", undefined, 409);
       throw error;
     } finally {
       client.release();
@@ -89,7 +87,8 @@ export class CapabilityVerificationRepository {
       );
       return result.rows[0]?.record ?? null;
     }
-    const run = this.store.state.capabilityVerificationRuns?.[id];
+    const state = await this.#readLocalState();
+    const run = state.runs[id];
     return run?.organizationId === organizationId ? structuredClone(run) : null;
   }
 
@@ -101,7 +100,8 @@ export class CapabilityVerificationRepository {
       );
       return result.rows.map((row) => row.record);
     }
-    return Object.values(this.store.state.capabilityVerificationRuns ?? {})
+    const state = await this.#readLocalState();
+    return Object.values(state.runs)
       .filter((run) => run.organizationId === organizationId)
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .map((run) => structuredClone(run));
@@ -142,13 +142,39 @@ export class CapabilityVerificationRepository {
       }
     }
 
-    const entry = Object.values(this.store.state.capabilityVerificationRuns ?? {}).find((run) => run.sessionId === sessionId);
+    const state = await this.#readLocalState();
+    const entry = Object.values(state.runs).find((run) => run.sessionId === sessionId);
     if (!entry) return null;
     const updated = applySessionEvent(entry, event);
     if (!updated) return structuredClone(entry);
-    this.store.state.capabilityVerificationRuns[entry.id] = updated;
-    await this.store.persistCompatibilityState();
+    state.runs[entry.id] = updated;
+    await this.#writeLocalState(state);
     return structuredClone(updated);
+  }
+
+  async #readLocalState() {
+    try {
+      const parsed = JSON.parse(await readFile(this.localPath, "utf8"));
+      if (parsed?.schemaVersion !== "1" || !parsed.runs || typeof parsed.runs !== "object" || Array.isArray(parsed.runs)) {
+        throw new CapabilityVerificationStoreError("capability_verification_local_store_invalid", undefined, 500);
+      }
+      return parsed;
+    } catch (error) {
+      if (error?.code === "ENOENT") return { schemaVersion: "1", runs: {} };
+      if (error instanceof SyntaxError) throw new CapabilityVerificationStoreError("capability_verification_local_store_invalid_json", undefined, 500);
+      throw error;
+    }
+  }
+
+  #writeLocalState(state) {
+    const snapshot = `${JSON.stringify(state, null, 2)}\n`;
+    this.localWriteChain = this.localWriteChain.catch(() => {}).then(async () => {
+      await mkdir(path.dirname(this.localPath), { recursive: true });
+      const temp = `${this.localPath}.tmp`;
+      await writeFile(temp, snapshot, "utf8");
+      await rename(temp, this.localPath);
+    });
+    return this.localWriteChain;
   }
 }
 
