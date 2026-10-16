@@ -34,6 +34,25 @@ function validateComponentReceipt({ receipt, workspaceId, indexRevision, query }
   if (receipt.query !== query.trim()) {
     throw new Error('component retrieval receipt query mismatch');
   }
+  if (!Array.isArray(receipt.results)) {
+    throw new Error('component retrieval receipt results are invalid');
+  }
+  const ranks = new Set();
+  for (const result of receipt.results) {
+    if (!result || typeof result.spanId !== 'string' || result.spanId.trim() === '') {
+      throw new Error('component retrieval receipt contains an invalid span id');
+    }
+    if (!Number.isInteger(result.rank) || result.rank <= 0) {
+      throw new Error('component retrieval receipt contains a non-positive rank');
+    }
+    if (ranks.has(result.rank)) {
+      throw new Error('component retrieval receipt contains a duplicate rank');
+    }
+    ranks.add(result.rank);
+    if (typeof result.score !== 'number' || !Number.isFinite(result.score)) {
+      throw new Error('component retrieval receipt contains an invalid score');
+    }
+  }
 }
 
 export function fuseHybridRetrieval({
