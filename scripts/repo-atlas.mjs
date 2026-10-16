@@ -5,6 +5,8 @@ import process from "node:process";
 
 import { scanRepository, selectRepositoryContext } from "../packages/repo-intelligence/src/index.js";
 import { analyzeRepositoryTopology } from "../packages/repo-intelligence/src/topology.js";
+import { analyzeStructuralRisk } from "../packages/repo-intelligence/src/risk.js";
+import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
 
 const [command, repoArg = ".", ...flags] = process.argv.slice(2);
 
@@ -24,12 +26,45 @@ try {
     const map = await scanRepository(repoArg);
     const result = selectRepositoryContext(map, { task, maxFiles, maxEstimatedTokens });
     await emit(result, getFlag(flags, "--output="));
+  } else if (command === "risk") {
+    const topN = parseIntegerFlag(flags, "--top=", 25);
+    const map = await scanRepository(repoArg);
+    const topology = await analyzeRepositoryTopology(repoArg, map);
+    const result = analyzeStructuralRisk(map, topology, { topN });
+    await emit(result, getFlag(flags, "--output="));
+  } else if (command === "bundle") {
+    const map = await scanRepository(repoArg);
+    const topology = await analyzeRepositoryTopology(repoArg, map);
+    const risk = analyzeStructuralRisk(map, topology, { topN: parseIntegerFlag(flags, "--top=", 25) });
+    const task = getFlag(flags, "--task=");
+    const context = task
+      ? selectRepositoryContext(map, {
+          task,
+          maxFiles: parseIntegerFlag(flags, "--max-files=", 24),
+          maxEstimatedTokens: parseIntegerFlag(flags, "--max-tokens=", 24_000)
+        })
+      : null;
+    const result = createRepositoryEvidenceBundle({
+      repoMap: map,
+      topology,
+      risk,
+      context,
+      provenance: {
+        repository: getFlag(flags, "--repository=") ?? undefined,
+        ref: getFlag(flags, "--ref=") ?? undefined,
+        commit: getFlag(flags, "--commit=") ?? undefined,
+        source: getFlag(flags, "--source=") ?? "local-checkout"
+      }
+    });
+    await emit(result, getFlag(flags, "--output="));
   } else {
     process.stderr.write(
       "Usage:\n" +
       "  npm run repo:atlas -- map <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- topology <repo-path> [--output=<file>]\n" +
-      "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n"
+      "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
+      "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
+      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n"
     );
     process.exitCode = 2;
   }
