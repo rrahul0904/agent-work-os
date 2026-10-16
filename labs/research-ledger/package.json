@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "npx vercel dev",
-    "test": "node tests.mjs",
-    "check": "node --check app.js && node --check completion.js && node --check api/research.js && node --check api/source-status.js && node --check railway-server.mjs && npm test",
+    "test:api": "node tests.mjs",
+    "test:runtime": "node runtime-smoke.mjs",
+    "test": "npm run test:api && npm run test:runtime",
+    "check": "node --check app.js && node --check completion.js && node --check api/research.js && node --check api/source-status.js && node --check railway-server.mjs && node --check runtime-smoke.mjs && npm test",
     "start": "node railway-server.mjs"
   },
   "engines": {
