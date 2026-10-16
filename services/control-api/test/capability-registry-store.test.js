@@ -7,6 +7,7 @@ import { createCapabilitySpec } from "../../../packages/capability-fabric/src/in
 import { JsonStore } from "../src/store.js";
 import { TenantCapabilityRegistryRepository } from "../src/capability-registry-store.js";
 
+// Keep this storage suite independent from control-plane routing so PR merge-ref CI validates composition with the latest main.
 async function fixture() {
   const root = await mkdtemp(path.join(tmpdir(), "agent-work-os-capability-registry-"));
   const statePath = path.join(root, "state.json");
