@@ -129,28 +129,16 @@ The command returns non-zero when the discovery marker is missing or the quality
 
 ## Remote verification through Agent Work OS
 
-A daemon that can execute Codex now advertises a built-in `capability-verify` agent alongside `codex`. This intentionally reuses the existing Agent Work OS session path instead of introducing a parallel control protocol. The existing session lifecycle already provides organization membership checks, machine ownership, online/capability checks, transactional daemon delivery in PostgreSQL, durable session events, interruption, and realtime updates.
+A daemon that can execute Codex advertises a built-in `capability-verify` agent alongside `codex`. The verifier deliberately reuses the existing Agent Work OS session path instead of introducing a parallel execution protocol. The session lifecycle already provides organization membership checks, machine ownership, online/capability checks, transactional daemon delivery in PostgreSQL, durable session events, interruption, and realtime updates.
 
-Start a verification session through the normal `POST /api/sessions` endpoint. The session `cwd` is the write boundary and the `prompt` is a JSON verification request:
-
-```json
-{
-  "organizationId": "org_...",
-  "machineId": "machine_...",
-  "cwd": "/path/to/verification-workspace",
-  "agent": "capability-verify",
-  "prompt": "{\"mode\":\"artifact-context\",\"harnessId\":\"codex\",\"approveWrite\":true,\"spec\":{...}}"
-}
-```
-
-For native discovery use `"mode":"native-discovery"` and a clean session workspace. Remote verification has stricter mutation rules than the local CLI:
+Remote verification has stricter mutation rules than the local CLI:
 
 - `approveWrite` must be explicitly true,
 - artifact-context `targetRoot` must remain at or beneath the session `cwd`,
 - native-discovery operates exactly at the session `cwd`,
 - remote verification never retains or promotes an installation,
 - verification receipts are not written to arbitrary local paths, and
-- interruption propagates to any nested Codex verification execution.
+- interruption propagates to nested Codex verification execution.
 
 The daemon emits the full receipt as a structured session event:
 
@@ -163,9 +151,50 @@ The daemon emits the full receipt as a structured session event:
 }
 ```
 
-Because this travels through `daemon.session.event`, the current control plane persists the receipt inside the session event stream and broadcasts it through the existing realtime channel. A short text summary is emitted as well so the verification result is visible in the existing session UI without teaching the UI a new resource type first.
+The backing session remains the append-only execution trace. A short text summary is also emitted so current session surfaces remain useful.
 
-This session-backed orchestration is the compatibility bridge. A later production slice can normalize capability verification runs into their own first-class PostgreSQL resource and API without changing the daemon verifier or receipt contract.
+## First-class CapabilityVerificationRun API
+
+The control plane now normalizes remote verification into a tenant-owned `CapabilityVerificationRun` resource while retaining the session as its execution evidence. In production, creation is transactional: the verification run, backing session, and durable daemon outbox command are inserted in one PostgreSQL transaction. An outbox failure therefore cannot leave a visible verification run without an execution command.
+
+Create a run:
+
+```http
+POST /api/capability-verifications
+```
+
+```json
+{
+  "organizationId": "org_...",
+  "machineId": "machine_...",
+  "cwd": "/path/to/verification-workspace",
+  "harnessId": "codex",
+  "mode": "artifact-context",
+  "approveWrite": true,
+  "spec": { "...": "CapabilitySpec" }
+}
+```
+
+The API validates tenant membership, viewer restrictions, machine ownership/online state, the advertised `capability-verify` daemon capability, the `CapabilitySpec`, harness, mode, and explicit filesystem approval before creating the run.
+
+Read/list runs with:
+
+```text
+GET /api/capability-verifications?organizationId=<org>
+GET /api/capability-verifications/<run-id>?organizationId=<org>
+```
+
+Interrupt an active run with:
+
+```http
+POST /api/capability-verifications/<run-id>/interrupt
+```
+
+using `{ "organizationId": "org_..." }` as the body. The command is routed to the backing session and then to the verifier's nested Codex execution.
+
+The normalized lifecycle is `queued → running → verifying → complete|failed|interrupted`. Session status/error events update the run, and the structured verification receipt finalizes it as `complete` or `failed`. The full receipt is retained on the run while the complete raw event trace remains on the backing session. Realtime clients receive `capability.verification.updated` events and authenticated state snapshots include `capabilityVerificationRuns` for the user's organizations.
+
+Local development persists these records in a separate atomic sidecar rather than expanding the legacy global JSON snapshot. Production stores them in `agent_work_os_capability_verification_runs_v1` with organization, machine, session, and creator ownership boundaries.
 
 ## Clean-room rule
 
