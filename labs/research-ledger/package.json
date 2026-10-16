@@ -1,13 +1,12 @@
 {
   "name": "research-ledger",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "npx vercel dev",
-    "test": "node tests.mjs"
+    "test": "node tests.mjs",
+    "check": "node --check v02.js && node --check api/research.js && npm test"
   },
-  "engines": {
-    "node": ">=20"
-  },
-  "type": "module"
+  "engines": { "node": ">=20" }
 }
