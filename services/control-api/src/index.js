@@ -9,9 +9,10 @@ import { digestShippingContract, validateShippingContract } from "./shipping-con
 import { buildProductSummary, listReceipts, loadPortfolio, rankPortfolio } from "./product-state.js";
 import { JsonStore } from "./store.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
-import { assertCapabilitySpec } from "../../../packages/capability-fabric/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { CapabilityVerificationRepository } from "./capability-verification-store.js";
+import { TenantCapabilityRegistryRepository } from "./capability-registry-store.js";
+import { handleCapabilityRegistryRequest, resolveVerificationCapabilitySpec } from "./capability-registry-routes.js";
 import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
@@ -47,6 +48,8 @@ export async function createControlPlane() {
   if (isProduction && !store.pool) throw new Error("DATABASE_URL_required_in_production");
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
+  const capabilityRegistry = new TenantCapabilityRegistryRepository(store);
+  await capabilityRegistry.initialize();
   const staleMachinesAtStartup = await store.initializeMachineSessionStore(machineStaleAfterMs);
   await store.initializeShippingRunStore();
   await store.initializeRealtimeEventStore();
@@ -327,6 +330,7 @@ export async function createControlPlane() {
       }
 
       if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
+      if (await handleCapabilityRegistryRequest({ req, res, url, principal, identities, registry: capabilityRegistry, readJson, json })) return;
       if (req.method === "GET" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
@@ -335,7 +339,7 @@ export async function createControlPlane() {
       }
       if (req.method === "POST" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
         const body = await readJson(req);
-        if (!body.organizationId || !body.machineId || !body.cwd || !body.spec) return json(res, 400, { error: "organizationId, machineId, cwd and spec are required" });
+        if (!body.organizationId || !body.machineId || !body.cwd || (!body.spec && !body.capabilitySlug)) return json(res, 400, { error: "organizationId, machineId, cwd and spec or capabilitySlug are required" });
         if (body.approveWrite !== true) return json(res, 400, { error: "approveWrite_true_required" });
         const membership = await identities.getMembership(principal.userId, body.organizationId);
         if (!membership) return json(res, 404, { error: "organization_not_found" });
@@ -343,7 +347,8 @@ export async function createControlPlane() {
         const machine = await store.getMachine(body.machineId);
         if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
         if (!machine.capabilities?.some((capability) => capability.name === "capability-verify")) return json(res, 400, { error: "capability_verification_not_available" });
-        const spec = assertCapabilitySpec(body.spec);
+        const spec = await resolveVerificationCapabilitySpec(capabilityRegistry, body.organizationId, body);
+        if (!spec) return json(res, 404, { error: "capability_not_found" });
         const harnessId = body.harnessId ?? "codex";
         const mode = body.mode ?? "artifact-context";
         if (harnessId !== "codex") return json(res, 400, { error: "capability_verification_harness_not_supported" });
@@ -868,6 +873,7 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/organizations" || /^\/api\/organizations\/[^/]+\/invitations$/.test(pathname)
     || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
+    || pathname === "/api/capabilities" || /^\/api\/capabilities\/[^/]+$/.test(pathname)
     || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
     || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
