@@ -102,7 +102,7 @@ function parseHistory(output, recognized, stats, contributors) {
       const [commit, timestamp, email = ""] = token.slice(1).split("\t");
       if (!commit || !timestamp) continue;
       const contributorId = contributorHash(email || "unknown");
-      current = { commit, timestamp, contributorId };
+      current = { commit, timestamp: canonicalTimestamp(timestamp), contributorId };
       commitIds.add(commit);
       contributors.add(contributorId);
       continue;
@@ -139,6 +139,14 @@ function parseNumstat(value) {
 
 function contributorHash(identity) {
   return `contributor:${createHash("sha256").update(identity.trim().toLowerCase()).digest("hex").slice(0, 16)}`;
+}
+
+function canonicalTimestamp(value) {
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) {
+    throw new RepoGitSignalsError("repo_git_timestamp_invalid", `Invalid Git commit timestamp: ${value}`);
+  }
+  return parsed.toISOString().replace(/\.000Z$/u, "+00:00");
 }
 
 async function assertGitRepository(options) {
