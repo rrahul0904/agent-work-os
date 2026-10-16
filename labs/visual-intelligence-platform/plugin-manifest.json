@@ -1,0 +1,24 @@
+{
+  "manifestVersion": "visual-intelligence-plugin/v1alpha1",
+  "name": "visual-intelligence",
+  "description": "Create and review governed technical diagrams, architecture diagrams, editable presentations and creative assets through the Visual Intelligence Platform.",
+  "capabilities": [
+    "prompt.compile",
+    "artifact.plan",
+    "diagram.generate",
+    "diagram.review",
+    "presentation.generate",
+    "presentation.review",
+    "creative.generate",
+    "creative.review",
+    "artifact.export"
+  ],
+  "surfaces": ["web", "api", "mcp", "skill", "plugin"],
+  "hostAdapters": ["codex", "claude", "cursor", "antigravity", "gemini"],
+  "security": {
+    "secrets": "host-managed-only",
+    "providerWrites": "policy-gated",
+    "receipts": "required",
+    "provenance": "required"
+  }
+}
