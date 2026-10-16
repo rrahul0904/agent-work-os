@@ -35,7 +35,7 @@
         "additionalProperties": false,
         "required": ["kind", "schemaVersion", "digest"],
         "properties": {
-          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk", "repo-diff"] },
+          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk", "repo-diff", "repo-git"] },
           "schemaVersion": { "type": "string", "minLength": 1 },
           "digest": { "$ref": "#/$defs/digest" }
         }
@@ -48,7 +48,7 @@
         "additionalProperties": false,
         "required": ["type", "text", "artifactDigest"],
         "properties": {
-          "type": { "enum": ["repository-shape", "repository-topology", "task-context", "structural-hotspots", "repository-drift"] },
+          "type": { "enum": ["repository-shape", "repository-topology", "task-context", "structural-hotspots", "repository-drift", "repository-git-history"] },
           "text": { "type": "string", "minLength": 1 },
           "artifactDigest": { "$ref": "#/$defs/digest" }
         }
@@ -58,7 +58,7 @@
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles", "affectedFiles"],
+      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles", "affectedFiles", "gitCommitsAnalyzed", "trackedFiles", "gitWorkingTreeDirty"],
       "properties": {
         "files": { "type": "integer", "minimum": 0 },
         "lines": { "type": "integer", "minimum": 0 },
@@ -67,7 +67,10 @@
         "dependencyEdges": { "type": ["integer", "null"], "minimum": 0 },
         "contextFiles": { "type": ["integer", "null"], "minimum": 0 },
         "highRiskFiles": { "type": ["integer", "null"], "minimum": 0 },
-        "affectedFiles": { "type": ["integer", "null"], "minimum": 0 }
+        "affectedFiles": { "type": ["integer", "null"], "minimum": 0 },
+        "gitCommitsAnalyzed": { "type": ["integer", "null"], "minimum": 0 },
+        "trackedFiles": { "type": ["integer", "null"], "minimum": 0 },
+        "gitWorkingTreeDirty": { "type": ["boolean", "null"] }
       }
     },
     "digest": { "$ref": "#/$defs/digest" }
