@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "site": "https://example.com",
+  "scope": {
+    "workspaceId": "self-working-agent",
+    "profileId": "work"
+  },
+  "goal": "collect active project names",
+  "route": {
+    "routeId": "route_example",
+    "revision": 1,
+    "status": "trusted",
+    "verifiedSuccesses": 2,
+    "consecutiveFailures": 0,
+    "steps": [
+      { "type": "navigate", "path": "/account/projects" },
+      { "type": "click", "selector": "[data-tab=active]" },
+      { "type": "extract", "selector": "[data-project-name]" }
+    ]
+  },
+  "receipt": {
+    "memoryVersion": 1,
+    "outcome": "success",
+    "verified": true,
+    "evidenceDigest": "sha256:<browser-evidence>",
+    "receiptDigest": "sha256:<deterministic-receipt>"
+  },
+  "policy": {
+    "advisoryOnly": true,
+    "mustRevalidateAgainstLiveBrowser": true,
+    "storeSecrets": false
+  }
+}
