@@ -1,10 +1,10 @@
-# Sentinel Reliability Pack
+# Sentinel Production Engineering Pack
 
 SKU: `N8N-RELIABILITY-001`
 Status: `PACKAGE_REQUIRED`
 
 ## Promise
-Production-hardening patterns for n8n: circuit breaking, exponential backoff with jitter, dead-letter routing, recovery probes, idempotency guidance and observability patterns.
+Production-hardening patterns and engineering support for n8n: three-state circuit breaking, bounded exponential backoff with full jitter, dead-letter routing, recovery probes, deterministic idempotency keys, replay-ready DLQ records, safe-disable behavior, failure simulation and deployment guidance.
 
 ## Buyer
 - n8n consultants
@@ -13,37 +13,52 @@ Production-hardening patterns for n8n: circuit breaking, exponential backoff wit
 - developers running business-critical workflows
 
 ## Commercial positioning
-The existing community/open-source Sentinel implementation remains a reference/community edition. The paid product must add independently authored commercial value rather than charging for the unchanged public MIT artifact.
+The existing Sentinel workflow remains MIT-licensed free core. We do **not** charge customers for pretending that open-source code is proprietary. Paid value is the separately authored production contract/test layer, deployment engineering, topology review, upgrades, runbooks and support.
 
 ## Editions
 
-### Reliability Pack — $79
-- production circuit-breaker template
-- DLQ pattern
-- retry/backoff templates
-- incident runbook
-- test harness and failure simulations
+### Reliability Engineering Pack — $79
+- attributed MIT free-core workflow reference
+- independently authored deterministic circuit-state contract model
+- DLQ/replay contract
+- idempotency-key contract
+- jitter/recovery/safe-disable tests
+- incident/recovery guidance
 
 ### Production Engineering Pack — $199
-- everything in Reliability Pack
-- Postgres-backed state pattern
-- idempotency pattern
-- structured telemetry schema
+- everything in Reliability Engineering Pack
+- 10,000-cycle deterministic transition soak test
+- production topology/persistence decision guide
+- structured failure/replay contract
+- compatibility/release receipt
 - deployment/upgrade guidance
-- reusable health-check/recovery subflows
-- architecture diagrams
+- support boundary and implementation checklist
 
 ### Team Implementation — from $1,000
 - review one customer workflow
-- install resilience patterns
+- install/configure resilience patterns
+- document persistence choice for the customer topology
 - failure-injection test
 - handoff report
 
-## Release gates
+## Explicit non-claim
+The current package does **not** yet ship a generic Postgres/Redis state adapter as completed product code. The free reference workflow uses n8n workflow static data. Durable external-state implementation is a separately scoped enhancement when the customer's multi-worker/high-availability topology requires it.
 
-- clearly document what is community/open source versus paid commercial additions
-- validate concurrent executions and state behavior for each supported deployment model
-- demonstrate 2xx, 4xx, 5xx, timeout, rate-limit and recovery paths
-- version compatibility matrix
-- zero secrets in package
-- exact-SHA release receipt with test evidence
+## Evidence already built
+- deterministic CLOSED/OPEN/HALF_OPEN contract
+- safe-disable routing
+- threshold/open shielding behavior
+- heartbeat recovery
+- failed-canary reopen behavior
+- bounded jitter
+- stable idempotency keys
+- replay-context DLQ records
+- 10,000 deterministic failure/recovery cycles
+
+## Remaining release gates
+- import exact free-core workflow into the supported n8n release
+- exercise workflow behavior in n8n, not only the separately authored contract model
+- confirm zero-secrets package and compatibility boundary
+- exact-SHA release receipt
+
+Do not mark `SELLABLE` until those runtime gates pass.

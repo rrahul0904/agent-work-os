@@ -1,14 +1,28 @@
-# LinkedIn Engagement Opportunity Finder
+# Authorized Social Opportunity Radar
 SKU: `N8N-SALES-002`
-Status: `REBUILD_REQUIRED`
+Status: `PACKAGE_REQUIRED`
+Legacy catalog slug: `linkedin-opportunity-finder`
 
 ## Promise
-Identify high-signal public engagement opportunities, rank them against configured ICP/topic rules, and prepare human-reviewed outreach/engagement suggestions.
+Rank **customer-authorized social/opportunity records** against configured topic/intent rules and return a deterministic human-review queue. The base commercial edition is source-agnostic and performs no scraping or automated engagement.
+
+## What ships
+- Clean-room core-node n8n workflow.
+- Explicit `authorizationConfirmed=true` guard.
+- Maximum 100 input records/request and 25 configured keywords.
+- Deterministic keyword/intent scoring, stable ordering and 50-result cap.
+- Evidence URLs retained only as metadata; URL presence never creates an opportunity score.
+- `humanReviewRequired=true` and `automatedEngagement=false` enforced in base output.
+- Deterministic tests, demo fixtures, support/compatibility/architecture/provenance/license documentation.
+
+## What does not ship
+- Historical Apify/profile-scraping workflow.
+- Browser automation, credential scraping, automated comments/messages/posts/connections or impersonation.
 
 ## Target price
-- Workflow Kit: $49
-- Intent Radar Pack: $149
-- Implementation: from $1,000
+- Workflow Kit: **$49**
+- Intent Radar Pack: **$149**
+- Installation/customization: from **$1,000** through direct service channels.
 
-## Release gates
-Provenance/license review; clean-room rebuild where required; platform terms review; no credential scraping; human approval before outbound actions; rate-limit handling; dedupe; sample-data tests; supported-data-source documentation; no promise of platform-safe automation beyond documented APIs/integrations.
+## Current release gate
+Clean-room authorship/license: PASS. Deterministic tests: PASS locally. Remaining gate is exact-source-blob certification and n8n 2.43.5 import on the central release runner, followed by the exact-SHA `GO` receipt. Do not publish or accept payment until state is `SELLABLE`.
