@@ -89,5 +89,5 @@ test("tenant registry filters latest capabilities by kind, tag, and source", asy
 
 test("tenant registry validates CapabilitySpec before persistence", async () => {
   const { registry } = await fixture();
-  await assert.rejects(registry.add(ORG_A, { id: "not-a-capability" }, { createdBy: USER }), { code: "capability_invalid", statusCode: 400 });
+  await assert.rejects(registry.add(ORG_A, { id: "not-a-capability" }, { createdBy: USER }), { code: "capability_id_invalid", statusCode: 400 });
 });
