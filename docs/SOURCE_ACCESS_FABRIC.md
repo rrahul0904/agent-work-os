@@ -18,7 +18,9 @@ opaque source URL
        no, 401/403 -> ACCESS_CONTEXT_REQUIRED
          -> source access request
          -> Capability Fabric resolves provider requirement
-         -> provider is verified through existing governed verification path
+         -> provider capability is registered
+         -> provider capability is verified through existing governed verification path
+         -> verification machine advertises the exact provider as read-only
          -> trusted access observation
          -> blocker-bound resume
          -> TARGET_IDENTITY_RESOLVED -> REA_EVIDENCE_DISCOVERY
@@ -101,7 +103,34 @@ If neither capability is present in the registry, the plan remains `missing` and
 
 If a matching capability is present, the plan becomes `available` and advances to `VERIFY_SOURCE_ACCESS_CAPABILITY`. Selection is bound to the exact source-intake transition.
 
-The existing Capability Fabric verification/daemon path remains the authority for proving an installed capability before it is used. This module does not bypass verification, approval, or credential boundaries.
+The existing Capability Fabric verification/daemon path remains the authority for proving the registered capability contract. This module does not bypass verification, approval, or credential boundaries.
+
+## Browser-read provider contract
+
+`packages/capability-fabric/src/source-access-providers.js` defines the canonical owned `browser-read` CapabilitySpec. It is intentionally a contract rather than an embedded browser implementation.
+
+The spec:
+
+- is `read-only`,
+- requires a connected `browser-read` tool,
+- forbids invented canonical URLs,
+- forbids provider writes and credential-changing actions,
+- requires `source-access-observation/v1`,
+- can be compiled and verified through the existing Capability Fabric verifier path.
+
+A passing capability verification receipt is necessary but is not sufficient to prove browser access. Before Source Intake resumes, the exact machine attached to the verification run must also advertise the provider with:
+
+```json
+{
+  "name": "browser-read",
+  "access": "read-only",
+  "observationContracts": ["source-access-observation/v1"]
+}
+```
+
+Missing provider advertisements, writable advertisements, or advertisements that omit the required observation contract fail closed and leave the WorkItem blocked. The machine may later be offline; the durable machine identity and its authenticated capability record remain the provider boundary.
+
+This prevents a language-model prompt from being treated as proof that a browser actually exists.
 
 ## CLI
 
@@ -144,6 +173,6 @@ The resolver retains the existing Source Fabric network rules:
 
 ## Current REA #229 state
 
-For the captured opaque Reddit share target, anonymous direct resolution and Reddit's public `/api/info?url=...` path both returned HTTP 403 before revealing the canonical post identity. Therefore the correct current gate is `ACCESS_CONTEXT_REQUIRED`, not target classification.
+For the captured opaque Reddit share target, anonymous direct resolution and Reddit's public `/api/info?url=...` path returned HTTP 403 before revealing the canonical post identity. A fresh 2026-10-17 external re-check of the short URL, JSON form, API-info form, and indexed token search also failed to expose a canonical post. Therefore the correct current gate remains `ACCESS_CONTEXT_REQUIRED`, not target classification.
 
-Repository routing, license/SHA capture, capability extraction, and clean-room implementation remain blocked until a trusted provider produces the canonical target observation.
+Repository routing, license/SHA capture, capability extraction, and clean-room implementation remain blocked until a trusted provider produces the canonical target observation. The owned provider contract and machine-advertisement trust gate are now implemented; a real connected browser observer is the remaining source-access dependency.
