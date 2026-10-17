@@ -66,10 +66,17 @@ try {
   const schema = await fetch(`${base}/db-schema.js`);
   assert.match(await schema.text(), /const DB_VERSION = 3/);
 
+  const semanticCore = await fetch(`${base}/semantic-core.js`);
+  const semanticCoreText = await semanticCore.text();
+  assert.match(semanticCoreText, /Xenova\/multilingual-e5-small/);
+  assert.match(semanticCoreText, /761b726dd34fb83930e26aab4e9ac3899aa1fa78/);
+
   const semanticWorker = await fetch(`${base}/semantic-worker.js`);
   const semanticWorkerText = await semanticWorker.text();
-  assert.match(semanticWorkerText, /multilingual-e5-small/);
+  assert.match(semanticWorkerText, /SEMANTIC_MODEL_ID/);
   assert.match(semanticWorkerText, /dtype: 'q8'/);
+  assert.match(semanticWorkerText, /pooling: 'mean'/);
+  assert.match(semanticWorkerText, /normalize: true/);
 
   const head = await fetch(`${base}/semantic-search.js`, { method: 'HEAD' });
   assert.equal(head.status, 200);
