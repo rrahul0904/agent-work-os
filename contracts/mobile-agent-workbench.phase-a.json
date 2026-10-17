@@ -1,0 +1,104 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "mobile-agent-workbench-phase-a",
+    "repoPath": "."
+  },
+  "release": {
+    "version": "phase-a"
+  },
+  "worktree": {
+    "baseRef": "HEAD",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": {
+      "name": "mobile-workbench-builder",
+      "command": "codex exec --full-auto 'Implement only Phase A of docs/reverse-engineering/pocket-ide-mobile-agent-workbench.md. Build an independently authored, side-effect-free mobile-workbench/v1 domain module plus deterministic tests. Do not add a native Android client, network calls, shell execution, Git mutation, package installation, deployment, or donor source. Preserve existing behavior. Run the narrowest focused tests before returning.'"
+    },
+    "repairCommand": {
+      "name": "mobile-workbench-repair",
+      "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE plus docs/reverse-engineering/pocket-ide-mobile-agent-workbench.md. Repair only the failing Phase A Mobile Agent Workbench gate. Do not broaden scope, use network, push, merge, deploy, or add native/device side effects. Run the narrowest relevant tests.'"
+    },
+    "maxRepairAttempts": 2
+  },
+  "verification": [
+    {
+      "name": "mobile-workbench-focused",
+      "command": "node --test services/control-api/test/mobile-workbench.test.js"
+    },
+    {
+      "name": "repository-unit",
+      "command": "npm test"
+    },
+    {
+      "name": "repository-acceptance",
+      "command": "npm run acceptance"
+    }
+  ],
+  "preview": {
+    "required": false
+  },
+  "production": {
+    "required": false
+  },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": {
+      "name": "tested-sha",
+      "command": "git rev-parse HEAD"
+    }
+  },
+  "goldenPath": [
+    {
+      "id": "MAW-A-001",
+      "description": "A mobile device capability profile is validated and receives a stable canonical digest."
+    },
+    {
+      "id": "MAW-A-002",
+      "description": "Local execution preflight fails closed for unsupported architecture or insufficient declared memory/storage/runtime capability."
+    },
+    {
+      "id": "MAW-A-003",
+      "description": "Remote execution requires a known capable Agent Work OS machine identity and preserves exact workspace/source identity."
+    },
+    {
+      "id": "MAW-A-004",
+      "description": "Process loss or restart reconciles in-flight mobile work to interrupted and never fabricates completion."
+    },
+    {
+      "id": "MAW-A-005",
+      "description": "Preview readiness requires positive health evidence bound to the exact run/workspace/source identity."
+    },
+    {
+      "id": "MAW-A-006",
+      "description": "Local-to-remote handoff rejects workspace/source digest mismatch and never claims live-process migration."
+    },
+    {
+      "id": "MAW-A-007",
+      "description": "Secret-like literal values are refused from persisted run and receipt payloads."
+    },
+    {
+      "id": "MAW-A-008",
+      "description": "Completion requires independent verifier evidence; a builder completion claim alone is not terminal truth."
+    }
+  ],
+  "excludedFromRelease": [
+    "native Android client",
+    "PRoot or Termux runtime",
+    "local shell execution",
+    "network execution",
+    "package installation",
+    "APK installation",
+    "real Git mutation",
+    "live coding-agent provider execution",
+    "browser or device UAT",
+    "preview deployment",
+    "production deployment",
+    "Pocket IDE parity"
+  ],
+  "policy": {
+    "commandTimeoutMs": 600000,
+    "retainFailureLogs": true
+  }
+}
