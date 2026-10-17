@@ -40,15 +40,22 @@ try {
   assert.equal(home.status, 200);
   const homeText = await home.text();
   assert.match(homeText, /Research Ledger/);
-  assert.match(home.headers.get('content-security-policy') || '', /frame-ancestors 'none'/);
+  const csp = home.headers.get('content-security-policy') || '';
+  assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /https:\/\/huggingface\.co/);
+  assert.match(csp, /https:\/\/\*\.hf\.co/);
   assert.ok(homeText.indexOf('src="/db-schema.js"') < homeText.indexOf('src="/app.js"'), 'schema guard must load before app');
+  assert.ok(homeText.indexOf('src="/completion.js"') < homeText.indexOf('src="/semantic-search.js"'), 'semantic controller must load after completion layer');
 
   const shippedAssets = [
     ['/styles.css', /text\/css/],
     ['/completion.css', /text\/css/],
     ['/db-schema.js', /javascript/],
     ['/app.js', /javascript/],
-    ['/completion.js', /javascript/]
+    ['/completion.js', /javascript/],
+    ['/semantic-core.js', /javascript/],
+    ['/semantic-worker.js', /javascript/],
+    ['/semantic-search.js', /javascript/]
   ];
   for (const [path, contentType] of shippedAssets) {
     const asset = await fetch(`${base}${path}`);
@@ -59,7 +66,12 @@ try {
   const schema = await fetch(`${base}/db-schema.js`);
   assert.match(await schema.text(), /const DB_VERSION = 3/);
 
-  const head = await fetch(`${base}/completion.css`, { method: 'HEAD' });
+  const semanticWorker = await fetch(`${base}/semantic-worker.js`);
+  const semanticWorkerText = await semanticWorker.text();
+  assert.match(semanticWorkerText, /multilingual-e5-small/);
+  assert.match(semanticWorkerText, /dtype: 'q8'/);
+
+  const head = await fetch(`${base}/semantic-search.js`, { method: 'HEAD' });
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');
 
