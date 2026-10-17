@@ -8,7 +8,9 @@ import { analyzeRepositoryTopology } from "../packages/repo-intelligence/src/top
 import { analyzeStructuralRisk } from "../packages/repo-intelligence/src/risk.js";
 import { analyzeGitSignals } from "../packages/repo-intelligence/src/git-signals.js";
 import { analyzeRepositoryImports } from "../packages/repo-intelligence/src/import-analysis.js";
+import { analyzeModuleResolution } from "../packages/repo-intelligence/src/module-resolution.js";
 import { analyzeRepositoryImpact } from "../packages/repo-intelligence/src/impact.js";
+import { analyzeSemanticRepositoryImpact } from "../packages/repo-intelligence/src/impact-v2.js";
 import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
 import { diffRepositoryMaps } from "../packages/repo-intelligence/src/diff.js";
 import { renderRepoAtlasHtml } from "../packages/repo-intelligence/src/report.js";
@@ -27,6 +29,11 @@ try {
     const map = await scanRepository(repoArg);
     const result = await analyzeRepositoryImports(repoArg, map);
     await emit(result, getFlag(flags, "--output="));
+  } else if (command === "resolve") {
+    const map = await scanRepository(repoArg);
+    const importAnalysis = await analyzeRepositoryImports(repoArg, map);
+    const result = await analyzeModuleResolution(repoArg, map, importAnalysis);
+    await emit(result, getFlag(flags, "--output="));
   } else if (command === "impact") {
     const previousMapPath = getFlag(flags, "--previous-map=");
     if (!previousMapPath) throw commandError("repo_atlas_previous_map_required", "impact requires --previous-map=<repo-map.json>");
@@ -41,6 +48,28 @@ try {
     const result = analyzeRepositoryImpact({
       repoMap: map,
       importAnalysis,
+      diff,
+      topology,
+      gitSignals,
+      maxDepth: parseIntegerFlag(flags, "--max-depth=", 5)
+    });
+    await emit(result, getFlag(flags, "--output="));
+  } else if (command === "semantic-impact") {
+    const previousMapPath = getFlag(flags, "--previous-map=");
+    if (!previousMapPath) throw commandError("repo_atlas_previous_map_required", "semantic-impact requires --previous-map=<repo-map.json>");
+    const map = await scanRepository(repoArg);
+    const previous = await readJson(previousMapPath);
+    const diff = diffRepositoryMaps(previous, map);
+    const importAnalysis = await analyzeRepositoryImports(repoArg, map);
+    const moduleResolution = await analyzeModuleResolution(repoArg, map, importAnalysis);
+    const topology = await analyzeRepositoryTopology(repoArg, map);
+    const gitSignals = hasFlag(flags, "--include-git")
+      ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
+      : null;
+    const result = analyzeSemanticRepositoryImpact({
+      repoMap: map,
+      importAnalysis,
+      moduleResolution,
       diff,
       topology,
       gitSignals,
@@ -164,7 +193,9 @@ try {
       "  npm run repo:atlas -- map <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- topology <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- imports <repo-path> [--output=<file>]\n" +
+      "  npm run repo:atlas -- resolve <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- impact <repo-path> --previous-map=<repo-map.json> [--max-depth=5] [--include-git] [--git-max-commits=500] [--output=<file>]\n" +
+      "  npm run repo:atlas -- semantic-impact <repo-path> --previous-map=<repo-map.json> [--max-depth=5] [--include-git] [--git-max-commits=500] [--output=<file>]\n" +
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
       "  npm run repo:atlas -- git <repo-path> [--max-commits=500] [--output=<file>]\n" +
