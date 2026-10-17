@@ -6,6 +6,7 @@ import { createDefaultShippingSupervisor } from "../../../services/control-api/s
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
 import { ClaudeCodeAdapter, CodexAdapter, EchoAdapter } from "./adapters.js";
 import { OpenCodeAdapter } from "./opencode-adapter.js";
+import { CursorAdapter } from "./cursor-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
@@ -28,7 +29,9 @@ const claudeCode = new ClaudeCodeAdapter();
 if (claudeCode.capability()) adapters.set("claude-code", claudeCode);
 const openCode = new OpenCodeAdapter();
 if (openCode.capability()) adapters.set("opencode", openCode);
-const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode, openCode);
+const cursor = new CursorAdapter();
+if (cursor.capability()) adapters.set("cursor", cursor);
+const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode, openCode, cursor);
 if (capabilityVerification.capability()) adapters.set("capability-verify", capabilityVerification);
 
 let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
