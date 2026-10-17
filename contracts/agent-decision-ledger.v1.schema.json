@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/agent-decision-ledger.v1.schema.json",
+  "title": "Agent Work OS Decision Ledger Contracts v1",
+  "description": "Domain-neutral, append-only decision/evaluation contracts. This schema intentionally contains no wagering or gambling execution semantics.",
+  "oneOf": [
+    { "$ref": "#/$defs/AgentDecision" },
+    { "$ref": "#/$defs/DecisionLedgerEntry" },
+    { "$ref": "#/$defs/OutcomeObservation" },
+    { "$ref": "#/$defs/CorrectionReceipt" },
+    { "$ref": "#/$defs/ModelGeneration" },
+    { "$ref": "#/$defs/ProviderBudgetReceipt" }
+  ],
+  "$defs": {
+    "Digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "ArtifactId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^[A-Za-z0-9._:/-]+$"
+    },
+    "EvidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_id", "digest", "epistemic_state"],
+      "properties": {
+        "evidence_id": { "$ref": "#/$defs/ArtifactId" },
+        "digest": { "$ref": "#/$defs/Digest" },
+        "epistemic_state": {
+          "type": "string",
+          "enum": ["observed", "derived", "inferred", "unknown", "verified"]
+        }
+      }
+    },
+    "MemoryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["retrospective_mode", "allow_unverified_retrospective_in_future_context"],
+      "properties": {
+        "retrospective_mode": {
+          "type": "string",
+          "enum": ["disabled", "write_only", "validated_only"]
+        },
+        "allow_unverified_retrospective_in_future_context": {
+          "const": false
+        }
+      }
+    },
+    "AgentDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "decision_id",
+        "created_at",
+        "decision",
+        "input_digest",
+        "evidence_digest",
+        "model_generation_id",
+        "model_runtime_digest",
+        "policy_digest",
+        "evidence_refs",
+        "memory_policy",
+        "rationale_summary"
+      ],
+      "properties": {
+        "schema": { "const": "agent-decision/v1" },
+        "decision_id": { "$ref": "#/$defs/ArtifactId" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "decision": {
+          "type": "string",
+          "enum": ["ACTION", "NO_ACTION", "NEEDS_HUMAN", "BLOCKED"]
+        },
+        "input_digest": { "$ref": "#/$defs/Digest" },
+        "evidence_digest": { "$ref": "#/$defs/Digest" },
+        "model_generation_id": { "$ref": "#/$defs/ArtifactId" },
+        "model_runtime_digest": { "$ref": "#/$defs/Digest" },
+        "policy_digest": { "$ref": "#/$defs/Digest" },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Advisory only; must never widen execution authority."
+        },
+        "rationale_summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "evidence_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/EvidenceRef" },
+          "uniqueItems": true
+        },
+        "memory_policy": { "$ref": "#/$defs/MemoryPolicy" },
+        "requested_effect_class": {
+          "type": ["string", "null"],
+          "maxLength": 200,
+          "description": "Intent only. Authority is granted elsewhere by Agent Work OS policy."
+        }
+      }
+    },
+    "DecisionLedgerEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "ledger_entry_id",
+        "accepted_at",
+        "decision_id",
+        "decision_digest",
+        "sequence",
+        "append_only"
+      ],
+      "properties": {
+        "schema": { "const": "decision-ledger-entry/v1" },
+        "ledger_entry_id": { "$ref": "#/$defs/ArtifactId" },
+        "accepted_at": { "type": "string", "format": "date-time" },
+        "decision_id": { "$ref": "#/$defs/ArtifactId" },
+        "decision_digest": { "$ref": "#/$defs/Digest" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "external_identity_key": { "type": ["string", "null"], "maxLength": 500 },
+        "append_only": { "const": true }
+      }
+    },
+    "OutcomeObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "outcome_id",
+        "observed_at",
+        "ledger_entry_id",
+        "decision_digest",
+        "source_digest",
+        "status"
+      ],
+      "properties": {
+        "schema": { "const": "outcome-observation/v1" },
+        "outcome_id": { "$ref": "#/$defs/ArtifactId" },
+        "observed_at": { "type": "string", "format": "date-time" },
+        "ledger_entry_id": { "$ref": "#/$defs/ArtifactId" },
+        "decision_digest": { "$ref": "#/$defs/Digest" },
+        "source_digest": { "$ref": "#/$defs/Digest" },
+        "status": {
+          "type": "string",
+          "enum": ["SUCCEEDED", "FAILED", "PARTIAL", "VOID", "UNKNOWN"]
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": { "type": ["number", "integer", "string", "boolean", "null"] }
+        },
+        "notes": { "type": ["string", "null"], "maxLength": 4000 }
+      }
+    },
+    "CorrectionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "correction_id",
+        "created_at",
+        "target_artifact_id",
+        "target_artifact_digest",
+        "reason_code",
+        "replacement_digest",
+        "does_not_overwrite_original"
+      ],
+      "properties": {
+        "schema": { "const": "correction-receipt/v1" },
+        "correction_id": { "$ref": "#/$defs/ArtifactId" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "target_artifact_id": { "$ref": "#/$defs/ArtifactId" },
+        "target_artifact_digest": { "$ref": "#/$defs/Digest" },
+        "reason_code": {
+          "type": "string",
+          "enum": ["SOURCE_CORRECTION", "IDENTITY_CORRECTION", "TIME_CORRECTION", "OUTCOME_CORRECTION", "OTHER"]
+        },
+        "reason_summary": { "type": ["string", "null"], "maxLength": 2000 },
+        "replacement_digest": { "$ref": "#/$defs/Digest" },
+        "does_not_overwrite_original": { "const": true }
+      }
+    },
+    "ModelGeneration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "model_generation_id",
+        "created_at",
+        "model_provider",
+        "model_name",
+        "runtime_digest",
+        "prompt_policy_digest",
+        "toolset_digest",
+        "inherits_scorecard"
+      ],
+      "properties": {
+        "schema": { "const": "model-generation/v1" },
+        "model_generation_id": { "$ref": "#/$defs/ArtifactId" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "model_provider": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "model_name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "runtime_digest": { "$ref": "#/$defs/Digest" },
+        "prompt_policy_digest": { "$ref": "#/$defs/Digest" },
+        "toolset_digest": { "$ref": "#/$defs/Digest" },
+        "baseline_generation_id": { "type": ["string", "null"], "maxLength": 200 },
+        "baseline_compatibility_digest": { "type": ["string", "null"], "pattern": "^(sha256:[a-f0-9]{64})?$" },
+        "inherits_scorecard": { "const": false }
+      }
+    },
+    "ProviderBudgetReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "receipt_id",
+        "run_id",
+        "created_at",
+        "provider",
+        "call_count",
+        "call_limit",
+        "budget_status"
+      ],
+      "properties": {
+        "schema": { "const": "provider-budget-receipt/v1" },
+        "receipt_id": { "$ref": "#/$defs/ArtifactId" },
+        "run_id": { "$ref": "#/$defs/ArtifactId" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "provider": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "call_count": { "type": "integer", "minimum": 0 },
+        "call_limit": { "type": "integer", "minimum": 0 },
+        "cost_observed": { "type": ["number", "null"], "minimum": 0 },
+        "cost_limit": { "type": ["number", "null"], "minimum": 0 },
+        "budget_status": {
+          "type": "string",
+          "enum": ["WITHIN_BUDGET", "BUDGET_EXCEEDED", "UNKNOWN"]
+        }
+      }
+    }
+  }
+}
