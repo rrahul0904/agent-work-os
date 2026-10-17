@@ -137,6 +137,13 @@ try {
   }
   assert.ok(report.breakdown?.byKind?.multilingual, 'benchmark receipt must include by-kind metrics');
   assert.ok(report.breakdown?.byLanguage?.en, 'benchmark receipt must include by-language metrics');
+  assert.equal(report.performance?.environment, 'browser-observed; runner/device dependent');
+  assert.ok(Number.isFinite(report.performance?.indexReadyElapsedMs) && report.performance.indexReadyElapsedMs > 0);
+  assert.ok(Number.isFinite(report.performance?.totalRunMs) && report.performance.totalRunMs >= report.performance.indexReadyElapsedMs);
+  assert.equal(report.performance?.semanticQuery?.samples, report.corpus.cases);
+  assert.equal(report.performance?.lexicalQuery?.samples, report.corpus.cases);
+  assert.equal(report.performance?.hybridFusion?.samples, report.corpus.cases);
+  assert.ok(report.performance.semanticQuery.p95Ms >= report.performance.semanticQuery.p50Ms);
 
   report.execution = {
     runner: 'playwright-chromium',
@@ -152,6 +159,7 @@ try {
     lexical: report.metrics.lexical,
     semantic: report.metrics.semantic,
     hybrid: report.metrics.hybrid,
+    performance: report.performance,
     decision: report.decision
   }, null, 2));
 } finally {
