@@ -102,7 +102,7 @@ test("OpenCode native discovery refuses to overwrite an existing project skill",
     adapter: new DiscoveringOpenCodeAdapter(),
     workspaceRoot: root,
     approveWrite: true
-  }), /opencode_native_discovery_workspace_conflict/);
+  }), { code: "opencode_native_discovery_workspace_conflict" });
 });
 
 test("OpenCode native discovery accepts skill capabilities only", async () => {
