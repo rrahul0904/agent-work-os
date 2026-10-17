@@ -58,13 +58,13 @@ assert.equal(hybrid[0].id, 'B');
 
 assert.match(html, /Quality claims require an executed receipt/);
 assert.match(html, /Recall@5 and mean reciprocal rank/);
+assert.match(html, /Download JSON receipt/);
 assert.match(html, /retrieval-benchmark\.js/);
 assert.match(runner, /new Worker\('\/semantic-worker\.js'/);
 assert.match(runner, /window\.__researchLedgerBenchmarkReport = report/);
 assert.match(runner, /aggregateMetrics\(rows, 'lexical'\)/);
 assert.match(runner, /aggregateMetrics\(rows, 'semantic'\)/);
 assert.match(runner, /aggregateMetrics\(rows, 'hybrid'\)/);
-assert.match(runner, /Download JSON receipt/).or;
 assert.doesNotMatch(runner, /\/api\/research/, 'benchmark must not send corpus passages to the application generation API');
 assert.match(runtime, /retrieval-benchmark\.html/);
 assert.match(runtime, /retrieval-benchmark-core\.js/);
