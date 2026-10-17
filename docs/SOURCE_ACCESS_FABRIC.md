@@ -105,14 +105,13 @@ If a matching capability is present, the plan becomes `available` and advances t
 
 The existing Capability Fabric verification/daemon path remains the authority for proving the registered capability contract. This module does not bypass verification, approval, or credential boundaries.
 
-## Browser-read provider contract
+## Browser-read provider
 
-`packages/capability-fabric/src/source-access-providers.js` defines the canonical owned `browser-read` CapabilitySpec. It is intentionally a contract rather than an embedded browser implementation.
+`packages/capability-fabric/src/source-access-providers.js` defines the canonical owned `browser-read` CapabilitySpec. `runtime/daemon/src/browser-read-adapter.js` now supports both an external observer command and an owned first-party Chromium observer.
 
-The spec:
+The provider contract:
 
 - is `read-only`,
-- requires a connected `browser-read` tool,
 - forbids invented canonical URLs,
 - forbids provider writes and credential-changing actions,
 - requires `source-access-observation/v1`,
@@ -128,9 +127,46 @@ A passing capability verification receipt is necessary but is not sufficient to 
 }
 ```
 
-Missing provider advertisements, writable advertisements, or advertisements that omit the required observation contract fail closed and leave the WorkItem blocked. The machine may later be offline; the durable machine identity and its authenticated capability record remain the provider boundary.
+Missing provider advertisements, writable advertisements, or advertisements that omit the required observation contract fail closed and leave the WorkItem blocked. This prevents a language-model prompt from being treated as proof that a browser actually exists.
 
-This prevents a language-model prompt from being treated as proof that a browser actually exists.
+### First-party Chromium observer
+
+The owned Chromium observer is explicitly opt-in. Enable it on the daemon machine with:
+
+```bash
+AGENT_WORK_OS_ENABLE_FIRST_PARTY_BROWSER_READ=true
+```
+
+The daemon advertises `browser-read` only when an actual Chrome/Chromium-compatible executable is resolved. On macOS it checks the standard application-bundle executables for Google Chrome, Chromium, and Microsoft Edge in addition to command names. An explicit path can be supplied when needed:
+
+```bash
+AGENT_WORK_OS_ENABLE_FIRST_PARTY_BROWSER_READ=true \
+AGENT_WORK_OS_BROWSER_EXECUTABLE='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+```
+
+The first-party observer:
+
+- launches a disposable headless browser profile,
+- sends the browser only the exact requested Reddit share URL,
+- discovers the ephemeral local DevTools endpoint from `DevToolsActivePort`,
+- reads the page target list from the local loopback DevTools API,
+- accepts only a canonical Reddit `/comments/...` target,
+- fails closed if navigation escapes the approved Reddit host boundary,
+- deletes the disposable profile after the observation,
+- emits only canonical URL, evidence reference, and observation time back to the adapter.
+
+No browser executable or no explicit opt-in means no first-party `browser-read` advertisement. The provider does not claim that CI simulation is a live Reddit/browser UAT receipt; an actual browser run on an online daemon is still required before REA #229 can cross Target Identity.
+
+### External observer override
+
+A custom read-only observer remains supported and takes precedence over the first-party provider when configured:
+
+```bash
+AGENT_WORK_OS_BROWSER_READ_COMMAND=/absolute/path/to/observer
+AGENT_WORK_OS_BROWSER_READ_ARGS='["--optional-arg"]'
+```
+
+Only the source access request identity is sent to that process. Arbitrary parent secrets are stripped from its environment unless explicitly allowlisted. Agent Work OS constructs the trusted observation itself, so an external process cannot forge the blocker/request binding hashes.
 
 ## CLI
 
@@ -159,7 +195,7 @@ The output contains the source-resolution receipt, access request, access observ
 
 ## Security boundary
 
-Source Access Fabric is read-oriented and does not authorize external writes. It does not store Reddit credentials, browser cookies, or provider secrets inside source receipts. Credential/session acquisition remains a separate governed capability and secret boundary.
+Source Access Fabric is read-oriented and does not authorize external writes. It does not store Reddit credentials, persistent browser cookies, or provider secrets inside source receipts. The first-party Chromium provider uses a disposable browser profile. Credential/session acquisition remains a separate governed capability and secret boundary.
 
 The resolver retains the existing Source Fabric network rules:
 
@@ -175,4 +211,4 @@ The resolver retains the existing Source Fabric network rules:
 
 For the captured opaque Reddit share target, anonymous direct resolution and Reddit's public `/api/info?url=...` path returned HTTP 403 before revealing the canonical post identity. A fresh 2026-10-17 external re-check of the short URL, JSON form, API-info form, and indexed token search also failed to expose a canonical post. Therefore the correct current gate remains `ACCESS_CONTEXT_REQUIRED`, not target classification.
 
-Repository routing, license/SHA capture, capability extraction, and clean-room implementation remain blocked until a trusted provider produces the canonical target observation. The owned provider contract and machine-advertisement trust gate are now implemented; a real connected browser observer is the remaining source-access dependency.
+Repository routing, license/SHA capture, capability extraction, and clean-room implementation remain blocked until a trusted provider produces the canonical target observation. The owned provider contract, machine-advertisement trust gate, event-driven auto-resume path, and first-party Chromium observer are implemented and CI-verified. The remaining source-access dependency is a real online daemon machine with Chrome/Chromium available, explicit first-party opt-in (or a custom external observer), registry/verification of `browser-read` on that same machine, and a live governed observation of this exact Reddit share.
