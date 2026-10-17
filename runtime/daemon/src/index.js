@@ -146,6 +146,7 @@ function connect() {
 }
 
 async function prepareTrackedWork(command, adapterId, reason, emit) {
+  if (activeWorkBySession.has(command.sessionId)) throw new Error("session_work_already_active");
   const workId = `run:${command.commandId}`;
   const existing = workSupervisor.getWork(workId);
   if (existing) {
