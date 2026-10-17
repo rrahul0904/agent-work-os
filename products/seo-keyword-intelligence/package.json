@@ -1,0 +1,15 @@
+{
+  "name": "@agent-work-os/seo-keyword-intelligence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Provider-neutral keyword discovery, provenance, clustering and opportunity ranking engine.",
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "analyze": "node src/engine.mjs",
+    "serve": "node src/server.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

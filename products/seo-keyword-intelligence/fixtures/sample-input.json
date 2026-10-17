@@ -1,0 +1,39 @@
+{
+  "observations": [
+    {
+      "keyword": "n8n self hosted requirements",
+      "source": "google-autocomplete",
+      "volume": 1200,
+      "difficulty": 31,
+      "intent": "informational"
+    },
+    {
+      "keyword": "N8N self-hosted requirements",
+      "source": "yepapi-related",
+      "volume": 1100,
+      "difficulty": 34,
+      "intent": "informational"
+    },
+    {
+      "keyword": "requirements for self hosting n8n",
+      "source": "yepapi-ideas",
+      "volume": 900,
+      "difficulty": 29,
+      "intent": "informational"
+    },
+    {
+      "keyword": "best n8n hosting",
+      "source": "google-autocomplete",
+      "volume": 3500,
+      "difficulty": 22,
+      "cpc": 8.2
+    },
+    {
+      "keyword": "n8n pricing",
+      "source": "search-console",
+      "volume": 5400,
+      "difficulty": 55,
+      "cpc": 6.3
+    }
+  ]
+}

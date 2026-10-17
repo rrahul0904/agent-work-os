@@ -1,0 +1,92 @@
+{
+  "name": "SEO Keyword Intelligence v2",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "seo-keyword-research",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [-420, 0],
+      "id": "8a121f41-1ed3-4eb1-bd87-6f370fb7fef0",
+      "name": "Keyword Research Request",
+      "webhookId": "seo-keyword-intelligence-v2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ ($env.KEYWORD_INTELLIGENCE_URL || 'http://host.docker.internal:8787') + '/research' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($json.body || $json) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [-120, 0],
+      "id": "d4d6cb94-a7d3-4b03-9e09-29e97d46066c",
+      "name": "Research + Intelligence"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [180, 0],
+      "id": "c55b4f61-1d1d-47e9-9aad-829619845785",
+      "name": "Return Ranked Opportunities"
+    }
+  ],
+  "connections": {
+    "Keyword Research Request": {
+      "main": [
+        [
+          {
+            "node": "Research + Intelligence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Research + Intelligence": {
+      "main": [
+        [
+          {
+            "node": "Return Ranked Opportunities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "cdb67c29-4960-4d44-82f0-12b561a296c5",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
