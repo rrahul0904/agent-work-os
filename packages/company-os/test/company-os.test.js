@@ -242,7 +242,7 @@ test("launch certificate requires every proof class and zero open blockers", () 
   assert.match(certificate.certificateDigest, /^sha256:/);
 });
 
-test("open blockers prevent certification even when evidence exists", () => {
+test("open blockers prevent certification even when evidence exists and preserve provenance-style refs", () => {
   const spec = buildSpec();
   let state = createInitialCompanyState(spec);
   for (const kind of LAUNCH_CERTIFICATE_REQUIREMENTS) {
@@ -257,12 +257,13 @@ test("open blockers prevent certification even when evidence exists", () => {
       category: "verification_failed",
       status: "open",
       reason: "Browser acceptance failed.",
-      evidenceRefs: ["fixture_browser_uat"],
+      evidenceRefs: ["fixture:browser_uat"],
       requiresHuman: false,
       firstObservedAt: "2026-10-17T04:55:00Z"
     }
   });
   const readiness = evaluateLaunchReadiness(state);
   assert.equal(readiness.ready, false);
+  assert.equal(state.blockers["verification-1"].evidenceRefs[0], "fixture:browser_uat");
   assert.deepEqual(readiness.openBlockerIds, ["verification-1"]);
 });
