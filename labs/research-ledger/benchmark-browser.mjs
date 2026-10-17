@@ -37,17 +37,54 @@ try {
   browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
   const browserErrors = [];
-  page.on('pageerror', error => browserErrors.push(`pageerror: ${error.message}`));
+  let lastStatus = '';
+  page.on('pageerror', error => {
+    const line = `pageerror: ${error.message}`;
+    browserErrors.push(line);
+    console.error(line);
+  });
   page.on('console', message => {
-    if (message.type() === 'error') browserErrors.push(`console: ${message.text()}`);
+    const line = `${message.type()}: ${message.text()}`;
+    if (message.type() === 'error' || message.type() === 'warning') browserErrors.push(line);
+    if (message.type() === 'error' || message.type() === 'warning') console.error(line);
+  });
+  page.on('requestfailed', request => {
+    const line = `requestfailed: ${request.url()} · ${request.failure()?.errorText || 'unknown'}`;
+    browserErrors.push(line);
+    console.error(line);
   });
 
   const response = await page.goto(`${base}/retrieval-benchmark.html`, { waitUntil: 'domcontentloaded' });
   assert.equal(response?.status(), 200);
   await page.getByRole('button', { name: 'Run browser benchmark' }).click();
-  await page.waitForFunction(() => Boolean(window.__researchLedgerBenchmarkReport), null, { timeout: 300_000 });
 
-  const report = await page.evaluate(() => window.__researchLedgerBenchmarkReport);
+  const statusPoll = setInterval(async () => {
+    try {
+      const current = await page.locator('#benchmarkStatus').textContent();
+      if (current && current !== lastStatus) {
+        lastStatus = current;
+        console.log(`benchmark-status: ${current}`);
+      }
+    } catch {}
+  }, 5000);
+
+  try {
+    await page.waitForFunction(() => Boolean(window.__researchLedgerBenchmarkReport || window.__researchLedgerBenchmarkFailure), null, { timeout: 240_000 });
+  } finally {
+    clearInterval(statusPoll);
+  }
+
+  const outcome = await page.evaluate(() => ({
+    report: window.__researchLedgerBenchmarkReport || null,
+    failure: window.__researchLedgerBenchmarkFailure || null,
+    status: document.querySelector('#benchmarkStatus')?.textContent || ''
+  }));
+  if (outcome.failure) {
+    throw new Error(`browser benchmark failed: ${outcome.failure.message}\nstatus: ${outcome.status}\nbrowser diagnostics:\n${browserErrors.join('\n') || 'none'}`);
+  }
+
+  const report = outcome.report;
+  assert.ok(report, `benchmark produced no report; status=${outcome.status}; diagnostics=${browserErrors.join(' | ')}`);
   assert.equal(report.schema, 'research-ledger/retrieval-benchmark.v1');
   assert.equal(report.k, 5);
   assert.equal(report.corpus.cases, 9);
