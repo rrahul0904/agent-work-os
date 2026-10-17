@@ -12,11 +12,7 @@ const CLI = fileURLToPath(new URL("../../../scripts/repo-atlas.mjs", import.meta
 
 async function withFixture(run) {
   const root = await mkdtemp(path.join(os.tmpdir(), "awos-repo-report-cli-"));
-  try {
-    await run(root);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+  try { await run(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
 async function put(root, relative, content) {
@@ -26,10 +22,10 @@ async function put(root, relative, content) {
 }
 
 async function invoke(args) {
-  return execFileAsync(process.execPath, [CLI, ...args], { encoding: "utf8", maxBuffer: 5 * 1024 * 1024 });
+  return execFileAsync(process.execPath, [CLI, ...args], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
 }
 
-test("report CLI writes a self-contained HTML artifact with optional drift", async () => {
+test("report CLI writes a self-contained M8 HTML artifact with parser imports, impact and drift", async () => {
   await withFixture(async (root) => {
     const previousRepo = path.join(root, "previous");
     const currentRepo = path.join(root, "current");
@@ -37,15 +33,21 @@ test("report CLI writes a self-contained HTML artifact with optional drift", asy
     const reportPath = path.join(root, "repo-atlas.html");
 
     await put(previousRepo, "package.json", JSON.stringify({ name: "report-cli" }));
-    await put(previousRepo, "src/index.ts", "export const value = 1;\n");
+    await put(previousRepo, "src/shared.ts", "export const shared = 1;\n");
+    await put(previousRepo, "src/service.ts", "import { shared } from './shared';\nexport const service = shared;\n");
+
     await put(currentRepo, "package.json", JSON.stringify({ name: "report-cli" }));
-    await put(currentRepo, "src/index.ts", "const SECRET = 'cli-report-secret';\nexport const value = 2;\n");
+    await put(currentRepo, "src/shared.ts", "const SECRET = 'cli-report-secret';\nexport const shared = 2;\n");
+    await put(currentRepo, "src/service.ts", "import { shared } from './shared';\nexport const service = shared;\n");
     await put(currentRepo, "src/new.ts", "export const created = true;\n");
 
     await invoke(["map", previousRepo, `--output=${previousMap}`]);
     const result = await invoke([
       "report", currentRepo,
       `--previous-map=${previousMap}`,
+      "--include-imports",
+      "--include-impact",
+      "--max-depth=3",
       "--title=Report CLI Fixture",
       `--output=${reportPath}`
     ]);
@@ -58,8 +60,13 @@ test("report CLI writes a self-contained HTML artifact with optional drift", asy
 
     const html = await readFile(reportPath, "utf8");
     assert.ok(html.includes("Report CLI Fixture"));
-    assert.ok(html.includes("src/new.ts"));
+    assert.ok(html.includes("Parser import coverage"));
+    assert.ok(html.includes("Change impact"));
+    assert.ok(html.includes("src/shared.ts"));
+    assert.ok(html.includes("src/service.ts"));
     assert.ok(html.includes('"affectedFiles":2'));
+    assert.ok(html.includes('"impactedFiles":1'));
+    assert.ok(html.includes('"fallbackFiles":0'));
     assert.equal(html.includes("cli-report-secret"), false);
     assert.equal(/<(?:script|link|img)[^>]+(?:src|href)=["']https?:/iu.test(html), false);
   });
