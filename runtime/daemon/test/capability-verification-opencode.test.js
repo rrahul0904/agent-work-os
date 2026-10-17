@@ -37,11 +37,11 @@ function makeSpec() {
   });
 }
 
-test("verification capability advertises OpenCode artifact-context only", () => {
+test("verification capability advertises both proven OpenCode verification modes", () => {
   const adapter = new CapabilityVerificationAdapter(null, null, new FakeOpenCodeAdapter());
   const capability = adapter.capability();
   assert.deepEqual(capability.harnesses, ["opencode"]);
-  assert.deepEqual(capability.harnessModes.opencode, ["artifact-context"]);
+  assert.deepEqual(capability.harnessModes.opencode, ["artifact-context", "native-discovery"]);
 });
 
 test("OpenCode artifact-context verification emits a passing receipt and rolls back", async () => {
@@ -68,19 +68,4 @@ test("OpenCode artifact-context verification emits a passing receipt and rolls b
   assert.equal(receipt.harness.name, "opencode");
   assert.equal(receipt.rollback.attempted, true);
   await assert.rejects(readFile(path.join(root, "stage", ".opencode", "skills", "opencode-verify", "SKILL.md"), "utf8"), { code: "ENOENT" });
-});
-
-test("OpenCode native-discovery stays fail-closed until independently proven", async () => {
-  const root = await mkdtemp(path.join(tmpdir(), "agent-work-os-opencode-native-"));
-  const adapter = new CapabilityVerificationAdapter(null, null, new FakeOpenCodeAdapter());
-  await assert.rejects(adapter.run({
-    sessionId: "outer-opencode-native",
-    cwd: root,
-    prompt: JSON.stringify({
-      spec: makeSpec(),
-      harnessId: "opencode",
-      mode: "native-discovery",
-      approveWrite: true
-    })
-  }, () => {}), /unsupported capability verification mode native-discovery for harness opencode/);
 });
