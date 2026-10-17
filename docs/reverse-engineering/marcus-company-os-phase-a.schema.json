@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/schemas/company-os/phase-a.schema.json",
+  "title": "Agent Work OS Autonomous Company OS Phase A contracts",
+  "description": "Research/specification schema bundle for the Marcus-derived Autonomous Company OS vertical. These company-domain records compose Agent Work OS generic work/approval/grant/receipt/deployment primitives and do not create a second authority system.",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "canonicalProjectId": {
+      "type": "string",
+      "pattern": "^project_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "canonicalWorkId": {
+      "type": "string",
+      "pattern": "^work_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "canonicalArtifactId": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "canonicalEvidenceId": {
+      "type": "string",
+      "pattern": "^evidence_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "canonicalReceiptId": {
+      "type": "string",
+      "pattern": "^receipt_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "canonicalDeploymentId": {
+      "type": "string",
+      "pattern": "^deployment_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "canonicalActorId": {
+      "type": "string",
+      "pattern": "^(user|agent|service)_[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "ref"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["source", "artifact", "evidence", "receipt", "deployment", "memory", "external"]
+        },
+        "ref": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "digest": { "$ref": "#/$defs/digest" },
+        "observedAt": { "$ref": "#/$defs/timestamp" }
+      }
+    },
+    "companySpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "companyId", "projectId", "revision", "founderIntent",
+        "problemStatement", "targetCustomer", "valueProposition", "businessModelHypothesis",
+        "productForm", "launchConstraints", "geographyAssumptions", "successMetricIds",
+        "allowedCapabilityIds", "provenance", "createdBy", "createdAt", "specDigest"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "company-spec/v1" },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "projectId": { "$ref": "#/$defs/canonicalProjectId" },
+        "revision": { "type": "integer", "minimum": 1 },
+        "founderIntent": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "problemStatement": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "targetCustomer": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "valueProposition": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "businessModelHypothesis": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "productForm": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "launchConstraints": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "geographyAssumptions": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 50 },
+        "budgetPolicyRef": { "type": ["string", "null"], "maxLength": 1024 },
+        "successMetricIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 128 }, "minItems": 1, "maxItems": 50, "uniqueItems": true },
+        "allowedCapabilityIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "maxItems": 200, "uniqueItems": true },
+        "provenance": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "minItems": 1, "maxItems": 200 },
+        "createdBy": { "$ref": "#/$defs/canonicalActorId" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "specDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "companyObjective": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "objectiveId", "companyId", "companySpecDigest", "name", "metricIds",
+        "baselineObservationRefs", "target", "horizon", "constraints", "state",
+        "evidenceRequirements", "createdAt", "updatedAt", "objectiveDigest"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "company-objective/v1" },
+        "objectiveId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companySpecDigest": { "$ref": "#/$defs/digest" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "metricIds": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 128 }, "minItems": 1, "maxItems": 50, "uniqueItems": true },
+        "baselineObservationRefs": { "type": "array", "items": { "type": "string", "minLength": 1, "maxLength": 256 }, "maxItems": 100 },
+        "target": {},
+        "horizon": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "constraints": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "budgetPolicyRef": { "type": ["string", "null"], "maxLength": 1024 },
+        "state": { "enum": ["planned", "active", "blocked", "achieved", "failed", "cancelled"] },
+        "evidenceRequirements": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "updatedAt": { "$ref": "#/$defs/timestamp" },
+        "objectiveDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "companyActionPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "planId", "companyId", "companySpecDigest", "objectiveId", "workstream",
+        "workItemId", "baseStateSnapshotDigest", "intent", "expectedOutputs", "expectedEffects",
+        "requestedCapabilityIds", "externalDependencies", "riskClass", "reversibility",
+        "approvalRequirement", "postconditionChecks", "createdBy", "createdAt", "planDigest"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "company-action-plan/v1" },
+        "planId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companySpecDigest": { "$ref": "#/$defs/digest" },
+        "objectiveId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "workstream": { "enum": ["product", "engineering", "design", "shipping", "growth", "sales", "partnerships", "fundraising", "support", "finance", "operations", "legal"] },
+        "workItemId": { "$ref": "#/$defs/canonicalWorkId" },
+        "baseStateSnapshotDigest": { "$ref": "#/$defs/digest" },
+        "intent": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "expectedOutputs": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "expectedEffects": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100, "uniqueItems": true },
+        "requestedCapabilityIds": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100, "uniqueItems": true },
+        "externalDependencies": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "riskClass": { "enum": ["low", "moderate", "high", "unknown"] },
+        "reversibility": { "enum": ["reversible", "partially_reversible", "irreversible", "unknown"] },
+        "budgetEstimate": { "type": ["object", "null"], "additionalProperties": true },
+        "approvalRequirement": { "enum": ["none", "policy", "human", "legal_or_regulated", "unknown"] },
+        "postconditionChecks": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "createdBy": { "$ref": "#/$defs/canonicalActorId" },
+        "createdAt": { "$ref": "#/$defs/timestamp" },
+        "planDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "companyBlocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "blockerId", "companyId", "category", "status", "reason", "evidenceRefs", "requiresHuman", "firstObservedAt", "lastObservedAt", "blockerDigest"],
+      "properties": {
+        "schemaVersion": { "const": "company-blocker/v1" },
+        "blockerId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "objectiveId": { "type": ["string", "null"], "maxLength": 128 },
+        "workItemId": { "oneOf": [{ "$ref": "#/$defs/canonicalWorkId" }, { "type": "null" }] },
+        "category": { "enum": ["provider_approval_pending", "credential_required", "human_decision_required", "legal_review_required", "payment_authority_required", "quota_or_rate_limit", "external_dependency", "verification_failed", "deployment_failed", "policy_denied", "insufficient_evidence", "reconciliation_required"] },
+        "status": { "enum": ["open", "resolved", "superseded"] },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "externalProvider": { "type": ["string", "null"], "maxLength": 256 },
+        "evidenceRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100 },
+        "requiresHuman": { "type": "boolean" },
+        "firstObservedAt": { "$ref": "#/$defs/timestamp" },
+        "lastObservedAt": { "$ref": "#/$defs/timestamp" },
+        "resolvedAt": { "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "blockerDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "companyMetricObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "observationId", "companyId", "metricId", "unit", "sourceType", "sourceRef", "observedAt", "quality", "provenance", "evidenceRefs", "observationDigest"],
+      "properties": {
+        "schemaVersion": { "const": "company-metric-observation/v1" },
+        "observationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "metricId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "value": {},
+        "unknown": { "type": "boolean" },
+        "unit": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "sourceType": { "enum": ["analytics", "billing", "crm", "deployment", "support", "research", "manual", "synthetic", "estimate"] },
+        "sourceRef": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "observedAt": { "$ref": "#/$defs/timestamp" },
+        "windowStart": { "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "windowEnd": { "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "quality": { "enum": ["verified", "observed", "derived", "estimate", "unknown"] },
+        "provenance": { "type": "array", "items": { "$ref": "#/$defs/reference" }, "minItems": 1, "maxItems": 100 },
+        "evidenceRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100 },
+        "observationDigest": { "$ref": "#/$defs/digest" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "unknown": { "const": true } }, "required": ["unknown"] },
+          "then": { "not": { "required": ["value"] } },
+          "else": { "required": ["value"] }
+        }
+      ]
+    },
+    "companyExperiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "experimentId", "companyId", "objectiveId", "hypothesis", "baselineObservationRefs", "interventionPlanDigest", "startAt", "outcomeObservationRefs", "state", "conclusion", "limitations", "experimentDigest"],
+      "properties": {
+        "schemaVersion": { "const": "company-experiment/v1" },
+        "experimentId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "objectiveId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "hypothesis": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "baselineObservationRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "minItems": 1, "maxItems": 100 },
+        "interventionPlanDigest": { "$ref": "#/$defs/digest" },
+        "startAt": { "$ref": "#/$defs/timestamp" },
+        "endAt": { "oneOf": [{ "$ref": "#/$defs/timestamp" }, { "type": "null" }] },
+        "outcomeObservationRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100 },
+        "state": { "enum": ["planned", "active", "complete", "cancelled", "invalid"] },
+        "conclusion": { "enum": ["win", "loss", "inconclusive", "unknown"] },
+        "limitations": { "type": "array", "items": { "type": "string", "maxLength": 1000 }, "maxItems": 100 },
+        "experimentDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "companyStateSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "snapshotId", "companyId", "companySpecDigest", "objectiveDigests", "openWorkItemIds", "openBlockerDigests", "latestMetricObservationDigests", "artifactRefs", "deploymentRefs", "receiptRefs", "projectedAt", "snapshotDigest"],
+      "properties": {
+        "schemaVersion": { "const": "company-state-snapshot/v1" },
+        "snapshotId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companySpecDigest": { "$ref": "#/$defs/digest" },
+        "objectiveDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" }, "maxItems": 100 },
+        "openWorkItemIds": { "type": "array", "items": { "$ref": "#/$defs/canonicalWorkId" }, "maxItems": 500, "uniqueItems": true },
+        "openBlockerDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" }, "maxItems": 500, "uniqueItems": true },
+        "latestMetricObservationDigests": { "type": "array", "items": { "$ref": "#/$defs/digest" }, "maxItems": 500, "uniqueItems": true },
+        "artifactRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 1000 },
+        "deploymentRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100 },
+        "receiptRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 2000 },
+        "memoryContextRef": { "type": ["string", "null"], "maxLength": 2048 },
+        "projectedAt": { "$ref": "#/$defs/timestamp" },
+        "snapshotDigest": { "$ref": "#/$defs/digest" }
+      }
+    },
+    "companyLaunchCertificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "certificateId", "companyId", "companySpecDigest", "sourceRevision", "buildReceiptRefs", "testReceiptRefs", "previewDeploymentRef", "browserUatReceiptRefs", "researchEvidenceRefs", "openBlockerRefs", "prohibitedExternalActionsConfirmedAbsent", "verifierRef", "issuedAt", "outcome", "certificateDigest"],
+      "properties": {
+        "schemaVersion": { "const": "company-launch-certificate/v1" },
+        "certificateId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companyId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "companySpecDigest": { "$ref": "#/$defs/digest" },
+        "sourceRevision": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "buildReceiptRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "minItems": 1, "maxItems": 100 },
+        "testReceiptRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "minItems": 1, "maxItems": 100 },
+        "previewDeploymentRef": { "type": ["string", "null"], "maxLength": 256 },
+        "browserUatReceiptRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100 },
+        "researchEvidenceRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "minItems": 1, "maxItems": 500 },
+        "openBlockerRefs": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "maxItems": 100 },
+        "prohibitedExternalActionsConfirmedAbsent": { "type": "array", "items": { "type": "string", "maxLength": 256 }, "minItems": 1, "maxItems": 100, "uniqueItems": true },
+        "verifierRef": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "issuedAt": { "$ref": "#/$defs/timestamp" },
+        "outcome": { "enum": ["passed", "failed", "blocked"] },
+        "certificateDigest": { "$ref": "#/$defs/digest" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/companySpec" },
+    { "$ref": "#/$defs/companyObjective" },
+    { "$ref": "#/$defs/companyActionPlan" },
+    { "$ref": "#/$defs/companyBlocker" },
+    { "$ref": "#/$defs/companyMetricObservation" },
+    { "$ref": "#/$defs/companyExperiment" },
+    { "$ref": "#/$defs/companyStateSnapshot" },
+    { "$ref": "#/$defs/companyLaunchCertificate" }
+  ]
+}
