@@ -1,0 +1,17 @@
+{
+  "name": "agent-work-os-context-continuity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "npm test",
+    "cc": "node bin/context-continuity.mjs"
+  },
+  "bin": {
+    "context-continuity": "bin/context-continuity.mjs"
+  }
+}
