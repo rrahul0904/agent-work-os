@@ -1,4 +1,5 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { accessSync, constants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { createSourceAccessObservation, validateSourceAccessRequest } from '../../../packages/evidence/src/source-access-context.js';
@@ -46,16 +47,37 @@ function parseProviderResult(stdout) {
   return result;
 }
 
+function resolveBrowserExecutable(candidate) {
+  const found = findCommand(candidate);
+  if (found) return found;
+  try {
+    accessSync(candidate, constants.X_OK);
+    const version = spawnSync(candidate, ['--version'], { encoding: 'utf8', timeout: 3_000 });
+    return {
+      executable: candidate,
+      version: version.status === 0 ? version.stdout.trim().split(/\r?\n/)[0] : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function resolveFirstPartyBrowser({ browserCommand, browserFound }) {
   if (browserFound !== undefined) return browserFound;
-  if (browserCommand) return findCommand(browserCommand);
+  if (browserCommand) return resolveBrowserExecutable(browserCommand);
   const candidates = process.platform === 'win32'
     ? ['chrome', 'msedge']
     : process.platform === 'darwin'
-      ? ['google-chrome', 'chromium']
+      ? [
+          '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+          '/Applications/Chromium.app/Contents/MacOS/Chromium',
+          '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+          'google-chrome',
+          'chromium',
+        ]
       : ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser'];
   for (const candidate of candidates) {
-    const found = findCommand(candidate);
+    const found = resolveBrowserExecutable(candidate);
     if (found) return found;
   }
   return null;
