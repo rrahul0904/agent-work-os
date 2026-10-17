@@ -14,11 +14,12 @@ import { analyzeModuleResolution } from "./module-resolution.js";
 import { analyzeRepositoryImpact } from "./impact.js";
 import { analyzeSemanticRepositoryImpact } from "./impact-v2.js";
 import { createRepositoryEvidenceBundle } from "./evidence.js";
+import { createRepositoryEvidenceBundleV2 } from "./evidence-v2.js";
 import { diffRepositoryMaps } from "./diff.js";
 
 export const REPO_ATLAS_MCP_SERVER = Object.freeze({
   name: "agent-work-os-repo-atlas",
-  version: "0.3.0"
+  version: "0.4.0"
 });
 
 export class RepoAtlasMcpError extends Error {
@@ -181,63 +182,131 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
   }));
 
   server.registerTool("repo_atlas_bundle", {
-    title: "Repo Atlas Evidence Bundle",
-    description: "Create a compact content-addressed repository evidence bundle, optionally including task context, drift, Git, parser imports and M8 change impact.",
-    inputSchema: z.object({
-      path: relativePathSchema.optional(),
-      task: z.string().min(1).max(20_000).optional(),
-      maxFiles: z.number().int().min(1).max(100).optional(),
-      maxEstimatedTokens: z.number().int().min(1).max(100_000).optional(),
-      previousMapPath: relativePathSchema.optional(),
-      includeGit: z.boolean().optional(),
-      includeImports: z.boolean().optional(),
-      includeImpact: z.boolean().optional(),
-      maxDepth: z.number().int().min(1).max(20).optional(),
-      gitMaxCommits: z.number().int().min(1).max(5_000).optional(),
-      repository: z.string().min(1).max(2_000).optional(),
-      ref: z.string().min(1).max(2_000).optional(),
-      commit: z.string().min(1).max(2_000).optional()
-    })
-  }, async ({
-    path: relativePath = ".",
-    task,
-    maxFiles = 24,
-    maxEstimatedTokens = 24_000,
-    previousMapPath,
-    includeGit = false,
-    includeImports = false,
-    includeImpact = false,
-    maxDepth = 5,
-    gitMaxCommits = 500,
-    repository,
-    ref,
-    commit
-  }) => safeToolCall(async () => {
-    if (includeImpact && !previousMapPath) throw new RepoAtlasMcpError("repo_atlas_previous_map_required", "includeImpact requires previousMapPath");
-    const repoPath = await resolveWithinRoot(root, relativePath, "directory");
-    const map = await scanRepository(repoPath);
-    const topology = await analyzeRepositoryTopology(repoPath, map);
-    const risk = analyzeStructuralRisk(map, topology);
-    const context = task ? selectRepositoryContext(map, { task, maxFiles, maxEstimatedTokens }) : null;
-    const previous = previousMapPath ? await readJsonWithinRoot(root, previousMapPath) : null;
-    const diff = previous ? diffRepositoryMaps(previous, map) : null;
-    const gitSignals = includeGit ? await analyzeGitSignals(repoPath, map, { maxCommits: gitMaxCommits }) : null;
-    const importAnalysis = includeImports || includeImpact ? await analyzeRepositoryImports(repoPath, map) : null;
-    const impact = includeImpact ? analyzeRepositoryImpact({ repoMap: map, importAnalysis, diff, topology, gitSignals, maxDepth }) : null;
-    return createRepositoryEvidenceBundle({
-      repoMap: map,
-      topology,
-      risk,
-      context,
-      diff,
-      gitSignals,
-      importAnalysis,
-      impact,
-      provenance: { repository, ref, commit, source: "mcp-local-root" }
-    });
-  }));
+    title: "Repo Atlas Evidence Bundle v1",
+    description: "Create the backward-compatible v1 content-addressed evidence bundle with optional M8 parser imports and change impact.",
+    inputSchema: bundleInputSchema()
+  }, async (input) => safeToolCall(async () => createV1Bundle(root, input)));
+
+  server.registerTool("repo_atlas_semantic_bundle", {
+    title: "Repo Atlas Semantic Evidence Bundle v2",
+    description: "Create a v2 content-addressed evidence bundle with parser imports, semantic module resolution and optional alias-aware change impact.",
+    inputSchema: semanticBundleInputSchema()
+  }, async (input) => safeToolCall(async () => createV2Bundle(root, input)));
 
   return server;
+}
+
+function bundleInputSchema() {
+  return z.object({
+    path: relativePathSchema.optional(),
+    task: z.string().min(1).max(20_000).optional(),
+    maxFiles: z.number().int().min(1).max(100).optional(),
+    maxEstimatedTokens: z.number().int().min(1).max(100_000).optional(),
+    previousMapPath: relativePathSchema.optional(),
+    includeGit: z.boolean().optional(),
+    includeImports: z.boolean().optional(),
+    includeImpact: z.boolean().optional(),
+    maxDepth: z.number().int().min(1).max(20).optional(),
+    gitMaxCommits: z.number().int().min(1).max(5_000).optional(),
+    repository: z.string().min(1).max(2_000).optional(),
+    ref: z.string().min(1).max(2_000).optional(),
+    commit: z.string().min(1).max(2_000).optional()
+  });
+}
+
+function semanticBundleInputSchema() {
+  return z.object({
+    path: relativePathSchema.optional(),
+    task: z.string().min(1).max(20_000).optional(),
+    maxFiles: z.number().int().min(1).max(100).optional(),
+    maxEstimatedTokens: z.number().int().min(1).max(100_000).optional(),
+    previousMapPath: relativePathSchema.optional(),
+    includeGit: z.boolean().optional(),
+    maxDepth: z.number().int().min(1).max(20).optional(),
+    gitMaxCommits: z.number().int().min(1).max(5_000).optional(),
+    repository: z.string().min(1).max(2_000).optional(),
+    ref: z.string().min(1).max(2_000).optional(),
+    commit: z.string().min(1).max(2_000).optional()
+  });
+}
+
+async function createV1Bundle(root, {
+  path: relativePath = ".",
+  task,
+  maxFiles = 24,
+  maxEstimatedTokens = 24_000,
+  previousMapPath,
+  includeGit = false,
+  includeImports = false,
+  includeImpact = false,
+  maxDepth = 5,
+  gitMaxCommits = 500,
+  repository,
+  ref,
+  commit
+}) {
+  if (includeImpact && !previousMapPath) throw new RepoAtlasMcpError("repo_atlas_previous_map_required", "includeImpact requires previousMapPath");
+  const repoPath = await resolveWithinRoot(root, relativePath, "directory");
+  const map = await scanRepository(repoPath);
+  const topology = await analyzeRepositoryTopology(repoPath, map);
+  const risk = analyzeStructuralRisk(map, topology);
+  const context = task ? selectRepositoryContext(map, { task, maxFiles, maxEstimatedTokens }) : null;
+  const previous = previousMapPath ? await readJsonWithinRoot(root, previousMapPath) : null;
+  const diff = previous ? diffRepositoryMaps(previous, map) : null;
+  const gitSignals = includeGit ? await analyzeGitSignals(repoPath, map, { maxCommits: gitMaxCommits }) : null;
+  const importAnalysis = includeImports || includeImpact ? await analyzeRepositoryImports(repoPath, map) : null;
+  const impact = includeImpact ? analyzeRepositoryImpact({ repoMap: map, importAnalysis, diff, topology, gitSignals, maxDepth }) : null;
+  return createRepositoryEvidenceBundle({
+    repoMap: map,
+    topology,
+    risk,
+    context,
+    diff,
+    gitSignals,
+    importAnalysis,
+    impact,
+    provenance: { repository, ref, commit, source: "mcp-local-root" }
+  });
+}
+
+async function createV2Bundle(root, {
+  path: relativePath = ".",
+  task,
+  maxFiles = 24,
+  maxEstimatedTokens = 24_000,
+  previousMapPath,
+  includeGit = false,
+  maxDepth = 5,
+  gitMaxCommits = 500,
+  repository,
+  ref,
+  commit
+}) {
+  const repoPath = await resolveWithinRoot(root, relativePath, "directory");
+  const map = await scanRepository(repoPath);
+  const topology = await analyzeRepositoryTopology(repoPath, map);
+  const risk = analyzeStructuralRisk(map, topology);
+  const context = task ? selectRepositoryContext(map, { task, maxFiles, maxEstimatedTokens }) : null;
+  const previous = previousMapPath ? await readJsonWithinRoot(root, previousMapPath) : null;
+  const diff = previous ? diffRepositoryMaps(previous, map) : null;
+  const gitSignals = includeGit ? await analyzeGitSignals(repoPath, map, { maxCommits: gitMaxCommits }) : null;
+  const importAnalysis = await analyzeRepositoryImports(repoPath, map);
+  const moduleResolution = await analyzeModuleResolution(repoPath, map, importAnalysis);
+  const semanticImpact = diff
+    ? analyzeSemanticRepositoryImpact({ repoMap: map, importAnalysis, moduleResolution, diff, topology, gitSignals, maxDepth })
+    : null;
+  return createRepositoryEvidenceBundleV2({
+    repoMap: map,
+    topology,
+    risk,
+    context,
+    diff,
+    gitSignals,
+    importAnalysis,
+    moduleResolution,
+    semanticImpact,
+    provenance: { repository, ref, commit, source: "mcp-local-root" }
+  });
 }
 
 const relativePathSchema = z.string().min(1).max(2_000).refine((value) => !path.isAbsolute(value), {
