@@ -14,6 +14,7 @@ REA owns evidence/provenance intake. Research Ledger owns the local source noteb
 | Deterministic lexical retrieval | Implemented; remains the default grounded-brief retriever |
 | Multilingual neural semantic search | Implemented as an opt-in browser Web Worker lane with pinned E5 model/runtime |
 | Semantic/lexical comparison | Implemented as top-result overlap diagnostic |
+| Experimental hybrid grounded-brief retrieval | Implemented with deterministic reciprocal-rank fusion and lexical fallback |
 | Exact passage citations | Implemented |
 | PDF page-marker provenance | Implemented; geometry highlighting remains optional future UX |
 | Grounded Q&A / compare / recommend | Implemented |
@@ -27,7 +28,7 @@ REA owns evidence/provenance intake. Research Ledger owns the local source noteb
 | Local evidence drift | Implemented with SHA-256 |
 | Remote URL freshness | Implemented with explicit bounded public-URL checks |
 | Private-network/SSRF refusal | Implemented with URL + DNS validation, pinned connection targets and redirect re-validation |
-| Product-specific automated verification | Implemented with independent path-scoped `research-ledger-ci` plus API/schema/semantic/runtime contracts |
+| Product-specific automated verification | Implemented with independent path-scoped `research-ledger-ci` plus API/schema/semantic/hybrid/runtime contracts |
 | Full Playwright/capacity matrix | Not claimed; remains a separate hardening lane |
 
 ## v0.3 completion work
@@ -49,10 +50,22 @@ REA owns evidence/provenance intake. Research Ledger owns the local source noteb
 - Semantic results preserve the existing exact passage IDs and can reopen the cited local passage.
 - The UI reports semantic/lexical top-result overlap and whether semantic indexing covered the whole notebook.
 - Model/runtime assets are downloaded only after explicit semantic use and can be cached by the browser; embedding vectors remain worker-memory state and are rebuilt when needed.
-- Exact semantic implementation head `a1b9b748eabb385bbefb527b85429e0690153297` passed independent `research-ledger-ci` push run #3 and PR run #4.
+- Exact semantic implementation head `a1b9b748eabb385bbefb527b85429e0690153297` passed independent product CI.
+
+## Experimental hybrid brief retrieval
+- Lexical remains the default brief retriever; users must explicitly choose **Hybrid RRF · experimental**.
+- Hybrid mode requests a broader lexical and semantic candidate set, then combines rank positions using reciprocal-rank fusion with `k=60`, avoiding invalid direct comparison of lexical relevance scores and embedding cosine scores.
+- The bridge reuses the existing Research Ledger brief-generation and rendering state rather than introducing a second brief model.
+- The bridge reconciles persisted capture-derived semantic passage IDs back to current local passages before rendering; exact passage click-through remains available.
+- Hybrid metadata records fusion mode, model/revision, semantic coverage, lexical/semantic overlap and whether a lexical fallback occurred.
+- Any model download, worker, bridge or fusion failure degrades to deterministic lexical evidence selection and records the fallback in evidence gaps/lineage rather than aborting the research run.
+- The keyboard shortcut is intercepted only when hybrid mode is selected; lexical mode delegates to the original app path unchanged.
+- The portable runtime explicitly serves the hybrid bridge and the product-specific gate validates its classic-script integration seam.
+- Exact hybrid implementation head `92292a5fedf416b1a6254eec25bbb96154873d54` passed `research-ledger-ci` run #24 with every verification step successful.
 
 ## Honest boundaries / next lanes
-- Semantic search is complete as an opt-in research inspection lane, but grounded brief generation still defaults to deterministic lexical retrieval. Promoting semantic/hybrid ranking into the brief generator requires a separate quality benchmark and rollback-safe integration rather than a parity claim.
+- Hybrid RRF is implemented but remains experimental. Automated contracts prove deterministic fusion and rollback behavior; they do not prove real-model retrieval-quality uplift.
+- The next retrieval milestone is an empirical browser benchmark corpus covering paraphrases, multilingual questions, lexical-exact matches, semantic-only matches and adversarial/noise cases before considering hybrid as the default.
 - The semantic index currently caps at 240 chunks and does not persist vectors across worker/browser restarts.
 - Encoded podcast-audio export remains unimplemented.
 - Full Playwright accessibility/capacity/browser-compatibility benchmarking remains a future hardening lane.
