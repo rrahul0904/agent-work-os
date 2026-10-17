@@ -1,0 +1,99 @@
+{
+  "fixture": "no-action-lineage-v1",
+  "purpose": "Demonstrate an append-only decision, later outcome, correction lineage, isolated model generation and provider budget receipt without domain-specific execution semantics.",
+  "artifacts": [
+    {
+      "schema": "model-generation/v1",
+      "model_generation_id": "model-gen:fixture-a",
+      "created_at": "2026-10-16T21:15:00-04:00",
+      "model_provider": "fixture-provider",
+      "model_name": "fixture-model",
+      "runtime_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "prompt_policy_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "toolset_digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "baseline_generation_id": null,
+      "baseline_compatibility_digest": null,
+      "inherits_scorecard": false
+    },
+    {
+      "schema": "agent-decision/v1",
+      "decision_id": "decision:fixture-001",
+      "created_at": "2026-10-16T21:16:00-04:00",
+      "decision": "NO_ACTION",
+      "input_digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "evidence_digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "model_generation_id": "model-gen:fixture-a",
+      "model_runtime_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "policy_digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "confidence": 0.41,
+      "rationale_summary": "Evidence did not cross the policy threshold required to propose an action, so abstention is the correct successful outcome.",
+      "evidence_refs": [
+        {
+          "evidence_id": "evidence:fixture-001",
+          "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+          "epistemic_state": "observed"
+        }
+      ],
+      "memory_policy": {
+        "retrospective_mode": "write_only",
+        "allow_unverified_retrospective_in_future_context": false
+      },
+      "requested_effect_class": null
+    },
+    {
+      "schema": "decision-ledger-entry/v1",
+      "ledger_entry_id": "ledger:fixture-001",
+      "accepted_at": "2026-10-16T21:16:01-04:00",
+      "decision_id": "decision:fixture-001",
+      "decision_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "sequence": 1,
+      "external_identity_key": "fixture:case-001",
+      "append_only": true
+    },
+    {
+      "schema": "outcome-observation/v1",
+      "outcome_id": "outcome:fixture-001",
+      "observed_at": "2026-10-17T09:00:00-04:00",
+      "ledger_entry_id": "ledger:fixture-001",
+      "decision_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "source_digest": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "status": "SUCCEEDED",
+      "metrics": {
+        "policy_threshold_respected": true,
+        "effects_executed": 0
+      },
+      "notes": "The no-action decision remained correct under the later observed fixture outcome."
+    },
+    {
+      "schema": "correction-receipt/v1",
+      "correction_id": "correction:fixture-001",
+      "created_at": "2026-10-17T09:05:00-04:00",
+      "target_artifact_id": "outcome:fixture-001",
+      "target_artifact_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "reason_code": "TIME_CORRECTION",
+      "reason_summary": "Fixture source timestamp was normalized after the original observation was recorded; the original observation remains intact.",
+      "replacement_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "does_not_overwrite_original": true
+    },
+    {
+      "schema": "provider-budget-receipt/v1",
+      "receipt_id": "budget:fixture-001",
+      "run_id": "run:fixture-001",
+      "created_at": "2026-10-16T21:16:02-04:00",
+      "provider": "fixture-provider",
+      "call_count": 3,
+      "call_limit": 10,
+      "cost_observed": 0.03,
+      "cost_limit": 0.25,
+      "budget_status": "WITHIN_BUDGET"
+    }
+  ],
+  "negative_tests_expected": [
+    "mutating the accepted decision after outcome observation must fail",
+    "changing confidence must not widen effect authority",
+    "feeding write-only retrospective text into the next run must fail",
+    "a budget receipt above the configured limit must fail the run",
+    "a second accepted entry with the same exact external identity must be rejected unless policy explicitly models a revision",
+    "a correction must append lineage rather than replace the original artifact"
+  ]
+}
