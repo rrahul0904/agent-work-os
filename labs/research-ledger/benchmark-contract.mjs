@@ -74,9 +74,14 @@ assert.match(runner, /aggregateMetrics\(rows, 'semantic'\)/);
 assert.match(runner, /aggregateMetrics\(rows, 'hybrid'\)/);
 assert.match(runner, /aggregateGroupedMetrics\(rows, 'kind'\)/);
 assert.match(runner, /aggregateGroupedMetrics\(rows, 'language'\)/);
+assert.match(runner, /modelReadyElapsedMs/);
+assert.match(runner, /indexReadyElapsedMs/);
+assert.match(runner, /semanticQuery: summarizeDurations\(semanticDurations\)/);
+assert.match(runner, /hybridFusion: summarizeDurations\(hybridDurations\)/);
+assert.match(runner, /browser-observed; runner\/device dependent/);
 assert.doesNotMatch(runner, /\/api\/research/, 'benchmark must not send corpus passages to the application generation API');
 assert.match(runtime, /retrieval-benchmark\.html/);
 assert.match(runtime, /retrieval-benchmark-core\.js/);
 assert.match(runtime, /retrieval-benchmark\.js/);
 
-console.log('research-ledger retrieval benchmark v2 contract passed');
+console.log('research-ledger retrieval benchmark v2 quality + latency contract passed');
