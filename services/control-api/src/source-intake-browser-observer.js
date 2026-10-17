@@ -60,12 +60,17 @@ function matchingSession(session, binding) {
     && candidate.transitionSha256 === binding.transitionSha256;
 }
 
+function workItemRealtimeEventKey(binding, workItem) {
+  return `source-intake:${binding.resumeCommandId}:work-item-v${workItem.version}`;
+}
+
 export function createSourceIntakeBrowserObserver({
   store,
   workItems,
   capabilityRegistryRepository,
   capabilityVerificationRepository,
   tenantSourceIntakeSupervisor,
+  publishRealtimeEvent = async () => null,
   now = () => new Date().toISOString(),
   sessionId = () => crypto.randomUUID(),
   messageId = () => crypto.randomUUID(),
@@ -80,6 +85,14 @@ export function createSourceIntakeBrowserObserver({
   requireMethod(capabilityRegistryRepository, 'capabilityRegistryRepository', 'resolve');
   requireMethod(capabilityVerificationRepository, 'capabilityVerificationRepository', 'get');
   requireMethod(tenantSourceIntakeSupervisor, 'tenantSourceIntakeSupervisor', 'resume');
+  if (typeof publishRealtimeEvent !== 'function') throw new TypeError('publishRealtimeEvent must be a function');
+
+  async function publishWorkItemUpdate(binding, workItem) {
+    return publishRealtimeEvent({
+      eventKey: workItemRealtimeEventKey(binding, workItem),
+      event: { type: 'work.item.updated', workItem: structuredClone(workItem) },
+    });
+  }
 
   async function authorize({ organizationId, workItem, verificationRunId, machineId }) {
     if (!workItem || workItem.organizationId !== organizationId) throw new Error('workItem organization mismatch');
@@ -124,7 +137,11 @@ export function createSourceIntakeBrowserObserver({
     if (workItem.status !== 'blocked') {
       const prior = (await workItems.listEvents(workItem.id, organizationId))
         .find((candidate) => candidate.commandId === binding.resumeCommandId && candidate.toStatus === 'ready');
-      if (prior) return Object.freeze({ workItem: prior.result ?? workItem, replayed: true, sessionId: session.id });
+      if (prior) {
+        const resumedWorkItem = prior.result ?? workItem;
+        const realtime = await publishWorkItemUpdate(binding, resumedWorkItem);
+        return Object.freeze({ workItem: resumedWorkItem, replayed: true, sessionId: session.id, realtime });
+      }
       throw new Error('bound WorkItem is no longer blocked by this browser observation');
     }
     if (workItem.version !== binding.blockedVersion) throw new Error('bound WorkItem version changed before browser observation');
@@ -151,7 +168,8 @@ export function createSourceIntakeBrowserObserver({
       commandId: binding.resumeCommandId,
       at: event.at ?? now(),
     });
-    return Object.freeze({ ...result, sessionId: session.id });
+    const realtime = await publishWorkItemUpdate(binding, result.workItem);
+    return Object.freeze({ ...result, sessionId: session.id, realtime });
   }
 
   async function reconcileSession(session) {
