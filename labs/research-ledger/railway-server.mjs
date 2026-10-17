@@ -17,7 +17,8 @@ const staticFiles = new Set([
   'completion.js',
   'semantic-core.js',
   'semantic-worker.js',
-  'semantic-search.js'
+  'semantic-search.js',
+  'hybrid-brief.js'
 ]);
 const mime = {
   '.html': 'text/html; charset=utf-8',
