@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createWakeQueue, createWorkLedger } from "./work-supervisor.js";
@@ -13,6 +14,7 @@ export async function createPersistentWorkSupervisor({
   const ledger = createWorkLedger({ now });
   const wakes = createWakeQueue({ now, maxSelfWakeDepth });
   const recovered = [];
+  let writeTail = Promise.resolve();
 
   const stored = await readSnapshot(resolvedPath);
   if (stored) {
@@ -81,20 +83,30 @@ export async function createPersistentWorkSupervisor({
 
     async flush() {
       await persist();
+      await writeTail;
     }
   };
 
-  async function persist() {
+  function persist() {
     const snapshot = {
       version: 1,
       workItems: ledger.list(),
       wakeDeliveries: wakes.list()
     };
-    await mkdir(path.dirname(resolvedPath), { recursive: true });
-    const tempPath = `${resolvedPath}.${process.pid}.${Date.now()}.tmp`;
-    await writeFile(tempPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
-    await rename(tempPath, resolvedPath);
+    const operation = writeTail.then(
+      () => writeSnapshot(resolvedPath, snapshot),
+      () => writeSnapshot(resolvedPath, snapshot)
+    );
+    writeTail = operation.catch(() => {});
+    return operation;
   }
+}
+
+async function writeSnapshot(filePath, snapshot) {
+  await mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(snapshot, null, 2)}\n`, "utf8");
+  await rename(tempPath, filePath);
 }
 
 async function readSnapshot(filePath) {
