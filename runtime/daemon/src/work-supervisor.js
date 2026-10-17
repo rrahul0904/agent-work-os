@@ -91,9 +91,9 @@ export function createWorkLedger({ now = () => Date.now() } = {}) {
             to: "lost",
             reason: "runtime_restart"
           });
-          hydrated.push(transitioned.work);
+          hydrated.push({ work: transitioned.work, recovered: true, receipt: transitioned.receipt });
         } else {
-          hydrated.push(clone(normalized));
+          hydrated.push({ work: clone(normalized), recovered: false, receipt: null });
         }
       }
       return hydrated;
@@ -115,6 +115,7 @@ export function createWakeQueue({ now = () => Date.now(), maxSelfWakeDepth = 4 }
       if (SELF_CAUSED_WAKE_SOURCES.has(normalized.source) && normalized.selfWakeDepth > maxSelfWakeDepth) {
         throw new Error("wake_chain_limit_exceeded");
       }
+      if (deliveries.has(normalized.id)) throw new Error("wake_id_exists");
       deliveries.set(normalized.id, normalized);
       byKey.set(normalized.deliveryKey, normalized.id);
       return { kind: "queued", delivery: clone(normalized) };
@@ -157,6 +158,22 @@ export function createWakeQueue({ now = () => Date.now(), maxSelfWakeDepth = 4 }
 
     list() {
       return [...deliveries.values()].sort((a, b) => a.sequence - b.sequence).map(clone);
+    },
+
+    hydrate(records) {
+      if (!Array.isArray(records)) throw new Error("wake_records_invalid");
+      for (const record of records) {
+        const normalized = normalizeStoredWake(record);
+        if (deliveries.has(normalized.id)) throw new Error("wake_id_exists");
+        if (byKey.has(normalized.deliveryKey)) throw new Error("wake_delivery_key_exists");
+        if (SELF_CAUSED_WAKE_SOURCES.has(normalized.source) && normalized.selfWakeDepth > maxSelfWakeDepth) {
+          throw new Error("wake_chain_limit_exceeded");
+        }
+        deliveries.set(normalized.id, normalized);
+        byKey.set(normalized.deliveryKey, normalized.id);
+        sequence = Math.max(sequence, normalized.sequence);
+      }
+      return this.list();
     }
   };
 }
@@ -228,6 +245,27 @@ function normalizeWake(input, at, sequence) {
     queuedAt: at,
     settledAt: null,
     settlementReceipt: null
+  };
+}
+
+function normalizeStoredWake(record) {
+  if (!record || typeof record !== "object") throw new Error("wake_record_invalid");
+  if (!WAKE_SOURCES.has(record.source)) throw new Error("wake_source_invalid");
+  if (!DELIVERY_STATES.has(record.status)) throw new Error("wake_delivery_status_invalid");
+  if (!Number.isInteger(record.priority) || record.priority < 0) throw new Error("wake_priority_invalid");
+  if (!Number.isInteger(record.sequence) || record.sequence < 1) throw new Error("wake_sequence_invalid");
+  if (!Number.isInteger(record.selfWakeDepth) || record.selfWakeDepth < 0) throw new Error("wake_depth_invalid");
+  if (record.status === "queued" && record.settlementReceipt) throw new Error("wake_queued_receipt_invalid");
+  if (record.status !== "queued" && !record.settlementReceipt) throw new Error("wake_settlement_receipt_required");
+  return {
+    ...record,
+    id: requiredString(record.id, "wake_id_invalid"),
+    deliveryKey: requiredString(record.deliveryKey, "wake_delivery_key_invalid"),
+    sessionId: requiredString(record.sessionId, "wake_session_invalid"),
+    workId: normalizeNullableString(record.workId),
+    causalDeliveryId: normalizeNullableString(record.causalDeliveryId),
+    settledAt: record.settledAt ?? null,
+    settlementReceipt: record.settlementReceipt ? clone(record.settlementReceipt) : null
   };
 }
 
