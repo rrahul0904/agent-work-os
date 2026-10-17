@@ -125,12 +125,29 @@ try {
     const gitSignals = hasFlag(flags, "--include-git")
       ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
       : null;
+    const includeImpact = hasFlag(flags, "--include-impact");
+    if (includeImpact && !diff) throw commandError("repo_atlas_previous_map_required", "report --include-impact requires --previous-map=<repo-map.json>");
+    const importAnalysis = hasFlag(flags, "--include-imports") || includeImpact
+      ? await analyzeRepositoryImports(repoArg, map)
+      : null;
+    const impact = includeImpact
+      ? analyzeRepositoryImpact({
+          repoMap: map,
+          importAnalysis,
+          diff,
+          topology,
+          gitSignals,
+          maxDepth: parseIntegerFlag(flags, "--max-depth=", 5)
+        })
+      : null;
     const html = renderRepoAtlasHtml({
       repoMap: map,
       topology,
       risk,
       diff,
       gitSignals,
+      importAnalysis,
+      impact,
       title: getFlag(flags, "--title=") ?? undefined
     });
     await emitHtml(html, getFlag(flags, "--output="), map.digest);
@@ -152,7 +169,7 @@ try {
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
       "  npm run repo:atlas -- git <repo-path> [--max-commits=500] [--output=<file>]\n" +
       "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--git-max-commits=500] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
-      "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--include-git] [--git-max-commits=500] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
+      "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--git-max-commits=500] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
       "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
     process.exitCode = 2;
