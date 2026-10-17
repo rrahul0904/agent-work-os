@@ -11,6 +11,7 @@ import {
 import { SEMANTIC_MODEL_ID, SEMANTIC_MODEL_REVISION, TRANSFORMERS_JS_VERSION } from './semantic-core.js';
 
 const $ = selector => document.querySelector(selector);
+const REQUEST_TIMEOUT_MS = 180_000;
 let worker = null;
 let sequence = 0;
 const pending = new Map();
@@ -19,6 +20,14 @@ function setStatus(message, state = 'idle') {
   const el = $('#benchmarkStatus');
   el.textContent = message;
   el.dataset.state = state;
+}
+
+function settlePending(requestId, kind, value) {
+  const request = pending.get(requestId);
+  if (!request) return;
+  pending.delete(requestId);
+  clearTimeout(request.timer);
+  request[kind](value);
 }
 
 function ensureWorker() {
@@ -41,22 +50,17 @@ function ensureWorker() {
       return;
     }
     if (message.type === 'error') {
-      const request = pending.get(message.requestId);
-      if (request) {
-        pending.delete(message.requestId);
-        request.reject(new Error(message.message || 'Benchmark worker failed'));
-      }
+      settlePending(message.requestId, 'reject', new Error(message.message || 'Benchmark worker failed'));
       return;
     }
-    const request = pending.get(message.requestId);
-    if (request) {
-      pending.delete(message.requestId);
-      request.resolve(message);
-    }
+    settlePending(message.requestId, 'resolve', message);
   };
   worker.onerror = event => {
-    for (const request of pending.values()) request.reject(new Error(event.message || 'Benchmark worker crashed'));
-    pending.clear();
+    for (const [requestId, request] of pending) {
+      clearTimeout(request.timer);
+      request.reject(new Error(event.message || 'Benchmark worker crashed'));
+      pending.delete(requestId);
+    }
     worker?.terminate();
     worker = null;
   };
@@ -67,7 +71,11 @@ function requestWorker(type, payload = {}) {
   const semanticWorker = ensureWorker();
   const requestId = `bench_${Date.now().toString(36)}_${++sequence}`;
   return new Promise((resolve, reject) => {
-    pending.set(requestId, { resolve, reject });
+    const timer = setTimeout(() => {
+      pending.delete(requestId);
+      reject(new Error(`${type} request exceeded ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s`));
+    }, REQUEST_TIMEOUT_MS);
+    pending.set(requestId, { resolve, reject, timer });
     semanticWorker.postMessage({ type, requestId, ...payload });
   });
 }
@@ -109,6 +117,8 @@ function downloadReport(report) {
 async function runBenchmark() {
   const run = $('#runBenchmark');
   const download = $('#downloadBenchmark');
+  window.__researchLedgerBenchmarkReport = null;
+  window.__researchLedgerBenchmarkFailure = null;
   run.disabled = true;
   download.disabled = true;
   $('#benchmarkRows').innerHTML = '';
@@ -162,7 +172,9 @@ async function runBenchmark() {
     download.disabled = false;
     download.onclick = () => downloadReport(report);
   } catch (error) {
-    setStatus(`Benchmark failed: ${error.message}`, 'error');
+    const failure = { message: error?.message || 'Benchmark failed', at: new Date().toISOString(), status: $('#benchmarkStatus')?.textContent || '' };
+    window.__researchLedgerBenchmarkFailure = failure;
+    setStatus(`Benchmark failed: ${failure.message}`, 'error');
   } finally {
     run.disabled = false;
   }
