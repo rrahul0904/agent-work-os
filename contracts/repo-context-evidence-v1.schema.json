@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-context-evidence-v1.schema.json",
+  "title": "Agent Work OS Repository Context Evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "task", "taskTokens", "selected", "estimatedTokens", "budget", "omittedByBudget", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-context-evidence/v1" },
+    "repositoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "task": { "type": "string", "minLength": 1, "maxLength": 20000 },
+    "taskTokens": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "selected": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["path", "language", "lines", "estimatedTokens", "relevance"], "properties": { "path": { "type": "string", "minLength": 1 }, "language": { "type": "string", "minLength": 1 }, "lines": { "type": "integer", "minimum": 0 }, "estimatedTokens": { "type": "integer", "minimum": 1 }, "relevance": { "type": "number", "minimum": 0 } } } },
+    "estimatedTokens": { "type": "integer", "minimum": 0 },
+    "budget": { "type": "object", "additionalProperties": false, "required": ["maxFiles", "maxEstimatedTokens"], "properties": { "maxFiles": { "type": "integer", "minimum": 1, "maximum": 500 }, "maxEstimatedTokens": { "type": "integer", "minimum": 1, "maximum": 2000000 } } },
+    "omittedByBudget": { "type": "integer", "minimum": 0 },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

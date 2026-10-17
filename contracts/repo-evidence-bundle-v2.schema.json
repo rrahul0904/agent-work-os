@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-evidence-bundle-v2.schema.json",
+  "title": "Agent Work OS Repository Evidence Bundle v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "producer", "provenance", "artifacts", "claims", "selectedPaths", "summary", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-evidence-bundle/v2" },
+    "repositoryDigest": { "$ref": "#/$defs/digest" },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "contractVersion"],
+      "properties": {
+        "name": { "const": "agent-work-os/repo-atlas" },
+        "contractVersion": { "const": 2 }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "repository": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "ref": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "commit": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "source": { "type": "string", "minLength": 1, "maxLength": 2000 }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "schemaVersion", "digest"],
+        "properties": {
+          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk", "repo-diff", "repo-git", "repo-imports", "repo-resolution", "repo-semantic-impact"] },
+          "schemaVersion": { "type": "string", "minLength": 1 },
+          "digest": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "text", "artifactDigest"],
+        "properties": {
+          "type": { "type": "string", "minLength": 1 },
+          "text": { "type": "string", "minLength": 1 },
+          "artifactDigest": { "$ref": "#/$defs/digest" }
+        }
+      }
+    },
+    "selectedPaths": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles", "affectedFiles", "gitCommitsAnalyzed", "trackedFiles", "gitWorkingTreeDirty", "parsedSourceFiles", "parserFallbackFiles", "resolvedImportFiles", "aliasResolvedEdges", "impactedFiles", "impactedModules", "highImpactChanges"],
+      "properties": {
+        "files": { "type": "integer", "minimum": 0 },
+        "lines": { "type": "integer", "minimum": 0 },
+        "languages": { "type": "integer", "minimum": 0 },
+        "modules": { "$ref": "#/$defs/nullableCount" },
+        "dependencyEdges": { "$ref": "#/$defs/nullableCount" },
+        "contextFiles": { "$ref": "#/$defs/nullableCount" },
+        "highRiskFiles": { "$ref": "#/$defs/nullableCount" },
+        "affectedFiles": { "$ref": "#/$defs/nullableCount" },
+        "gitCommitsAnalyzed": { "$ref": "#/$defs/nullableCount" },
+        "trackedFiles": { "$ref": "#/$defs/nullableCount" },
+        "gitWorkingTreeDirty": { "type": ["boolean", "null"] },
+        "parsedSourceFiles": { "$ref": "#/$defs/nullableCount" },
+        "parserFallbackFiles": { "$ref": "#/$defs/nullableCount" },
+        "resolvedImportFiles": { "$ref": "#/$defs/nullableCount" },
+        "aliasResolvedEdges": { "$ref": "#/$defs/nullableCount" },
+        "impactedFiles": { "$ref": "#/$defs/nullableCount" },
+        "impactedModules": { "$ref": "#/$defs/nullableCount" },
+        "highImpactChanges": { "$ref": "#/$defs/nullableCount" }
+      }
+    },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "nullableCount": { "type": ["integer", "null"], "minimum": 0 }
+  }
+}

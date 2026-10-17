@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-risk-v1.schema.json",
+  "title": "Agent Work OS Repository Structural Risk v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "topologyDigest", "methodology", "hotspots", "modules", "metrics", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-risk/v1" },
+    "repositoryDigest": { "$ref": "#/$defs/digest" },
+    "topologyDigest": { "$ref": "#/$defs/digest" },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "inputs", "note"],
+      "properties": {
+        "version": { "const": "structural-risk/v1" },
+        "inputs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "hotspots": { "type": "array", "items": { "$ref": "#/$defs/fileRisk" } },
+    "modules": { "type": "array", "items": { "$ref": "#/$defs/moduleRisk" } },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filesScored", "modulesScored", "highRiskFiles", "highRiskModules"],
+      "properties": {
+        "filesScored": { "type": "integer", "minimum": 0 },
+        "modulesScored": { "type": "integer", "minimum": 0 },
+        "highRiskFiles": { "type": "integer", "minimum": 0 },
+        "highRiskModules": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "level": { "enum": ["low", "medium", "high"] },
+    "fileRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "language", "lines", "incomingImports", "outgoingImports", "score", "level", "reasons"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "language": { "type": "string", "minLength": 1 },
+        "lines": { "type": "integer", "minimum": 0 },
+        "incomingImports": { "type": "integer", "minimum": 0 },
+        "outgoingImports": { "type": "integer", "minimum": 0 },
+        "score": { "type": "number", "minimum": 0 },
+        "level": { "$ref": "#/$defs/level" },
+        "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+      }
+    },
+    "moduleRisk": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["moduleId", "name", "path", "files", "lines", "incomingDependencies", "outgoingDependencies", "score", "level", "reasons"],
+      "properties": {
+        "moduleId": { "type": "string", "pattern": "^module:" },
+        "name": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "files": { "type": "integer", "minimum": 0 },
+        "lines": { "type": "integer", "minimum": 0 },
+        "incomingDependencies": { "type": "integer", "minimum": 0 },
+        "outgoingDependencies": { "type": "integer", "minimum": 0 },
+        "score": { "type": "number", "minimum": 0 },
+        "level": { "$ref": "#/$defs/level" },
+        "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 }, "minItems": 1 }
+      }
+    }
+  }
+}

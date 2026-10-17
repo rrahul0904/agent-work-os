@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-git-signals-v1.schema.json",
+  "title": "Agent Work OS Repository Git Signals v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "headCommit", "workingTreeDirty", "historyLimit", "commitsAnalyzed", "contributorCount", "metrics", "hotspots", "files", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-git-signals/v1" },
+    "repositoryDigest": { "$ref": "#/$defs/digest" },
+    "headCommit": { "type": "string", "pattern": "^[0-9a-f]{40,64}$" },
+    "workingTreeDirty": { "type": "boolean" },
+    "historyLimit": { "type": "integer", "minimum": 1, "maximum": 5000 },
+    "commitsAnalyzed": { "type": "integer", "minimum": 0 },
+    "contributorCount": { "type": "integer", "minimum": 0 },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["filesAnalyzed", "trackedFiles", "filesWithHistory", "totalChurn"],
+      "properties": {
+        "filesAnalyzed": { "type": "integer", "minimum": 0 },
+        "trackedFiles": { "type": "integer", "minimum": 0 },
+        "filesWithHistory": { "type": "integer", "minimum": 0 },
+        "totalChurn": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "hotspots": { "type": "array", "items": { "$ref": "#/$defs/fileSignal" }, "maxItems": 100 },
+    "files": { "type": "array", "items": { "$ref": "#/$defs/fileSignal" } },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "fileSignal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "tracked", "commitsTouched", "additions", "deletions", "churn", "contributorCount", "topContributorId", "lastChangedAt"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "tracked": { "type": "boolean" },
+        "commitsTouched": { "type": "integer", "minimum": 0 },
+        "additions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 },
+        "churn": { "type": "integer", "minimum": 0 },
+        "contributorCount": { "type": "integer", "minimum": 0 },
+        "topContributorId": { "type": ["string", "null"], "pattern": "^contributor:[0-9a-f]{16}$" },
+        "lastChangedAt": { "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}
