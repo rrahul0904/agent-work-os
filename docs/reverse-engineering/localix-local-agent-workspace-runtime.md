@@ -114,34 +114,97 @@ The upstream is MIT. Direct code reuse is possible only with the applicable MIT 
 
 Any future intentional source reuse must record upstream file path, exact SHA and license/notice handling. No Localix branding or visual assets are imported.
 
-## First implemented slice
+## Implemented owned runtime slice
 
-This branch adds an independently authored `runtime/daemon/src/work-supervisor.js` with:
+This branch now carries an independently authored, durable supervisor rather than only an in-memory contract.
+
+### Work lifecycle
+
+`runtime/daemon/src/work-supervisor.js` provides:
 
 - stable work IDs and kinds;
 - sequence-checked state transitions;
-- append-only transition receipts with canonical SHA-256 digest;
-- restart hydration that marks stale `running` work as `lost`;
-- wake sources, priority and deterministic delivery keys;
-- duplicate wake suppression;
+- append-only transition receipts with canonical SHA-256 digests;
+- explicit `queued | running | blocked | waiting | review | complete | failed | interrupted | lost | unknown` states;
+- restart hydration that converts stale persisted `running` work to a new `lost` transition with reason `runtime_restart` while retaining prior history.
+
+### Wake delivery
+
+The same module provides:
+
+- typed wake sources;
+- user-vs-machine priority;
+- deterministic delivery keys;
+- duplicate suppression;
 - causal wake provenance;
 - bounded self-caused wake depth;
-- append-only wake settlement receipts.
+- append-only settlement receipts;
+- restore of queued and settled wake records without changing identity or receipt digests.
 
-The accompanying unit tests cover stale transitions, terminal double-completion protection, restart/lost-work recovery, user-vs-machine wake priority, duplicate delivery keys, causal provenance and self-wake bounds.
+### Durable daemon store
 
-This is intentionally an in-memory contract slice. Persistence/control-plane protocol integration and execution-backend enforcement are subsequent gates.
+`runtime/daemon/src/work-supervisor-store.js` adds a versioned local supervisor snapshot:
+
+- atomic temp-file + rename replacement;
+- serialized write queue so concurrent session completions cannot regress the snapshot;
+- work and wake hydration on boot;
+- persisted wake idempotency across restart;
+- recovered-work drain for publishing explicit lost-work facts;
+- graceful daemon shutdown flush.
+
+The default path is `.agent-work-os/runtime-supervisor.json` and can be overridden with `AGENT_WORK_OS_RUNTIME_SUPERVISOR_STATE`.
+
+### Real session execution binding
+
+`runtime/daemon/src/index.js` now binds actual `session.start`, `session.message`, and `session.interrupt` commands to the supervisor:
+
+- a work identity is created as `run:<commandId>`;
+- the selected adapter and current `local` backend identity are recorded;
+- work is persisted before the daemon acknowledges execution admission;
+- successful adapter completion produces a `complete` transition receipt;
+- adapter failure produces a `failed` transition receipt;
+- interrupt produces an `interrupted` transition receipt;
+- only one tracked agent run may be active for a session at a time;
+- a persisted `lost`/`unknown` command is not blindly rerun after restart and instead fails closed with reconciliation required.
+
+### Control-plane visibility without a duplicate state model
+
+Supervisor transitions are emitted through the existing `daemon.session.event` path as `kind: "work"` events. The existing control plane already durably persists session events and includes session history in client snapshots, so the first vertical slice does not create a second PostgreSQL work model that would collide with the existing task/domain `workItems` resource.
+
+On daemon authentication after restart, recovered `lost` transitions are published into the owning session timeline.
+
+This is intentionally not yet a top-level runtime-work query API. The canonical local supervisor ledger remains daemon-owned while the session event timeline provides durable operator evidence.
+
+## Verification coverage
+
+Unit coverage now includes:
+
+- stale transition refusal;
+- terminal double-completion protection;
+- restart/lost-work recovery without history loss;
+- user-vs-machine wake priority;
+- duplicate delivery keys;
+- causal provenance;
+- self-wake bounds;
+- persisted queued/settled wake restoration;
+- wake idempotency across process restart.
+
+Acceptance coverage separately exercises concurrent supervisor persistence so filesystem scheduling does not perturb the control-plane replica test suite.
+
+During this lane a pre-existing asynchronous assertion in the control-plane identity test was exposed: session failure can become observable while durable daemon-ack reconciliation is still `processing`. The test now waits for the documented reconciliation completion state rather than relying on timing; production reconciliation semantics are unchanged.
 
 ## Next gates
 
-1. Repository-level CI on this branch.
-2. Reconcile these primitives with existing session/verification/shipping records to avoid duplicate state models.
-3. Add persisted work/wake storage and restart replay.
-4. Surface work/wake state in the daemon/control-plane snapshot.
-5. Introduce `ExecutionBackendSpec` with deterministic fake + local backends and explicit sandbox capability state.
-6. Add worktree/container isolation before considering SSH.
-7. Bind real Codex/Claude adapter attempts to WorkAttempt lifecycle and receipts.
+1. Keep exact branch-head unit + acceptance CI green.
+2. Introduce a canonical `ExecutionBackendSpec` and backend health/capability receipt; retain `local` and deterministic fake first.
+3. Add workspace-root, filesystem, process and network authority contracts; make absence of sandboxing explicit.
+4. Add source-owned worktree/container isolation before considering SSH.
+5. Wire real work completion/monitor/sub-agent facts into the durable wake producer/consumer path; the wake queue is persistent today but not yet the universal session-start mechanism.
+6. Add explicit command-reconciliation records for uncertain daemon death after an external effect, rather than treating every lost run as safely retryable.
+7. Add a top-level operator read model only if it can be derived without duplicating session/task truth.
+8. Add full daemon-process restart UAT: start real echo work, terminate daemon mid-run, restart, prove `lost` publication and no blind duplicate execution.
+9. Reconcile completion/review with verification evidence and Shipping OS exact-SHA gates.
 
 ## Truthful status
 
-`SOURCE=done / UPSTREAM_SHA_LICENSE=pinned / SOURCE_ARCHITECTURE=first-pass / ROUTING=AGENT_WORK_OS_DONOR / DOSSIER=committed / WORK_SUPERVISOR_CONTRACT=implemented-first-slice / ISOLATED_UNIT_TESTS=5-pass / FULL_REPO_CI=pending / PERSISTENCE=pending / CONTROL_PLANE_INTEGRATION=pending / EXECUTION_BACKEND_GOVERNANCE=pending / UAT=none / SHIPPED=no`
+`SOURCE=done / UPSTREAM_SHA_LICENSE=pinned / SOURCE_ARCHITECTURE=first-pass / ROUTING=AGENT_WORK_OS_DONOR / DOSSIER=updated / WORK_SUPERVISOR=implemented / DURABLE_STORE=implemented / WAKE_PERSISTENCE=implemented / REAL_SESSION_BINDING=implemented / RESTART_LOST_RECOVERY=implemented / SESSION_TIMELINE_VISIBILITY=implemented / EXECUTION_BACKEND_GOVERNANCE=next / SANDBOX=not-yet / UNIVERSAL_WAKE_EXECUTION=not-yet / FULL_DAEMON_RESTART_UAT=not-yet / SHIPPED=no`
