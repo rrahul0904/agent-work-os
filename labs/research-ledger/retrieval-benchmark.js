@@ -15,6 +15,8 @@ const $ = selector => document.querySelector(selector);
 const REQUEST_TIMEOUT_MS = 180_000;
 let worker = null;
 let sequence = 0;
+let activeBenchmarkStart = 0;
+let modelReadyElapsedMs = null;
 const pending = new Map();
 
 function setStatus(message, state = 'idle') {
@@ -37,6 +39,9 @@ function ensureWorker() {
   worker.onmessage = event => {
     const message = event.data || {};
     if (message.type === 'model-status') {
+      if (message.state === 'ready' && activeBenchmarkStart && modelReadyElapsedMs === null) {
+        modelReadyElapsedMs = performance.now() - activeBenchmarkStart;
+      }
       setStatus(message.state === 'ready' ? 'Pinned semantic model ready.' : 'Loading pinned multilingual embedding model…', message.state);
       return;
     }
@@ -85,6 +90,24 @@ function pct(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function roundMs(value) {
+  return Math.round(Number(value || 0) * 10) / 10;
+}
+
+function summarizeDurations(values = []) {
+  const clean = values.filter(Number.isFinite).sort((a, b) => a - b);
+  if (!clean.length) return { samples: 0, minMs: 0, meanMs: 0, p50Ms: 0, p95Ms: 0, maxMs: 0 };
+  const percentile = p => clean[Math.min(clean.length - 1, Math.max(0, Math.ceil(clean.length * p) - 1))];
+  return {
+    samples: clean.length,
+    minMs: roundMs(clean[0]),
+    meanMs: roundMs(clean.reduce((sum, value) => sum + value, 0) / clean.length),
+    p50Ms: roundMs(percentile(0.5)),
+    p95Ms: roundMs(percentile(0.95)),
+    maxMs: roundMs(clean[clean.length - 1])
+  };
+}
+
 function renderSummary(report) {
   const root = $('#benchmarkSummary');
   root.innerHTML = ['lexical', 'semantic', 'hybrid'].map(mode => {
@@ -120,6 +143,11 @@ async function runBenchmark() {
   const download = $('#downloadBenchmark');
   window.__researchLedgerBenchmarkReport = null;
   window.__researchLedgerBenchmarkFailure = null;
+  activeBenchmarkStart = performance.now();
+  modelReadyElapsedMs = null;
+  const lexicalDurations = [];
+  const semanticDurations = [];
+  const hybridDurations = [];
   run.disabled = true;
   download.disabled = true;
   $('#benchmarkRows').innerHTML = '';
@@ -127,24 +155,42 @@ async function runBenchmark() {
   try {
     setStatus('Preparing benchmark corpus…', 'indexing');
     const indexKey = `${RETRIEVAL_BENCHMARK_VERSION}:${SEMANTIC_MODEL_REVISION}`;
+    const indexStarted = performance.now();
     await requestWorker('index', {
       indexKey,
       chunks: BENCHMARK_CHUNKS.map(chunk => ({ id: chunk.id, title: chunk.title, text: chunk.text }))
     });
+    const indexReadyElapsedMs = performance.now() - activeBenchmarkStart;
+    const indexOperationMs = performance.now() - indexStarted;
 
     const rows = [];
     for (let index = 0; index < BENCHMARK_CASES.length; index += 1) {
       const testCase = BENCHMARK_CASES[index];
       setStatus(`Running case ${index + 1}/${BENCHMARK_CASES.length}: ${testCase.id}`, 'running');
+
+      const lexicalStarted = performance.now();
       const lexicalResults = lexicalBenchmarkResults(testCase.query, RETRIEVAL_BENCHMARK_K);
+      lexicalDurations.push(performance.now() - lexicalStarted);
+
+      const semanticStarted = performance.now();
       const semanticResponse = await requestWorker('search', { query: testCase.query, limit: RETRIEVAL_BENCHMARK_K });
+      semanticDurations.push(performance.now() - semanticStarted);
       const semanticResults = semanticResponse.results || [];
+
+      const hybridStarted = performance.now();
       const hybridResults = hybridBenchmarkResults(lexicalResults, semanticResults, RETRIEVAL_BENCHMARK_K);
+      hybridDurations.push(performance.now() - hybridStarted);
+
       rows.push({
         ...testCase,
         lexical: evaluateRanking(lexicalResults, testCase.expected),
         semantic: evaluateRanking(semanticResults, testCase.expected),
         hybrid: evaluateRanking(hybridResults, testCase.expected),
+        timings: {
+          lexicalMs: roundMs(lexicalDurations.at(-1)),
+          semanticMs: roundMs(semanticDurations.at(-1)),
+          hybridFusionMs: roundMs(hybridDurations.at(-1))
+        },
         rankings: {
           lexical: lexicalResults.map(item => item.id),
           semantic: semanticResults.map(item => item.id),
@@ -153,12 +199,23 @@ async function runBenchmark() {
       });
     }
 
+    const totalRunMs = performance.now() - activeBenchmarkStart;
     const report = {
       schema: RETRIEVAL_BENCHMARK_VERSION,
       generatedAt: new Date().toISOString(),
       k: RETRIEVAL_BENCHMARK_K,
       model: { id: SEMANTIC_MODEL_ID, revision: SEMANTIC_MODEL_REVISION, transformers: TRANSFORMERS_JS_VERSION, dtype: 'q8' },
       corpus: { chunks: BENCHMARK_CHUNKS.length, cases: BENCHMARK_CASES.length },
+      performance: {
+        environment: 'browser-observed; runner/device dependent',
+        modelReadyElapsedMs: modelReadyElapsedMs === null ? null : roundMs(modelReadyElapsedMs),
+        indexReadyElapsedMs: roundMs(indexReadyElapsedMs),
+        indexOperationMs: roundMs(indexOperationMs),
+        totalRunMs: roundMs(totalRunMs),
+        lexicalQuery: summarizeDurations(lexicalDurations),
+        semanticQuery: summarizeDurations(semanticDurations),
+        hybridFusion: summarizeDurations(hybridDurations)
+      },
       metrics: {
         lexical: aggregateMetrics(rows, 'lexical'),
         semantic: aggregateMetrics(rows, 'semantic'),
@@ -173,7 +230,7 @@ async function runBenchmark() {
     window.__researchLedgerBenchmarkReport = report;
     renderSummary(report);
     renderRows(rows);
-    setStatus('Benchmark complete. Review overall and grouped metrics and download the JSON receipt before making retrieval-default decisions.', 'ready');
+    setStatus('Benchmark complete. Review quality and latency metrics and download the JSON receipt before making retrieval-default decisions.', 'ready');
     download.disabled = false;
     download.onclick = () => downloadReport(report);
   } catch (error) {
@@ -181,6 +238,7 @@ async function runBenchmark() {
     window.__researchLedgerBenchmarkFailure = failure;
     setStatus(`Benchmark failed: ${failure.message}`, 'error');
   } finally {
+    activeBenchmarkStart = 0;
     run.disabled = false;
   }
 }
