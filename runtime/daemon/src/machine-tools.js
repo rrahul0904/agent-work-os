@@ -1,14 +1,22 @@
 import os from "node:os";
 import fs from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
+import path from "node:path";
 
 const DEFAULT_MAX_READ_BYTES = 1024 * 1024;
+const DEFAULT_MAX_WRITE_BYTES = 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
 const DEFAULT_MAX_ENTRIES = 1000;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
+function sha256(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 export function createMachineTools(policy, options = {}) {
   const maxReadBytes = options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES;
+  const maxWriteBytes = options.maxWriteBytes ?? DEFAULT_MAX_WRITE_BYTES;
   const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   const maxEntries = options.maxEntries ?? DEFAULT_MAX_ENTRIES;
   const defaultTimeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
@@ -16,12 +24,7 @@ export function createMachineTools(policy, options = {}) {
 
   return {
     info() {
-      return {
-        platform: os.platform(),
-        arch: os.arch(),
-        hostname: os.hostname(),
-        policy: policy.describe()
-      };
+      return { platform: os.platform(), arch: os.arch(), hostname: os.hostname(), policy: policy.describe() };
     },
 
     async list(inputPath = ".") {
@@ -42,7 +45,39 @@ export function createMachineTools(policy, options = {}) {
       const stat = await fs.stat(target);
       if (!stat.isFile()) throw new Error("machine_tool_read_not_file");
       if (stat.size > maxReadBytes) throw new Error(`machine_tool_read_too_large:${stat.size}`);
-      return { path: target, size: stat.size, content: await fs.readFile(target, "utf8") };
+      const buffer = await fs.readFile(target);
+      return { path: target, size: stat.size, sha256: sha256(buffer), content: buffer.toString("utf8") };
+    },
+
+    async write(request = {}) {
+      if (typeof request.path !== "string" || typeof request.content !== "string") throw new Error("machine_tool_write_invalid");
+      const target = policy.resolveWorkspacePath(request.path, "write");
+      const buffer = Buffer.from(request.content, "utf8");
+      if (buffer.length > maxWriteBytes) throw new Error(`machine_tool_write_too_large:${buffer.length}`);
+
+      let existing;
+      let existingStat;
+      try {
+        existingStat = await fs.stat(target);
+        if (!existingStat.isFile()) throw new Error("machine_tool_write_not_file");
+        existing = await fs.readFile(target);
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
+      if (request.expectedSha256 !== undefined) {
+        if (!existing) throw new Error("machine_tool_write_precondition_missing");
+        const actual = sha256(existing);
+        if (actual !== request.expectedSha256) throw new Error(`machine_tool_write_precondition_failed:${actual}`);
+      }
+
+      const temp = path.join(path.dirname(target), `.agent-work-os-${path.basename(target)}-${randomUUID()}.tmp`);
+      try {
+        await fs.writeFile(temp, buffer, existingStat ? { mode: existingStat.mode & 0o777 } : undefined);
+        await fs.rename(temp, target);
+      } finally {
+        await fs.rm(temp, { force: true }).catch(() => {});
+      }
+      return { path: target, size: buffer.length, sha256: sha256(buffer), replaced: Boolean(existing) };
     },
 
     async run(request = {}) {
@@ -77,17 +112,7 @@ export function createMachineTools(policy, options = {}) {
         timer.unref?.();
         child.once("close", (code, signal) => {
           clearTimeout(timer);
-          resolve({
-            program,
-            args,
-            cwd,
-            exitCode: code,
-            signal,
-            timedOut,
-            truncated,
-            stdout: stdout.toString("utf8"),
-            stderr: stderr.toString("utf8")
-          });
+          resolve({ program, args, cwd, exitCode: code, signal, timedOut, truncated, stdout: stdout.toString("utf8"), stderr: stderr.toString("utf8") });
         });
       });
     }
