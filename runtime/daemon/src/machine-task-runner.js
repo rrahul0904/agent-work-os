@@ -70,10 +70,11 @@ async function appendBounded(target, chunk, stream) {
 }
 
 function requestStop(reason) {
-  if (!child || child.exitCode !== null || child.signalCode !== null) return;
   if (reason === "timeout") timedOut = true;
   else cancelRequested = true;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
   child.kill("SIGTERM");
+  if (forceKillTimer) clearTimeout(forceKillTimer);
   forceKillTimer = setTimeout(() => {
     if (child && child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
   }, 5000);
@@ -93,7 +94,7 @@ try {
   await fs.writeFile(stderrPath, "", { flag: "a", mode: 0o600 });
   child = spawn(program, args, { cwd, env: childEnv, shell: false, stdio: ["ignore", "pipe", "pipe"] });
   await save({
-    status: "running",
+    status: cancelRequested ? "cancel_requested" : "running",
     runnerPid: process.pid,
     childPid: child.pid,
     startedAt: now(),
@@ -101,6 +102,7 @@ try {
     stdoutPath,
     stderrPath
   });
+  if (cancelRequested) requestStop("cancel");
 
   let writeChain = Promise.resolve();
   child.stdout.on("data", (chunk) => { writeChain = writeChain.then(() => appendBounded(stdoutPath, Buffer.from(chunk), "stdout")); });
