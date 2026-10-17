@@ -48,15 +48,18 @@ async function connect(root) {
   return client;
 }
 
-test("Repo Atlas MCP exposes bounded read-only M1-M8 tools over current stdio protocol", async () => {
+test("Repo Atlas MCP exposes bounded read-only M1-M9 tools over current stdio protocol", async () => {
   await withFixture(async (root) => {
     const workspace = path.join(root, "workspace");
     await put(workspace, "package.json", JSON.stringify({ name: "mcp-fixture", private: true }));
+    await put(workspace, "tsconfig.json", JSON.stringify({ compilerOptions: { baseUrl: ".", paths: { "@shared": ["src/shared"] } } }));
     await put(workspace, "src/billing.ts", "export const billing = true;\n");
-    await put(workspace, "src/index.ts", "import { billing } from './billing';\nexport { billing };\n");
+    await put(workspace, "src/shared.ts", "export const shared = true;\n");
+    await put(workspace, "src/index.ts", "import { billing } from './billing';\nimport { shared } from '@shared';\nexport { billing, shared };\n");
     const previous = await scanRepository(workspace);
     await writeFile(path.join(root, "previous-map.json"), JSON.stringify(previous), "utf8");
     await put(workspace, "src/billing.ts", "export const billing = true;\nexport const changed = true;\n");
+    await put(workspace, "src/shared.ts", "export const shared = true;\nexport const semanticChanged = true;\n");
     await initializeGitFixture(workspace);
 
     const client = await connect(root);
@@ -68,17 +71,19 @@ test("Repo Atlas MCP exposes bounded read-only M1-M8 tools over current stdio pr
         "repo_atlas_context",
         "repo_atlas_topology",
         "repo_atlas_imports",
+        "repo_atlas_resolution",
         "repo_atlas_hotspots",
         "repo_atlas_git_signals",
         "repo_atlas_drift",
         "repo_atlas_impact",
+        "repo_atlas_semantic_impact",
         "repo_atlas_bundle"
       ]);
 
       const overview = await client.callTool({ name: "repo_atlas_overview", arguments: { path: "workspace" } });
       assert.notEqual(overview.isError, true);
       assert.equal(overview.structuredContent.schemaVersion, "repo-atlas-overview/v1");
-      assert.equal(overview.structuredContent.metrics.files, 3);
+      assert.equal(overview.structuredContent.metrics.files, 5);
       assert.equal(JSON.stringify(overview.structuredContent).includes("export const"), false);
 
       const context = await client.callTool({
@@ -95,7 +100,15 @@ test("Repo Atlas MCP exposes bounded read-only M1-M8 tools over current stdio pr
       assert.equal(imports.structuredContent.schemaVersion, "repo-atlas-import-summary/v1");
       assert.equal(imports.structuredContent.metrics.fallbackFiles, 0);
       assert.ok(imports.structuredContent.edges.some((edge) => edge.from === "src/index.ts" && edge.to === "src/billing.ts"));
+      assert.ok(imports.structuredContent.edges.some((edge) => edge.from === "src/index.ts" && edge.specifier === "@shared" && edge.targetKind === "package"));
       assert.equal(JSON.stringify(imports.structuredContent).includes("export const billing"), false);
+
+      const resolution = await client.callTool({ name: "repo_atlas_resolution", arguments: { path: "workspace", limit: 20 } });
+      assert.notEqual(resolution.isError, true);
+      assert.equal(resolution.structuredContent.schemaVersion, "repo-atlas-resolution-summary/v1");
+      assert.equal(resolution.structuredContent.metrics.tsconfigPathResolved, 1);
+      assert.ok(resolution.structuredContent.resolutions.some((item) => item.specifier === "@shared" && item.targetFile === "src/shared.ts" && item.resolutionKind === "tsconfig-path"));
+      assert.equal(JSON.stringify(resolution.structuredContent).includes("semanticChanged"), false);
 
       const impact = await client.callTool({
         name: "repo_atlas_impact",
@@ -105,12 +118,23 @@ test("Repo Atlas MCP exposes bounded read-only M1-M8 tools over current stdio pr
       assert.equal(impact.structuredContent.schemaVersion, "repo-atlas-impact-summary/v1");
       assert.ok(impact.structuredContent.impactedFiles.includes("src/index.ts"));
 
+      const semanticImpact = await client.callTool({
+        name: "repo_atlas_semantic_impact",
+        arguments: { path: "workspace", previousMapPath: "previous-map.json", maxDepth: 3, top: 10 }
+      });
+      assert.notEqual(semanticImpact.isError, true);
+      assert.equal(semanticImpact.structuredContent.schemaVersion, "repo-atlas-semantic-impact-summary/v1");
+      assert.ok(semanticImpact.structuredContent.impactedFiles.includes("src/index.ts"));
+      assert.ok(semanticImpact.structuredContent.metrics.aliasResolvedEdges >= 1);
+      assert.match(semanticImpact.structuredContent.moduleResolutionDigest, /^sha256:[0-9a-f]{64}$/u);
+      assert.equal(JSON.stringify(semanticImpact.structuredContent).includes("semanticChanged"), false);
+
       const gitSignals = await client.callTool({ name: "repo_atlas_git_signals", arguments: { path: "workspace", maxCommits: 20, top: 5 } });
       assert.notEqual(gitSignals.isError, true);
       assert.equal(gitSignals.structuredContent.schemaVersion, "repo-atlas-git-summary/v1");
       assert.equal(gitSignals.structuredContent.commitsAnalyzed, 1);
       assert.equal(gitSignals.structuredContent.workingTreeDirty, false);
-      assert.equal(gitSignals.structuredContent.metrics.trackedFiles, 3);
+      assert.equal(gitSignals.structuredContent.metrics.trackedFiles, 5);
       assert.equal(JSON.stringify(gitSignals.structuredContent).includes("repo-atlas-test@example.com"), false);
 
       const bundle = await client.callTool({
@@ -132,8 +156,9 @@ test("Repo Atlas MCP exposes bounded read-only M1-M8 tools over current stdio pr
         assert.ok(bundle.structuredContent.artifacts.some((artifact) => artifact.kind === kind));
       }
       assert.ok(bundle.structuredContent.claims.some((claim) => claim.type === "repository-change-impact"));
+      assert.equal(bundle.structuredContent.artifacts.some((artifact) => artifact.kind === "repo-resolution"), false);
       assert.equal(JSON.stringify(bundle.structuredContent).includes("repo-atlas-test@example.com"), false);
-      assert.equal(JSON.stringify(bundle.structuredContent).includes("export const billing"), false);
+      assert.equal(JSON.stringify(bundle.structuredContent).includes("semanticChanged"), false);
     } finally {
       await client.close();
     }
