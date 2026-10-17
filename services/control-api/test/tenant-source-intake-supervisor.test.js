@@ -15,6 +15,7 @@ const now = '2026-10-16T20:10:00.000Z';
 const org = 'org_11111111-1111-4111-8111-111111111111';
 const actor = 'agent_33333333-3333-4333-8333-333333333333';
 const workId = 'work_22222222-2222-4222-8222-222222222222';
+const machineId = 'machine_66666666-6666-4666-8666-666666666666';
 
 function sortValue(value) {
   if (Array.isArray(value)) return value.map(sortValue);
@@ -80,7 +81,7 @@ function verificationRun(spec, overrides = {}) {
   };
   const receipt = { ...payload, receiptDigest: receiptDigest(payload) };
   return {
-    id: 'verify_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', organizationId: org, capabilityId: spec.id,
+    id: 'verify_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', organizationId: org, machineId, capabilityId: spec.id,
     capabilityVersion: spec.version, capabilitySlug: spec.metadata.slug, status: 'complete', receipt, ...overrides,
   };
 }
@@ -100,7 +101,9 @@ async function sourceState() {
   return { accessRequest, blockedTransition, observation };
 }
 
-function repositories(spec, run) {
+function repositories(spec, run, machineCapability = {
+  name: 'browser-read', access: 'read-only', observationContracts: ['source-access-observation/v1'],
+}) {
   return {
     capabilityRegistryRepository: {
       async listByOrganization(organizationId) {
@@ -109,6 +112,12 @@ function repositories(spec, run) {
       },
     },
     capabilityVerificationRepository: {
+      store: {
+        async getMachine(id) {
+          assert.equal(id, machineId);
+          return { id, organizationId: org, capabilities: machineCapability ? [machineCapability] : [] };
+        },
+      },
       async get(id, organizationId) {
         assert.equal(organizationId, org);
         return id === run?.id ? structuredClone(run) : null;
@@ -186,4 +195,45 @@ test('tenant supervisor rejects run whose provider slug does not match observati
     /provider does not match source observation/,
   );
   assert.equal(workItems.item.status, 'blocked');
+});
+
+test('tenant supervisor rejects a verification machine that does not advertise the source provider', async () => {
+  const spec = provider();
+  const run = verificationRun(spec);
+  const workItems = new WorkItems();
+  const state = await sourceState();
+  const blocker = createTenantSourceIntakeSupervisor({ workItems, ...repositories(spec, run) });
+  const blocked = await blocker.block({
+    workItem: workItems.item, transition: state.blockedTransition, accessRequest: state.accessRequest,
+    organizationId: org, actorId: actor, commandId: 'command_44444444-4444-4444-8444-444444444444', at: now,
+  });
+  const supervisor = createTenantSourceIntakeSupervisor({ workItems, ...repositories(spec, run, null) });
+  await assert.rejects(() => supervisor.resume({
+    workItem: blocked.workItem, accessObservation: state.observation, verificationRunId: run.id,
+    organizationId: org, actorId: actor, commandId: 'command_55555555-5555-4555-8555-555555555555', at: '2026-10-16T20:12:00.000Z',
+  }), /not advertised by verification machine/);
+  assert.equal(workItems.item.status, 'blocked');
+});
+
+test('tenant supervisor rejects writable or contract-incompatible source provider advertisements', async () => {
+  const spec = provider();
+  const run = verificationRun(spec);
+  const state = await sourceState();
+  for (const machineCapability of [
+    { name: 'browser-read', access: 'read-write', observationContracts: ['source-access-observation/v1'] },
+    { name: 'browser-read', access: 'read-only', observationContracts: ['some-other-contract/v1'] },
+  ]) {
+    const workItems = new WorkItems();
+    const blocker = createTenantSourceIntakeSupervisor({ workItems, ...repositories(spec, run) });
+    const blocked = await blocker.block({
+      workItem: workItems.item, transition: state.blockedTransition, accessRequest: state.accessRequest,
+      organizationId: org, actorId: actor, commandId: 'command_44444444-4444-4444-8444-444444444444', at: now,
+    });
+    const supervisor = createTenantSourceIntakeSupervisor({ workItems, ...repositories(spec, run, machineCapability) });
+    await assert.rejects(() => supervisor.resume({
+      workItem: blocked.workItem, accessObservation: state.observation, verificationRunId: run.id,
+      organizationId: org, actorId: actor, commandId: 'command_55555555-5555-4555-8555-555555555555', at: '2026-10-16T20:12:00.000Z',
+    }), /read-only access|required observation contract/);
+    assert.equal(workItems.item.status, 'blocked');
+  }
 });
