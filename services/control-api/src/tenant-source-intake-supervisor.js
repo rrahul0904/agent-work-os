@@ -1,4 +1,5 @@
 import { CapabilityRegistry } from '../../../packages/capability-fabric/src/index.js';
+import { persistRealtimeEvent } from './realtime-events.js';
 import { createSourceIntakeBrowserObserver } from './source-intake-browser-observer.js';
 import { createSourceIntakeSupervisor } from './source-intake-supervisor.js';
 import {
@@ -22,6 +23,22 @@ function supportsBrowserObservationStore(store) {
   return store
     && ['createSessionWithCommand', 'listSessionsByOrganization', 'listSessions', 'getMachine', 'getSession']
       .every((method) => typeof store[method] === 'function');
+}
+
+function createBrowserRealtimePublisher(store) {
+  if (!store?.pool || typeof store.initializeRealtimeEventStore !== 'function') return async () => null;
+  let initialized = null;
+  return async ({ eventKey, event }) => {
+    if (!initialized) initialized = store.initializeRealtimeEventStore().catch((error) => {
+      initialized = null;
+      throw error;
+    });
+    await initialized;
+    return persistRealtimeEvent(store.pool, event, {
+      eventKey,
+      originId: 'source-intake-browser-observer',
+    });
+  };
 }
 
 function scheduleRestartReconciliation(observer, attempt = 0) {
@@ -92,6 +109,7 @@ export function createTenantSourceIntakeSupervisor({
       capabilityRegistryRepository,
       capabilityVerificationRepository,
       tenantSourceIntakeSupervisor: api,
+      publishRealtimeEvent: createBrowserRealtimePublisher(sessionStore),
     });
     if (typeof capabilityVerificationRepository.registerSessionEventConsumer === 'function') {
       capabilityVerificationRepository.registerSessionEventConsumer(async ({ sessionId, event }) => {
