@@ -21,7 +21,7 @@ function responseCapture() {
   };
 }
 
-function dependencies({ role = 'member', existing = item(), supervisor = {}, observer = null } = {}) {
+function dependencies({ role = 'member', existing = item(), supervisor = {} } = {}) {
   return {
     identities: {
       async getMembership(userId, organizationId) {
@@ -37,8 +37,8 @@ function dependencies({ role = 'member', existing = item(), supervisor = {}, obs
       async inspect(args) { return supervisor.inspect ? supervisor.inspect(args) : { state: 'blocked' }; },
       async block(args) { return supervisor.block ? supervisor.block(args) : { workItem: { ...existing, status: 'blocked', version: existing.version + 1 } }; },
       async resume(args) { return supervisor.resume ? supervisor.resume(args) : { workItem: { ...existing, status: 'ready', version: existing.version + 1 } }; },
+      ...(supervisor.observe ? { observe: supervisor.observe } : {}),
     },
-    sourceIntakeBrowserObserver: observer,
   };
 }
 
@@ -144,16 +144,16 @@ test('POST resume accepts verificationRunId, never a caller-supplied receipt', a
   assert.equal(result.body.workItem.status, 'ready');
 });
 
-test('POST observe launches only the server-owned browser observer binding', async () => {
+test('POST resume browser-read mode launches only the server-owned observer binding', async () => {
   let seen;
   const session = { id: 'browser-session-1', agent: 'browser-read', organizationId: org, machineId };
   const deps = dependencies({
     existing: item('blocked', 5),
-    observer: { launch: async (args) => { seen = args; return { session, replayed: false, reconciled: null }; } },
+    supervisor: { observe: async (args) => { seen = args; return { session, replayed: false, reconciled: null }; } },
   });
   const result = await invoke({
-    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`, deps,
-    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, cwd: '/tmp/rea-229', accessObservation: { forged: true } },
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`, deps,
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, observationMode: 'browser-read', cwd: '/tmp/rea-229' },
   });
   assert.equal(result.status, 202);
   assert.deepEqual(seen, {
@@ -165,46 +165,66 @@ test('POST observe launches only the server-owned browser observer binding', asy
     actorId: user,
     cwd: '/tmp/rea-229',
   });
-  assert.equal('accessObservation' in seen, false);
   assert.equal(result.broadcasts.length, 1);
   assert.equal(result.broadcasts[0].type, 'session.created');
   assert.equal(result.broadcasts[0].session.id, session.id);
 });
 
-test('POST observe does not broadcast a duplicate launch and rejects viewers', async () => {
+test('browser-read launch rejects caller-supplied observation and unsupported modes', async () => {
   let calls = 0;
-  const observer = { launch: async () => { calls += 1; return { session: { id: 'existing' }, replayed: true, reconciled: null }; } };
+  const deps = dependencies({
+    existing: item('blocked', 5),
+    supervisor: { observe: async () => { calls += 1; return { session: { id: 'should-not-run' }, replayed: false }; } },
+  });
+  const forged = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`, deps,
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, observationMode: 'browser-read', accessObservation: { forged: true } },
+  });
+  assert.equal(forged.status, 400);
+  assert.equal(forged.body.error, 'source_intake_browser_observation_must_be_server_generated');
+  const unsupported = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`, deps,
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, observationMode: 'write-browser' },
+  });
+  assert.equal(unsupported.status, 400);
+  assert.equal(unsupported.body.error, 'source_intake_observation_mode_invalid');
+  assert.equal(calls, 0);
+});
+
+test('browser-read launch is idempotent at the route and still rejects viewers', async () => {
+  let calls = 0;
+  const observer = async () => { calls += 1; return { session: { id: 'existing' }, replayed: true, reconciled: null }; };
   const duplicate = await invoke({
-    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
-    deps: dependencies({ existing: item('blocked', 5), observer }),
-    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId },
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`,
+    deps: dependencies({ existing: item('blocked', 5), supervisor: { observe: observer } }),
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, observationMode: 'browser-read' },
   });
   assert.equal(duplicate.status, 200);
   assert.equal(duplicate.broadcasts.length, 0);
   assert.equal(calls, 1);
 
   const viewer = await invoke({
-    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
-    deps: dependencies({ role: 'viewer', existing: item('blocked', 5), observer }),
-    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId },
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`,
+    deps: dependencies({ role: 'viewer', existing: item('blocked', 5), supervisor: { observe: observer } }),
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, observationMode: 'browser-read' },
   });
   assert.equal(viewer.status, 403);
   assert.equal(calls, 1);
 });
 
-test('POST observe requires machine and verification run and fails closed if observer service is unavailable', async () => {
+test('browser-read mode requires verification run and machine and fails closed if observer is unavailable', async () => {
   const missing = await invoke({
-    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`,
     deps: dependencies({ existing: item('blocked', 5) }),
-    body: { organizationId: org, expectedVersion: 5 },
+    body: { organizationId: org, expectedVersion: 5, observationMode: 'browser-read' },
   });
   assert.equal(missing.status, 400);
   assert.deepEqual(missing.body.fields, ['verificationRunId', 'machineId']);
 
   const unavailable = await invoke({
-    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/resume`,
     deps: dependencies({ existing: item('blocked', 5) }),
-    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId },
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, observationMode: 'browser-read' },
   });
   assert.equal(unavailable.status, 503);
   assert.equal(unavailable.body.error, 'source_intake_browser_observer_unavailable');
