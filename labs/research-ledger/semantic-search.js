@@ -5,7 +5,8 @@ import {
   buildSemanticChunks,
   selectCoverageChunks,
   lexicalRank,
-  rankOverlap
+  rankOverlap,
+  reciprocalRankFusion
 } from './semantic-core.js';
 
 const DB_NAME = 'research-ledger';
@@ -130,6 +131,29 @@ async function ensureSemanticIndex() {
   return chunks;
 }
 
+async function hybridRetrieve(query, lexicalResults = [], limit = 7) {
+  const chunks = await ensureSemanticIndex();
+  const breadth = Math.max(limit * 2, 12);
+  const response = await requestWorker('search', { query, limit: breadth });
+  const semanticResults = response.results || [];
+  const lexicalResultsNormalized = lexicalResults.length
+    ? lexicalResults.slice(0, breadth).map(item => ({ id: item.id, score: Number(item.score) || 0 }))
+    : lexicalRank(query, chunks, breadth);
+  const results = reciprocalRankFusion([
+    { name: 'lexical', results: lexicalResultsNormalized },
+    { name: 'semantic', results: semanticResults }
+  ], limit);
+  return {
+    results,
+    overlap: rankOverlap(semanticResults, lexicalResultsNormalized, Math.min(8, breadth)),
+    coverage: { indexed: chunks.length, total: allChunkCount, complete: chunks.length === allChunkCount },
+    model: SEMANTIC_MODEL_ID,
+    revision: SEMANTIC_MODEL_REVISION,
+    fusion: 'rrf',
+    rrfK: 60
+  };
+}
+
 function openSemanticPassage(id) {
   const chunk = indexedChunks.find(item => item.id === id);
   if (!chunk) return;
@@ -182,6 +206,22 @@ async function runSemanticSearch() {
   }
 }
 
+function injectBriefRetrievalUi() {
+  if (document.querySelector('#briefRetrieval')) return;
+  const modeRow = document.querySelector('.mode-row');
+  if (!modeRow) return;
+  const label = document.createElement('label');
+  label.className = 'brief-retrieval-control';
+  label.innerHTML = `<span>Brief retrieval</span><select id="briefRetrieval" aria-label="Brief retrieval mode"><option value="lexical">Lexical · default</option><option value="hybrid">Hybrid RRF · experimental</option></select>`;
+  modeRow.appendChild(label);
+  const select = label.querySelector('select');
+  select.value = localStorage.getItem('research-ledger:brief-retrieval') === 'hybrid' ? 'hybrid' : 'lexical';
+  select.onchange = () => {
+    localStorage.setItem('research-ledger:brief-retrieval', select.value);
+    setSemanticStatus(select.value === 'hybrid' ? 'Hybrid briefs will load the local embedding model when needed.' : 'Grounded briefs use deterministic lexical retrieval.', 'idle');
+  };
+}
+
 function injectSemanticUi() {
   if (document.querySelector('#runSemanticSearch')) return;
   const row = document.querySelector('.local-search-row');
@@ -198,11 +238,14 @@ function injectSemanticUi() {
   note.innerHTML = `<strong>Optional local embeddings.</strong> First use downloads a pinned quantized ${escapeHtml(SEMANTIC_MODEL_ID)} model. Your passages are embedded inside a Web Worker and are not sent to the model host. <span id="semanticStatus" data-state="idle">Not loaded.</span>`;
   results.insertAdjacentElement('beforebegin', note);
   button.onclick = runSemanticSearch;
+  injectBriefRetrievalUi();
 
   const style = document.createElement('style');
-  style.textContent = `.semantic-note{margin:10px 0 12px;padding:10px 12px;border:1px solid rgba(32,37,31,.12);border-radius:10px;font-size:12px;line-height:1.45;color:#687066;background:rgba(255,255,255,.45)}.semantic-note strong{color:#20251f}.semantic-note #semanticStatus{display:block;margin-top:4px}.semantic-note #semanticStatus[data-state="error"]{color:#8a3427}.semantic-result small{display:block;margin-top:5px;color:#687066;font-size:11px}.local-search-row #runSemanticSearch{white-space:nowrap}`;
+  style.textContent = `.semantic-note{margin:10px 0 12px;padding:10px 12px;border:1px solid rgba(32,37,31,.12);border-radius:10px;font-size:12px;line-height:1.45;color:#687066;background:rgba(255,255,255,.45)}.semantic-note strong{color:#20251f}.semantic-note #semanticStatus{display:block;margin-top:4px}.semantic-note #semanticStatus[data-state="error"]{color:#8a3427}.semantic-result small{display:block;margin-top:5px;color:#687066;font-size:11px}.local-search-row #runSemanticSearch{white-space:nowrap}.brief-retrieval-control{display:flex;align-items:center;gap:7px;margin-left:auto;font-size:12px;color:#687066}.brief-retrieval-control select{border:1px solid rgba(32,37,31,.15);border-radius:8px;padding:6px 8px;background:rgba(255,255,255,.75);color:#20251f}`;
   document.head.appendChild(style);
 }
+
+window.ResearchLedgerSemantic = Object.freeze({ hybridRetrieve });
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectSemanticUi, { once: true });
 else injectSemanticUi();
