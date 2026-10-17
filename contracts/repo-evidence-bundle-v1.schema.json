@@ -35,7 +35,7 @@
         "additionalProperties": false,
         "required": ["kind", "schemaVersion", "digest"],
         "properties": {
-          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk", "repo-diff", "repo-git"] },
+          "kind": { "enum": ["repo-map", "repo-topology", "repo-context", "repo-risk", "repo-diff", "repo-git", "repo-imports", "repo-impact"] },
           "schemaVersion": { "type": "string", "minLength": 1 },
           "digest": { "$ref": "#/$defs/digest" }
         }
@@ -48,7 +48,7 @@
         "additionalProperties": false,
         "required": ["type", "text", "artifactDigest"],
         "properties": {
-          "type": { "enum": ["repository-shape", "repository-topology", "task-context", "structural-hotspots", "repository-drift", "repository-git-history"] },
+          "type": { "enum": ["repository-shape", "repository-topology", "task-context", "structural-hotspots", "repository-drift", "repository-git-history", "repository-import-analysis", "repository-change-impact"] },
           "text": { "type": "string", "minLength": 1 },
           "artifactDigest": { "$ref": "#/$defs/digest" }
         }
@@ -58,7 +58,7 @@
     "summary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles", "affectedFiles", "gitCommitsAnalyzed", "trackedFiles", "gitWorkingTreeDirty"],
+      "required": ["files", "lines", "languages", "modules", "dependencyEdges", "contextFiles", "highRiskFiles", "affectedFiles", "gitCommitsAnalyzed", "trackedFiles", "gitWorkingTreeDirty", "parsedSourceFiles", "parserFallbackFiles", "impactedFiles", "impactedModules", "highImpactChanges"],
       "properties": {
         "files": { "type": "integer", "minimum": 0 },
         "lines": { "type": "integer", "minimum": 0 },
@@ -70,7 +70,12 @@
         "affectedFiles": { "type": ["integer", "null"], "minimum": 0 },
         "gitCommitsAnalyzed": { "type": ["integer", "null"], "minimum": 0 },
         "trackedFiles": { "type": ["integer", "null"], "minimum": 0 },
-        "gitWorkingTreeDirty": { "type": ["boolean", "null"] }
+        "gitWorkingTreeDirty": { "type": ["boolean", "null"] },
+        "parsedSourceFiles": { "type": ["integer", "null"], "minimum": 0 },
+        "parserFallbackFiles": { "type": ["integer", "null"], "minimum": 0 },
+        "impactedFiles": { "type": ["integer", "null"], "minimum": 0 },
+        "impactedModules": { "type": ["integer", "null"], "minimum": 0 },
+        "highImpactChanges": { "type": ["integer", "null"], "minimum": 0 }
       }
     },
     "digest": { "$ref": "#/$defs/digest" }
