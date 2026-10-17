@@ -142,14 +142,29 @@ async function fixture() {
     'command_88888888-8888-4888-8888-888888888888',
   ];
   let commandIndex = 0;
+  const realtimeByKey = new Map();
+  const realtimeAttempts = [];
+  const publishRealtimeEvent = async ({ eventKey, event }) => {
+    realtimeAttempts.push({ eventKey, event: structuredClone(event) });
+    const existing = realtimeByKey.get(eventKey);
+    if (existing) return { eventId: existing.eventId, eventKey, inserted: false };
+    const receipt = { eventId: realtimeByKey.size + 1, eventKey, inserted: true };
+    realtimeByKey.set(eventKey, { ...receipt, event: structuredClone(event) });
+    return receipt;
+  };
   const observer = createSourceIntakeBrowserObserver({
     store, workItems, capabilityRegistryRepository, capabilityVerificationRepository, tenantSourceIntakeSupervisor,
+    publishRealtimeEvent,
     now: () => now,
     sessionId: () => 'browser-session-1',
     messageId: () => 'browser-message-1',
     commandId: () => ids[commandIndex++],
   });
-  return { observer, workItems, store, spec, run, state, blocked, capabilityRegistryRepository, capabilityVerificationRepository, tenantSourceIntakeSupervisor };
+  return {
+    observer, workItems, store, spec, run, state, blocked,
+    capabilityRegistryRepository, capabilityVerificationRepository, tenantSourceIntakeSupervisor,
+    publishRealtimeEvent, realtimeByKey, realtimeAttempts,
+  };
 }
 
 test('launch creates a durable server-owned browser observation session bound to the exact blocker', async () => {
@@ -177,8 +192,8 @@ test('launch creates a durable server-owned browser observation session bound to
   assert.equal(store.commands[0].payload.agent, 'browser-read');
 });
 
-test('valid persisted browser observation auto-resumes the exact WorkItem to REA discovery', async () => {
-  const { observer, workItems, store, run, state, blocked } = await fixture();
+test('valid persisted browser observation auto-resumes and publishes one stable realtime WorkItem identity', async () => {
+  const { observer, workItems, store, run, state, blocked, realtimeByKey, realtimeAttempts } = await fixture();
   const launched = await observer.launch({
     organizationId: org, workItemId: workId, expectedVersion: blocked.workItem.version,
     verificationRunId: run.id, machineId, actorId: actor,
@@ -192,15 +207,25 @@ test('valid persisted browser observation auto-resumes the exact WorkItem to REA
   const resumed = await observer.handleSessionEvent({ session: persistedSession, event });
   assert.equal(resumed.workItem.status, 'ready');
   assert.equal(resumed.sourceIntakeTransition.nextAction, 'REA_EVIDENCE_DISCOVERY');
+  assert.equal(resumed.realtime.inserted, true);
   assert.equal(workItems.item.status, 'ready');
   assert.equal(workItems.events.at(-1).commandId, launched.session.sourceIntakeBinding.resumeCommandId);
+  assert.equal(realtimeByKey.size, 1);
+  const [eventKey, publication] = [...realtimeByKey.entries()][0];
+  assert.equal(eventKey, `source-intake:${launched.session.sourceIntakeBinding.resumeCommandId}:work-item-v${resumed.workItem.version}`);
+  assert.equal(publication.event.type, 'work.item.updated');
+  assert.equal(publication.event.workItem.status, 'ready');
 
   const duplicate = await observer.handleSessionEvent({ session: persistedSession, event });
   assert.equal(duplicate.replayed, true);
+  assert.equal(duplicate.realtime.inserted, false);
   assert.equal(workItems.events.filter((candidate) => candidate.toStatus === 'ready').length, 1);
+  assert.equal(realtimeByKey.size, 1);
+  assert.equal(realtimeAttempts.length, 2);
+  assert.equal(realtimeAttempts[0].eventKey, realtimeAttempts[1].eventKey, 'fresh resume and replay use the same deterministic realtime event key');
 });
 
-test('restart reconciliation consumes a previously persisted observation without launching another browser session', async () => {
+test('restart reconciliation consumes a previously persisted observation, republishes idempotently, and launches no new browser session', async () => {
   const f = await fixture();
   const launched = await f.observer.launch({
     organizationId: org, workItemId: workId, expectedVersion: f.blocked.workItem.version,
@@ -210,21 +235,29 @@ test('restart reconciliation consumes a previously persisted observation without
     request: f.state.accessRequest, provider: 'browser-read', canonicalUrl,
     observedAt: now, evidenceRef: 'browser-session:restart-recovery',
   });
-  f.store.persistEvent(launched.session.id, {
+  const event = {
     kind: 'tool', name: 'source-access-observation', phase: 'completed', payload: observation, at: now,
-  });
+  };
+  const persisted = f.store.persistEvent(launched.session.id, event);
+  await f.observer.handleSessionEvent({ session: persisted, event });
+  assert.equal(f.workItems.item.status, 'ready');
+  assert.equal(f.realtimeByKey.size, 1);
 
   const restarted = createSourceIntakeBrowserObserver({
     store: f.store, workItems: f.workItems,
     capabilityRegistryRepository: f.capabilityRegistryRepository,
     capabilityVerificationRepository: f.capabilityVerificationRepository,
     tenantSourceIntakeSupervisor: f.tenantSourceIntakeSupervisor,
+    publishRealtimeEvent: f.publishRealtimeEvent,
   });
   const results = await restarted.reconcileAll();
   assert.equal(results.length, 1);
   assert.equal(results[0].ok, true);
+  assert.equal(results[0].result.replayed, true);
+  assert.equal(results[0].result.realtime.inserted, false);
   assert.equal(f.workItems.item.status, 'ready');
   assert.equal(f.store.sessions.length, 1);
+  assert.equal(f.realtimeByKey.size, 1);
 });
 
 test('launch is idempotent for the same current blocker and verification run', async () => {
