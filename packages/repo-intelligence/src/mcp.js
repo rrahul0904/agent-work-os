@@ -10,13 +10,15 @@ import { analyzeRepositoryTopology } from "./topology.js";
 import { analyzeStructuralRisk } from "./risk.js";
 import { analyzeGitSignals } from "./git-signals.js";
 import { analyzeRepositoryImports } from "./import-analysis.js";
+import { analyzeModuleResolution } from "./module-resolution.js";
 import { analyzeRepositoryImpact } from "./impact.js";
+import { analyzeSemanticRepositoryImpact } from "./impact-v2.js";
 import { createRepositoryEvidenceBundle } from "./evidence.js";
 import { diffRepositoryMaps } from "./diff.js";
 
 export const REPO_ATLAS_MCP_SERVER = Object.freeze({
   name: "agent-work-os-repo-atlas",
-  version: "0.2.0"
+  version: "0.3.0"
 });
 
 export class RepoAtlasMcpError extends Error {
@@ -74,6 +76,21 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
     const repoPath = await resolveWithinRoot(root, relativePath, "directory");
     const map = await scanRepository(repoPath);
     return compactImports(await analyzeRepositoryImports(repoPath, map), limit);
+  }));
+
+  server.registerTool("repo_atlas_resolution", {
+    title: "Repo Atlas Semantic Module Resolution",
+    description: "Resolve parser imports through repository-local tsconfig/jsconfig aliases, baseUrl and workspace packages without executing project code.",
+    inputSchema: z.object({
+      path: relativePathSchema.optional(),
+      limit: z.number().int().min(1).max(500).optional()
+    })
+  }, async ({ path: relativePath = ".", limit = 100 }) => safeToolCall(async () => {
+    const repoPath = await resolveWithinRoot(root, relativePath, "directory");
+    const map = await scanRepository(repoPath);
+    const importAnalysis = await analyzeRepositoryImports(repoPath, map);
+    const resolution = await analyzeModuleResolution(repoPath, map, importAnalysis);
+    return compactResolution(resolution, limit);
   }));
 
   server.registerTool("repo_atlas_hotspots", {
@@ -139,9 +156,33 @@ export function createRepoAtlasMcpServer({ rootPath } = {}) {
     return compactImpact(impact, top);
   }));
 
+  server.registerTool("repo_atlas_semantic_impact", {
+    title: "Repo Atlas Semantic Change Impact",
+    description: "Return bounded alias-aware blast-radius signals using static tsconfig/jsconfig and workspace package resolution.",
+    inputSchema: z.object({
+      path: relativePathSchema.optional(),
+      previousMapPath: relativePathSchema,
+      maxDepth: z.number().int().min(1).max(20).optional(),
+      includeGit: z.boolean().optional(),
+      gitMaxCommits: z.number().int().min(1).max(5_000).optional(),
+      top: z.number().int().min(1).max(100).optional()
+    })
+  }, async ({ path: relativePath = ".", previousMapPath, maxDepth = 5, includeGit = false, gitMaxCommits = 500, top = 25 }) => safeToolCall(async () => {
+    const repoPath = await resolveWithinRoot(root, relativePath, "directory");
+    const previous = await readJsonWithinRoot(root, previousMapPath);
+    const map = await scanRepository(repoPath);
+    const diff = diffRepositoryMaps(previous, map);
+    const importAnalysis = await analyzeRepositoryImports(repoPath, map);
+    const moduleResolution = await analyzeModuleResolution(repoPath, map, importAnalysis);
+    const topology = await analyzeRepositoryTopology(repoPath, map);
+    const gitSignals = includeGit ? await analyzeGitSignals(repoPath, map, { maxCommits: gitMaxCommits }) : null;
+    const impact = analyzeSemanticRepositoryImpact({ repoMap: map, importAnalysis, moduleResolution, diff, topology, gitSignals, maxDepth });
+    return compactSemanticImpact(impact, top);
+  }));
+
   server.registerTool("repo_atlas_bundle", {
     title: "Repo Atlas Evidence Bundle",
-    description: "Create a compact content-addressed repository evidence bundle, optionally including task context, drift, Git, parser imports and change impact.",
+    description: "Create a compact content-addressed repository evidence bundle, optionally including task context, drift, Git, parser imports and M8 change impact.",
     inputSchema: z.object({
       path: relativePathSchema.optional(),
       task: z.string().min(1).max(20_000).optional(),
@@ -297,6 +338,32 @@ function compactImports(imports, limit) {
   });
 }
 
+function compactResolution(resolution, limit) {
+  const configs = resolution.configs.slice(0, Math.min(limit, 100));
+  const workspacePackages = resolution.workspacePackages.slice(0, Math.min(limit, 200));
+  const resolutions = resolution.resolutions.slice(0, limit);
+  return Object.freeze({
+    schemaVersion: "repo-atlas-resolution-summary/v1",
+    repositoryDigest: resolution.repositoryDigest,
+    importAnalysisDigest: resolution.importAnalysisDigest,
+    moduleResolutionDigest: resolution.digest,
+    metrics: resolution.metrics,
+    configs: Object.freeze(configs),
+    workspacePackages: Object.freeze(workspacePackages),
+    resolutions: Object.freeze(resolutions),
+    methodology: resolution.methodology,
+    truncation: Object.freeze({
+      requestedLimit: limit,
+      resolutionsReturned: resolutions.length,
+      totalResolutions: resolution.resolutions.length,
+      configsReturned: configs.length,
+      totalConfigs: resolution.configs.length,
+      workspacePackagesReturned: workspacePackages.length,
+      totalWorkspacePackages: resolution.workspacePackages.length
+    })
+  });
+}
+
 function compactGitSignals(signals, top) {
   return Object.freeze({
     schemaVersion: "repo-atlas-git-summary/v1",
@@ -335,6 +402,27 @@ function compactImpact(impact, top) {
     impactDigest: impact.digest,
     importAnalysisDigest: impact.importAnalysisDigest,
     diffDigest: impact.diffDigest,
+    maxDepth: impact.maxDepth,
+    metrics: impact.metrics,
+    files: Object.freeze(impact.files.slice(0, top)),
+    removedFiles: impact.removedFiles,
+    impactedFiles: Object.freeze(impact.impactedFiles.slice(0, top * 5)),
+    impactedModules: impact.impactedModules,
+    methodology: impact.methodology,
+    truncation: Object.freeze({ requestedTop: top, fileChangesReturned: Math.min(top, impact.files.length), totalFileChanges: impact.files.length })
+  });
+}
+
+function compactSemanticImpact(impact, top) {
+  return Object.freeze({
+    schemaVersion: "repo-atlas-semantic-impact-summary/v1",
+    repositoryDigest: impact.repositoryDigest,
+    impactDigest: impact.digest,
+    importAnalysisDigest: impact.importAnalysisDigest,
+    moduleResolutionDigest: impact.moduleResolutionDigest,
+    diffDigest: impact.diffDigest,
+    topologyDigest: impact.topologyDigest,
+    gitSignalsDigest: impact.gitSignalsDigest,
     maxDepth: impact.maxDepth,
     metrics: impact.metrics,
     files: Object.freeze(impact.files.slice(0, top)),
