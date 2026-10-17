@@ -60,13 +60,23 @@ try {
     ['/semantic-core.js', /javascript/],
     ['/semantic-worker.js', /javascript/],
     ['/semantic-search.js', /javascript/],
-    ['/hybrid-brief.js', /javascript/]
+    ['/hybrid-brief.js', /javascript/],
+    ['/retrieval-benchmark-core.js', /javascript/],
+    ['/retrieval-benchmark.js', /javascript/]
   ];
   for (const [path, contentType] of shippedAssets) {
     const asset = await fetch(`${base}${path}`);
     assert.equal(asset.status, 200, `${path} must be served by the portable runtime`);
     assert.match(asset.headers.get('content-type') || '', contentType);
   }
+
+  const benchmarkPage = await fetch(`${base}/retrieval-benchmark.html`);
+  assert.equal(benchmarkPage.status, 200);
+  const benchmarkHtml = await benchmarkPage.text();
+  assert.match(benchmarkHtml, /Research Ledger Retrieval Benchmark/);
+  assert.match(benchmarkHtml, /Quality claims require an executed receipt/);
+  assert.match(benchmarkHtml, /Recall@5 and mean reciprocal rank/);
+  assert.match(benchmarkHtml, /src="\/retrieval-benchmark\.js"/);
 
   const schema = await fetch(`${base}/db-schema.js`);
   assert.match(await schema.text(), /const DB_VERSION = 3/);
@@ -90,7 +100,12 @@ try {
   assert.match(hybridText, /hybrid-rrf/);
   assert.match(hybridText, /lexical-fallback/);
 
-  const head = await fetch(`${base}/semantic-search.js`, { method: 'HEAD' });
+  const benchmarkCore = await fetch(`${base}/retrieval-benchmark-core.js`);
+  const benchmarkCoreText = await benchmarkCore.text();
+  assert.match(benchmarkCoreText, /research-ledger\/retrieval-benchmark\.v1/);
+  assert.match(benchmarkCoreText, /BENCHMARK_CASES/);
+
+  const head = await fetch(`${base}/retrieval-benchmark.js`, { method: 'HEAD' });
   assert.equal(head.status, 200);
   assert.equal(await head.text(), '');
 
