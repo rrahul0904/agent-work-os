@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 import { createSourceAccessObservation, validateSourceAccessRequest } from '../../../packages/evidence/src/source-access-context.js';
 import { findCommand } from './adapters.js';
@@ -8,6 +9,7 @@ const PROVIDER_REQUEST_CONTRACT = 'browser-read-provider-request/v1';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_STDOUT_BYTES = 64 * 1024;
 const MAX_STDERR_BYTES = 8 * 1024;
+const FIRST_PARTY_PROVIDER = fileURLToPath(new URL('./browser-read-chromium-provider.js', import.meta.url));
 
 function parseArgs(value) {
   if (!value) return [];
@@ -24,12 +26,12 @@ function boundedAppend(current, chunk, limit, label) {
   return next;
 }
 
-function providerEnvironment(allowlist = process.env.AGENT_WORK_OS_BROWSER_READ_ENV_ALLOWLIST ?? '') {
+function providerEnvironment(allowlist = process.env.AGENT_WORK_OS_BROWSER_READ_ENV_ALLOWLIST ?? '', extra = {}) {
   const names = new Set(['PATH', 'HOME', 'TMPDIR', 'TEMP', 'TMP', 'SystemRoot']);
   for (const name of String(allowlist).split(',').map((value) => value.trim()).filter(Boolean)) names.add(name);
   const env = {};
   for (const name of names) if (process.env[name] !== undefined) env[name] = process.env[name];
-  return env;
+  return { ...env, ...extra };
 }
 
 function parseProviderResult(stdout) {
@@ -44,6 +46,21 @@ function parseProviderResult(stdout) {
   return result;
 }
 
+function resolveFirstPartyBrowser({ browserCommand, browserFound }) {
+  if (browserFound !== undefined) return browserFound;
+  if (browserCommand) return findCommand(browserCommand);
+  const candidates = process.platform === 'win32'
+    ? ['chrome', 'msedge']
+    : process.platform === 'darwin'
+      ? ['google-chrome', 'chromium']
+      : ['google-chrome-stable', 'google-chrome', 'chromium', 'chromium-browser'];
+  for (const candidate of candidates) {
+    const found = findCommand(candidate);
+    if (found) return found;
+  }
+  return null;
+}
+
 export class BrowserReadAdapter {
   name = 'browser-read';
   children = new Map();
@@ -51,13 +68,27 @@ export class BrowserReadAdapter {
   constructor({
     command = process.env.AGENT_WORK_OS_BROWSER_READ_COMMAND ?? '',
     args = parseArgs(process.env.AGENT_WORK_OS_BROWSER_READ_ARGS),
-    found = null,
+    found = undefined,
     timeoutMs = Number(process.env.AGENT_WORK_OS_BROWSER_READ_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS),
     envAllowlist = process.env.AGENT_WORK_OS_BROWSER_READ_ENV_ALLOWLIST ?? '',
+    firstPartyEnabled = process.env.AGENT_WORK_OS_ENABLE_FIRST_PARTY_BROWSER_READ === 'true',
+    browserCommand = process.env.AGENT_WORK_OS_BROWSER_EXECUTABLE ?? '',
+    browserFound = undefined,
   } = {}) {
+    this.firstParty = false;
+    this.browserFound = null;
+    if (!command && firstPartyEnabled) {
+      this.browserFound = resolveFirstPartyBrowser({ browserCommand, browserFound });
+      if (this.browserFound) {
+        command = process.execPath;
+        args = [FIRST_PARTY_PROVIDER];
+        found = { executable: process.execPath, version: process.version };
+        this.firstParty = true;
+      }
+    }
     this.command = command;
     this.args = [...args];
-    this.found = found ?? (command ? findCommand(command) : null);
+    this.found = found !== undefined ? found : (command ? findCommand(command) : null);
     this.timeoutMs = timeoutMs;
     this.envAllowlist = envAllowlist;
     if (!Number.isFinite(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 300_000) {
@@ -73,6 +104,11 @@ export class BrowserReadAdapter {
       version: this.found.version,
       access: 'read-only',
       observationContracts: [OBSERVATION_CONTRACT],
+      observerKind: this.firstParty ? 'agent-work-os-chromium' : 'external-command',
+      ...(this.browserFound ? {
+        browserExecutable: this.browserFound.executable,
+        browserVersion: this.browserFound.version,
+      } : {}),
     };
   }
 
@@ -88,7 +124,12 @@ export class BrowserReadAdapter {
     emit({ kind: 'status', status: 'running', message: 'Browser read provider started', at: new Date().toISOString() });
     const child = spawn(this.found.executable, this.args, {
       cwd: request.cwd,
-      env: providerEnvironment(this.envAllowlist),
+      env: providerEnvironment(this.envAllowlist, this.browserFound ? {
+        AGENT_WORK_OS_BROWSER_EXECUTABLE: this.browserFound.executable,
+        ...(process.env.AGENT_WORK_OS_BROWSER_READ_NAVIGATION_TIMEOUT_MS ? {
+          AGENT_WORK_OS_BROWSER_READ_NAVIGATION_TIMEOUT_MS: process.env.AGENT_WORK_OS_BROWSER_READ_NAVIGATION_TIMEOUT_MS,
+        } : {}),
+      } : {}),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     this.children.set(request.sessionId, child);
