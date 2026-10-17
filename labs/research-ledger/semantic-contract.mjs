@@ -67,6 +67,11 @@ assert.match(worker, /normalize: true/);
 assert.match(worker, /dtype: 'q8'/);
 assert.doesNotMatch(worker, /\/api\//, 'semantic worker must not send passages through application APIs');
 assert.match(controller, /new Worker\('\/semantic-worker\.js', \{ type: 'module'/);
+assert.match(controller, /async function semanticRetrieve\(query, limit = 7\)/);
+assert.match(controller, /window\.ResearchLedgerSemantic = Object\.freeze\(\{ semanticRetrieve, hybridRetrieve \}\)/);
+assert.match(controller, /<option value="lexical">Lexical · default<\/option>/);
+assert.match(controller, /<option value="semantic">Semantic · experimental<\/option>/);
+assert.match(controller, /<option value="hybrid">Hybrid RRF · experimental<\/option>/);
 assert.match(controller, /Your passages are embedded inside a Web Worker and are not sent to the model host/);
 assert.doesNotMatch(controller, /fetch\(/, 'semantic controller should use local IndexedDB + worker only');
 
@@ -74,4 +79,4 @@ for (const asset of ['semantic-core.js', 'semantic-worker.js', 'semantic-search.
 assert.match(runtime, /https:\/\/huggingface\.co/);
 assert.match(runtime, /https:\/\/\*\.hf\.co/);
 
-console.log('research-ledger semantic retrieval contract passed');
+console.log('research-ledger semantic retrieval + brief bridge contract passed');
