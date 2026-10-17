@@ -1,0 +1,43 @@
+name: research-ledger-benchmark
+
+on:
+  push:
+    paths:
+      - 'labs/research-ledger/retrieval-benchmark*'
+      - 'labs/research-ledger/semantic-*'
+      - 'labs/research-ledger/benchmark-browser.mjs'
+      - '.github/workflows/research-ledger-benchmark.yml'
+  pull_request:
+    paths:
+      - 'labs/research-ledger/retrieval-benchmark*'
+      - 'labs/research-ledger/semantic-*'
+      - 'labs/research-ledger/benchmark-browser.mjs'
+      - '.github/workflows/research-ledger-benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: labs/research-ledger
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install browser benchmark dependency
+        run: npm install --no-save --no-audit --no-fund playwright@1.56.1
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run retrieval benchmark
+        run: node benchmark-browser.mjs
+      - name: Upload benchmark receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-ledger-retrieval-benchmark
+          path: labs/research-ledger/retrieval-benchmark-receipt.json
+          if-no-files-found: error
