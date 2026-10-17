@@ -6,6 +6,8 @@ import { handleSourceIntakeRequest } from '../src/source-intake-routes.js';
 const org = 'org_11111111-1111-4111-8111-111111111111';
 const user = 'user_22222222-2222-4222-8222-222222222222';
 const workId = 'work_33333333-3333-4333-8333-333333333333';
+const machineId = 'machine_44444444-4444-4444-8444-444444444444';
+const verificationRunId = 'verify_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
 function item(status = 'running', version = 4) {
   return { id: workId, organizationId: org, status, version };
@@ -19,7 +21,7 @@ function responseCapture() {
   };
 }
 
-function dependencies({ role = 'member', existing = item(), supervisor = {} } = {}) {
+function dependencies({ role = 'member', existing = item(), supervisor = {}, observer = null } = {}) {
   return {
     identities: {
       async getMembership(userId, organizationId) {
@@ -36,6 +38,7 @@ function dependencies({ role = 'member', existing = item(), supervisor = {} } = 
       async block(args) { return supervisor.block ? supervisor.block(args) : { workItem: { ...existing, status: 'blocked', version: existing.version + 1 } }; },
       async resume(args) { return supervisor.resume ? supervisor.resume(args) : { workItem: { ...existing, status: 'ready', version: existing.version + 1 } }; },
     },
+    sourceIntakeBrowserObserver: observer,
   };
 }
 
@@ -130,15 +133,81 @@ test('POST resume accepts verificationRunId, never a caller-supplied receipt', a
       commandId: 'command_y',
       expectedVersion: 5,
       accessObservation,
-      verificationRunId: 'verify_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      verificationRunId,
       capabilityVerificationReceipt: { forged: true },
     },
   });
   assert.equal(result.status, 200);
-  assert.equal(seen.verificationRunId, 'verify_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  assert.equal(seen.verificationRunId, verificationRunId);
   assert.equal(seen.accessObservation, accessObservation);
   assert.equal('capabilityVerificationReceipt' in seen, false);
   assert.equal(result.body.workItem.status, 'ready');
+});
+
+test('POST observe launches only the server-owned browser observer binding', async () => {
+  let seen;
+  const session = { id: 'browser-session-1', agent: 'browser-read', organizationId: org, machineId };
+  const deps = dependencies({
+    existing: item('blocked', 5),
+    observer: { launch: async (args) => { seen = args; return { session, replayed: false, reconciled: null }; } },
+  });
+  const result = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`, deps,
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId, cwd: '/tmp/rea-229', accessObservation: { forged: true } },
+  });
+  assert.equal(result.status, 202);
+  assert.deepEqual(seen, {
+    organizationId: org,
+    workItemId: workId,
+    expectedVersion: 5,
+    verificationRunId,
+    machineId,
+    actorId: user,
+    cwd: '/tmp/rea-229',
+  });
+  assert.equal('accessObservation' in seen, false);
+  assert.equal(result.broadcasts.length, 1);
+  assert.equal(result.broadcasts[0].type, 'session.created');
+  assert.equal(result.broadcasts[0].session.id, session.id);
+});
+
+test('POST observe does not broadcast a duplicate launch and rejects viewers', async () => {
+  let calls = 0;
+  const observer = { launch: async () => { calls += 1; return { session: { id: 'existing' }, replayed: true, reconciled: null }; } };
+  const duplicate = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
+    deps: dependencies({ existing: item('blocked', 5), observer }),
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId },
+  });
+  assert.equal(duplicate.status, 200);
+  assert.equal(duplicate.broadcasts.length, 0);
+  assert.equal(calls, 1);
+
+  const viewer = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
+    deps: dependencies({ role: 'viewer', existing: item('blocked', 5), observer }),
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId },
+  });
+  assert.equal(viewer.status, 403);
+  assert.equal(calls, 1);
+});
+
+test('POST observe requires machine and verification run and fails closed if observer service is unavailable', async () => {
+  const missing = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
+    deps: dependencies({ existing: item('blocked', 5) }),
+    body: { organizationId: org, expectedVersion: 5 },
+  });
+  assert.equal(missing.status, 400);
+  assert.deepEqual(missing.body.fields, ['verificationRunId', 'machineId']);
+
+  const unavailable = await invoke({
+    method: 'POST', pathname: `/api/work-items/${workId}/source-intake/observe`,
+    deps: dependencies({ existing: item('blocked', 5) }),
+    body: { organizationId: org, expectedVersion: 5, verificationRunId, machineId },
+  });
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.body.error, 'source_intake_browser_observer_unavailable');
 });
 
 test('source intake route hides cross-tenant WorkItems', async () => {
