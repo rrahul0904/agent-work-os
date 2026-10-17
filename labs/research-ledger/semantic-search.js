@@ -131,24 +131,34 @@ async function ensureSemanticIndex() {
   return chunks;
 }
 
-async function hybridRetrieve(query, lexicalResults = [], limit = 7) {
+async function semanticRetrieve(query, limit = 7) {
   const chunks = await ensureSemanticIndex();
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 7, 20));
+  const response = await requestWorker('search', { query, limit: safeLimit });
+  return {
+    results: response.results || [],
+    coverage: { indexed: chunks.length, total: allChunkCount, complete: chunks.length === allChunkCount },
+    model: SEMANTIC_MODEL_ID,
+    revision: SEMANTIC_MODEL_REVISION
+  };
+}
+
+async function hybridRetrieve(query, lexicalResults = [], limit = 7) {
   const breadth = Math.max(limit * 2, 12);
-  const response = await requestWorker('search', { query, limit: breadth });
-  const semanticResults = response.results || [];
+  const semantic = await semanticRetrieve(query, breadth);
   const lexicalResultsNormalized = lexicalResults.length
     ? lexicalResults.slice(0, breadth).map(item => ({ id: item.id, score: Number(item.score) || 0 }))
-    : lexicalRank(query, chunks, breadth);
+    : lexicalRank(query, indexedChunks, breadth);
   const results = reciprocalRankFusion([
     { name: 'lexical', results: lexicalResultsNormalized },
-    { name: 'semantic', results: semanticResults }
+    { name: 'semantic', results: semantic.results }
   ], limit);
   return {
     results,
-    overlap: rankOverlap(semanticResults, lexicalResultsNormalized, Math.min(8, breadth)),
-    coverage: { indexed: chunks.length, total: allChunkCount, complete: chunks.length === allChunkCount },
-    model: SEMANTIC_MODEL_ID,
-    revision: SEMANTIC_MODEL_REVISION,
+    overlap: rankOverlap(semantic.results, lexicalResultsNormalized, Math.min(8, breadth)),
+    coverage: semantic.coverage,
+    model: semantic.model,
+    revision: semantic.revision,
     fusion: 'rrf',
     rrfK: 60
   };
@@ -212,13 +222,19 @@ function injectBriefRetrievalUi() {
   if (!modeRow) return;
   const label = document.createElement('label');
   label.className = 'brief-retrieval-control';
-  label.innerHTML = `<span>Brief retrieval</span><select id="briefRetrieval" aria-label="Brief retrieval mode"><option value="lexical">Lexical · default</option><option value="hybrid">Hybrid RRF · experimental</option></select>`;
+  label.innerHTML = `<span>Brief retrieval</span><select id="briefRetrieval" aria-label="Brief retrieval mode"><option value="lexical">Lexical · default</option><option value="semantic">Semantic · experimental</option><option value="hybrid">Hybrid RRF · experimental</option></select>`;
   modeRow.appendChild(label);
   const select = label.querySelector('select');
-  select.value = localStorage.getItem('research-ledger:brief-retrieval') === 'hybrid' ? 'hybrid' : 'lexical';
+  const saved = localStorage.getItem('research-ledger:brief-retrieval');
+  select.value = saved === 'semantic' || saved === 'hybrid' ? saved : 'lexical';
   select.onchange = () => {
     localStorage.setItem('research-ledger:brief-retrieval', select.value);
-    setSemanticStatus(select.value === 'hybrid' ? 'Hybrid briefs will load the local embedding model when needed.' : 'Grounded briefs use deterministic lexical retrieval.', 'idle');
+    const messages = {
+      lexical: 'Grounded briefs use deterministic lexical retrieval.',
+      semantic: 'Semantic briefs will load the pinned local multilingual embedding model when needed.',
+      hybrid: 'Hybrid briefs will load the local embedding model and fuse lexical + semantic ranks.'
+    };
+    setSemanticStatus(messages[select.value] || messages.lexical, 'idle');
   };
 }
 
@@ -245,7 +261,7 @@ function injectSemanticUi() {
   document.head.appendChild(style);
 }
 
-window.ResearchLedgerSemantic = Object.freeze({ hybridRetrieve });
+window.ResearchLedgerSemantic = Object.freeze({ semanticRetrieve, hybridRetrieve });
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', injectSemanticUi, { once: true });
 else injectSemanticUi();
