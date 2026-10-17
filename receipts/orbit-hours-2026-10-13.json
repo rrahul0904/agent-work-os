@@ -1,0 +1,31 @@
+{
+  "project": "Orbit Hours",
+  "run_date": "2026-10-13",
+  "source_target": "https://www.reddit.com/r/indiehackersindia/s/PlTzgvqd3D",
+  "resolved_target": "Overlap - World Clock / com.beingbriston.overlap",
+  "method": "REA-governed clean-room reconstruction",
+  "status": "IMPLEMENTED_CORE_NATIVE_SOURCE_READY",
+  "verification": {
+    "typescript_strict_compile": "PASS",
+    "domain_assertions": "PASS_12",
+    "native_packaging": "PASS",
+    "local_http_asset_fetch": "PASS",
+    "apple_xcode_build": "NOT_RUN_REQUIRES_MACOS_XCODE",
+    "android_gradle_build": "NOT_RUN_REQUIRES_ANDROID_SDK_DEPENDENCIES",
+    "production_store_release": "NOT_AUTHORIZED"
+  },
+  "hashes": {
+    "dist_app_main_js_sha256": "a1bbda4daf4527fafa55cf65dd6de52342725bd1376d734770c49545908e3e5a",
+    "tests_run_mjs_sha256": "ffaef11cbe8d0c22f014e99e82f6aed28a47c52ec8c8ec2543a053ee75735d7c",
+    "source_zip_sha256": "1df6ba78b192d3a41b2b14f7b86cf876456e3f4f647e8ca9d4ad198452294f65"
+  },
+  "gates_open": [
+    "full global public holiday provider",
+    "contact editor/timezone search",
+    "Apple simulator/device UAT",
+    "Android emulator/device UAT",
+    "widget extension target wiring and refresh UAT",
+    "accessibility/localization audit",
+    "store signing/privacy/release receipts"
+  ]
+}
