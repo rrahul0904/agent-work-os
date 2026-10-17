@@ -10,6 +10,8 @@ import { CursorAdapter } from "./cursor-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
+import { createMachinePolicyFromEnv } from "./machine-policy.js";
+import { createMachineTools } from "./machine-tools.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const machineCredential = process.env.AGENT_WORK_OS_MACHINE_TOKEN ?? "";
@@ -22,6 +24,8 @@ const adapters = new Map();
 const nativeSessions = new Map();
 const shippingRuns = new Set();
 const commandReceipts = createCommandReceiptCache();
+const machinePolicy = createMachinePolicyFromEnv();
+const machineTools = createMachineTools(machinePolicy);
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter();
 if (codex.capability()) adapters.set("codex", codex);
@@ -45,6 +49,7 @@ function connect() {
     reconnectAttempt = 0;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = undefined; }
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
+    if (machinePolicy.enabled) capabilities.push({ name: "machine-tools", executable: "builtin", version: "1", policy: machinePolicy.describe() });
     ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, ...(machineCredential ? { machineCredential } : {}), machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
   });
@@ -55,7 +60,7 @@ function connect() {
     try {
       const command = decodeMessage(String(event.data));
       if (command.type === "server.machine.authenticated") {
-        console.log(`[daemon] authenticated as ${machineName} (${machineId}) org=${command.organizationId ?? "local"} agents=${[...adapters.keys()].join(",")} shipping=enabled`);
+        console.log(`[daemon] authenticated as ${machineName} (${machineId}) org=${command.organizationId ?? "local"} agents=${[...adapters.keys()].join(",")} shipping=enabled machineTools=${machinePolicy.enabled ? "enabled" : "disabled"}`);
         return;
       }
       if (command.type !== "server.command") return;
@@ -66,8 +71,8 @@ function connect() {
         ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ...receipt.receipt }));
         return;
       }
-      const ack = (ok, error) => {
-        const result = { ok, ...(error ? { error } : {}) };
+      const ack = (ok, error, value) => {
+        const result = { ok, ...(error ? { error } : {}), ...(value !== undefined ? { result: value } : {}) };
         commandReceipts.complete(command.commandId, result);
         ws.send(encodeMessage({ type: "daemon.command.ack", machineId, commandId: command.commandId, ...result }));
       };
@@ -78,6 +83,23 @@ function connect() {
         if (shippingRuns.has(p.runId)) throw new Error(`Shipping run ${p.runId} is already active`);
         shippingRuns.add(p.runId); ack(true);
         void runShipping(p.runId, p.contract).finally(() => shippingRuns.delete(p.runId));
+        return;
+      }
+      if (command.action === "machine.info") {
+        ack(true, undefined, machineTools.info());
+        return;
+      }
+      if (command.action === "machine.workspace.list") {
+        ack(true, undefined, await machineTools.list(command.payload?.path ?? "."));
+        return;
+      }
+      if (command.action === "machine.workspace.read") {
+        if (!command.payload?.path) throw new Error("machine.workspace.read requires path");
+        ack(true, undefined, await machineTools.read(command.payload.path));
+        return;
+      }
+      if (command.action === "machine.execution.run") {
+        ack(true, undefined, await machineTools.run(command.payload));
         return;
       }
       if (command.action === "session.start") {
