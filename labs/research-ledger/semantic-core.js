@@ -4,6 +4,7 @@ export const TRANSFORMERS_JS_VERSION = '3.8.1';
 export const SEMANTIC_MAX_CHUNKS = 240;
 export const SEMANTIC_CHUNK_CHARS = 1500;
 export const SEMANTIC_CHUNK_OVERLAP = 220;
+export const HYBRID_RRF_K = 60;
 
 const STOP = new Set('a an the and or but if then than to of in on at by for from with without as is are was were be been being it its this that these those what which who whom how why when where can could should would may might will do does did have has had not no yes into about over under more most less least very also just their there they them we our you your i me my'.split(' '));
 
@@ -106,4 +107,24 @@ export function rankOverlap(first = [], second = [], limit = 8) {
   let overlap = 0;
   for (const id of a) if (b.has(id)) overlap += 1;
   return { overlap, limit: Math.min(limit, Math.max(a.size, b.size)) };
+}
+
+export function reciprocalRankFusion(rankings = [], limit = 8, k = HYBRID_RRF_K) {
+  const fused = new Map();
+  rankings.forEach((ranking, rankingIndex) => {
+    const source = ranking?.name || `ranking-${rankingIndex + 1}`;
+    const results = Array.isArray(ranking?.results) ? ranking.results : [];
+    results.forEach((item, index) => {
+      const id = String(item?.id || '');
+      if (!id) return;
+      const current = fused.get(id) || { id, score: 0, sources: [], ranks: {} };
+      current.score += 1 / (k + index + 1);
+      current.sources.push(source);
+      current.ranks[source] = index + 1;
+      fused.set(id, current);
+    });
+  });
+  return [...fused.values()]
+    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+    .slice(0, Math.max(1, limit));
 }
