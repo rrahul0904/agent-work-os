@@ -46,6 +46,10 @@ try {
   assert.match(csp, /https:\/\/\*\.hf\.co/);
   assert.ok(homeText.indexOf('src="/db-schema.js"') < homeText.indexOf('src="/app.js"'), 'schema guard must load before app');
   assert.ok(homeText.indexOf('src="/completion.js"') < homeText.indexOf('src="/semantic-search.js"'), 'semantic controller must load after completion layer');
+  assert.ok(homeText.indexOf('src="/semantic-search.js"') < homeText.indexOf('src="/hybrid-brief.js"'), 'hybrid bridge must be declared after semantic controller');
+  assert.match(homeText, /<script src="\/db-schema\.js"><\/script>/);
+  assert.match(homeText, /<script src="\/app\.js"><\/script>/);
+  assert.match(homeText, /<script src="\/hybrid-brief\.js"><\/script>/);
 
   const shippedAssets = [
     ['/styles.css', /text\/css/],
@@ -55,7 +59,8 @@ try {
     ['/completion.js', /javascript/],
     ['/semantic-core.js', /javascript/],
     ['/semantic-worker.js', /javascript/],
-    ['/semantic-search.js', /javascript/]
+    ['/semantic-search.js', /javascript/],
+    ['/hybrid-brief.js', /javascript/]
   ];
   for (const [path, contentType] of shippedAssets) {
     const asset = await fetch(`${base}${path}`);
@@ -70,6 +75,7 @@ try {
   const semanticCoreText = await semanticCore.text();
   assert.match(semanticCoreText, /Xenova\/multilingual-e5-small/);
   assert.match(semanticCoreText, /761b726dd34fb83930e26aab4e9ac3899aa1fa78/);
+  assert.match(semanticCoreText, /reciprocalRankFusion/);
 
   const semanticWorker = await fetch(`${base}/semantic-worker.js`);
   const semanticWorkerText = await semanticWorker.text();
@@ -77,6 +83,12 @@ try {
   assert.match(semanticWorkerText, /dtype: 'q8'/);
   assert.match(semanticWorkerText, /pooling: 'mean'/);
   assert.match(semanticWorkerText, /normalize: true/);
+
+  const hybrid = await fetch(`${base}/hybrid-brief.js`);
+  const hybridText = await hybrid.text();
+  assert.match(hybridText, /hybridRetrieve/);
+  assert.match(hybridText, /hybrid-rrf/);
+  assert.match(hybridText, /lexical-fallback/);
 
   const head = await fetch(`${base}/semantic-search.js`, { method: 'HEAD' });
   assert.equal(head.status, 200);
