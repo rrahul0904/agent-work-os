@@ -2,15 +2,17 @@ import path from "node:path";
 import { verifyCapabilityWithAdapter } from "./capability-verifier.js";
 import { verifyCodexNativeDiscovery } from "./codex-native-verifier.js";
 import { verifyClaudeNativeDiscovery } from "./claude-native-verifier.js";
+import { verifyOpenCodeNativeDiscovery } from "./opencode-native-verifier.js";
 
 export class CapabilityVerificationAdapter {
   name = "capability-verify";
   #adapters = new Map();
   #active = new Map();
 
-  constructor(codexAdapter = null, claudeCodeAdapter = null) {
+  constructor(codexAdapter = null, claudeCodeAdapter = null, openCodeAdapter = null) {
     if (codexAdapter) this.#adapters.set("codex", codexAdapter);
     if (claudeCodeAdapter) this.#adapters.set("claude-code", claudeCodeAdapter);
+    if (openCodeAdapter) this.#adapters.set("opencode", openCodeAdapter);
   }
 
   capability() {
@@ -25,7 +27,7 @@ export class CapabilityVerificationAdapter {
     return {
       name: this.name,
       executable: "builtin",
-      version: "3",
+      version: "5",
       harnesses: available.map((entry) => entry.harnessId),
       modes: [...new Set(Object.values(harnessModes).flat())],
       harnessModes,
@@ -91,6 +93,15 @@ export class CapabilityVerificationAdapter {
           });
         } else if (harnessId === "claude-code") {
           result = await verifyClaudeNativeDiscovery({
+            spec: payload.spec,
+            adapter: nestedAdapter,
+            workspaceRoot: workspace,
+            approveWrite: true,
+            receiptPath: null,
+            sessionIdFactory
+          });
+        } else if (harnessId === "opencode") {
+          result = await verifyOpenCodeNativeDiscovery({
             spec: payload.spec,
             adapter: nestedAdapter,
             workspaceRoot: workspace,
