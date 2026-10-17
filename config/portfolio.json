@@ -83,6 +83,21 @@
       "nextAction": "Restore authenticated Preview verification, complete independent review, then continue question-bank QA/promotion.",
       "evidence": ["24 exact-head checks green on donor-suite candidate", "exact-SHA Preview deployed", "60k-question draft corpus materialized in PR #59"],
       "updatedAt": "2026-10-08T03:53:38Z"
+    },
+    {
+      "id": "beat-arena",
+      "name": "Beat Arena",
+      "repository": "TBD — separate product repository",
+      "category": "product",
+      "status": "BUILDING",
+      "readiness": 18,
+      "value": 4,
+      "effort": 3,
+      "risk": 3,
+      "blockers": [],
+      "nextAction": "Complete retained REA browser evidence capture, create the standalone product repository, then implement the Slice 1 upload/vote/weekly-season MVP behind Shipping OS gates.",
+      "evidence": ["Public target and stack identified", "live product behavior documented", "Reddit retention/fairness feedback captured", "governed REA dossier committed on rea/skrtt-beat-arena-20261013"],
+      "updatedAt": "2026-10-13T18:35:00Z"
     }
   ]
 }
