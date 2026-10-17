@@ -7,6 +7,8 @@ import { scanRepository, selectRepositoryContext } from "../packages/repo-intell
 import { analyzeRepositoryTopology } from "../packages/repo-intelligence/src/topology.js";
 import { analyzeStructuralRisk } from "../packages/repo-intelligence/src/risk.js";
 import { analyzeGitSignals } from "../packages/repo-intelligence/src/git-signals.js";
+import { analyzeRepositoryImports } from "../packages/repo-intelligence/src/import-analysis.js";
+import { analyzeRepositoryImpact } from "../packages/repo-intelligence/src/impact.js";
 import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
 import { diffRepositoryMaps } from "../packages/repo-intelligence/src/diff.js";
 import { renderRepoAtlasHtml } from "../packages/repo-intelligence/src/report.js";
@@ -20,6 +22,30 @@ try {
   } else if (command === "topology") {
     const map = await scanRepository(repoArg);
     const result = await analyzeRepositoryTopology(repoArg, map);
+    await emit(result, getFlag(flags, "--output="));
+  } else if (command === "imports") {
+    const map = await scanRepository(repoArg);
+    const result = await analyzeRepositoryImports(repoArg, map);
+    await emit(result, getFlag(flags, "--output="));
+  } else if (command === "impact") {
+    const previousMapPath = getFlag(flags, "--previous-map=");
+    if (!previousMapPath) throw commandError("repo_atlas_previous_map_required", "impact requires --previous-map=<repo-map.json>");
+    const map = await scanRepository(repoArg);
+    const previous = await readJson(previousMapPath);
+    const diff = diffRepositoryMaps(previous, map);
+    const importAnalysis = await analyzeRepositoryImports(repoArg, map);
+    const topology = await analyzeRepositoryTopology(repoArg, map);
+    const gitSignals = hasFlag(flags, "--include-git")
+      ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
+      : null;
+    const result = analyzeRepositoryImpact({
+      repoMap: map,
+      importAnalysis,
+      diff,
+      topology,
+      gitSignals,
+      maxDepth: parseIntegerFlag(flags, "--max-depth=", 5)
+    });
     await emit(result, getFlag(flags, "--output="));
   } else if (command === "context") {
     const task = getFlag(flags, "--task=");
@@ -58,6 +84,21 @@ try {
     const gitSignals = hasFlag(flags, "--include-git")
       ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
       : null;
+    const includeImpact = hasFlag(flags, "--include-impact");
+    if (includeImpact && !diff) throw commandError("repo_atlas_previous_map_required", "--include-impact requires --previous-map=<repo-map.json>");
+    const importAnalysis = hasFlag(flags, "--include-imports") || includeImpact
+      ? await analyzeRepositoryImports(repoArg, map)
+      : null;
+    const impact = includeImpact
+      ? analyzeRepositoryImpact({
+          repoMap: map,
+          importAnalysis,
+          diff,
+          topology,
+          gitSignals,
+          maxDepth: parseIntegerFlag(flags, "--max-depth=", 5)
+        })
+      : null;
     const result = createRepositoryEvidenceBundle({
       repoMap: map,
       topology,
@@ -65,6 +106,8 @@ try {
       context,
       diff,
       gitSignals,
+      importAnalysis,
+      impact,
       provenance: {
         repository: getFlag(flags, "--repository=") ?? undefined,
         ref: getFlag(flags, "--ref=") ?? undefined,
@@ -103,10 +146,12 @@ try {
       "Usage:\n" +
       "  npm run repo:atlas -- map <repo-path> [--output=<file>]\n" +
       "  npm run repo:atlas -- topology <repo-path> [--output=<file>]\n" +
+      "  npm run repo:atlas -- imports <repo-path> [--output=<file>]\n" +
+      "  npm run repo:atlas -- impact <repo-path> --previous-map=<repo-map.json> [--max-depth=5] [--include-git] [--git-max-commits=500] [--output=<file>]\n" +
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
       "  npm run repo:atlas -- git <repo-path> [--max-commits=500] [--output=<file>]\n" +
-      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--git-max-commits=500] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
+      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--git-max-commits=500] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
       "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--include-git] [--git-max-commits=500] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
       "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
