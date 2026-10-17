@@ -75,7 +75,7 @@ export function createCompanyObjective(input, spec) {
     companySpecDigest: spec.specDigest,
     name: requireText(value.name, "name", 500),
     metricIds: idArray(value.metricIds, "metricIds", 50, true),
-    baselineObservationRefs: idArray(value.baselineObservationRefs ?? [], "baselineObservationRefs", 100),
+    baselineObservationRefs: refArray(value.baselineObservationRefs ?? [], "baselineObservationRefs", 100),
     target: value.target ?? null,
     horizon: requireText(value.horizon, "horizon", 256),
     constraints: textArray(value.constraints ?? [], "constraints", 100),
@@ -136,7 +136,7 @@ export function createCompanyBlocker(input) {
     status: requireEnum(value.status ?? "open", ["open", "resolved", "superseded"], "status"),
     reason: requireText(value.reason, "reason", 5_000),
     externalProvider: value.externalProvider ?? null,
-    evidenceRefs: idArray(value.evidenceRefs ?? [], "evidenceRefs", 100),
+    evidenceRefs: refArray(value.evidenceRefs ?? [], "evidenceRefs", 100),
     requiresHuman: Boolean(value.requiresHuman),
     firstObservedAt: requireTimestamp(value.firstObservedAt, "firstObservedAt"),
     lastObservedAt: requireTimestamp(value.lastObservedAt ?? value.firstObservedAt, "lastObservedAt"),
@@ -170,7 +170,7 @@ export function createMetricObservation(input) {
     windowEnd: value.windowEnd ? requireTimestamp(value.windowEnd, "windowEnd") : null,
     quality: requireEnum(value.quality ?? "unknown", ["verified", "observed", "derived", "estimate", "unknown"], "quality"),
     provenance,
-    evidenceRefs: idArray(value.evidenceRefs ?? [], "evidenceRefs", 100)
+    evidenceRefs: refArray(value.evidenceRefs ?? [], "evidenceRefs", 100)
   };
   assertNoSecrets(observation);
   return { ...observation, observationDigest: canonicalDigest(observation) };
@@ -403,6 +403,13 @@ function textArray(value, field, maxItems) {
 function idArray(value, field, maxItems, requireOne = false) {
   if (!Array.isArray(value) || value.length > maxItems || (requireOne && value.length === 0)) throw new CompanyValidationError(`company_${field}_invalid`);
   const normalized = value.map((item) => requireId(item, field));
+  if (new Set(normalized).size !== normalized.length) throw new CompanyValidationError(`company_${field}_duplicate`);
+  return normalized;
+}
+
+function refArray(value, field, maxItems, requireOne = false) {
+  if (!Array.isArray(value) || value.length > maxItems || (requireOne && value.length === 0)) throw new CompanyValidationError(`company_${field}_invalid`);
+  const normalized = value.map((item) => requireText(item, field, 2_048));
   if (new Set(normalized).size !== normalized.length) throw new CompanyValidationError(`company_${field}_duplicate`);
   return normalized;
 }
