@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Research Ledger Capture",
+  "version": "0.1.0",
+  "description": "Explicitly capture selected tabs and AI chat context into Research Ledger.",
+  "permissions": ["activeTab", "scripting", "sidePanel"],
+  "host_permissions": ["https://chatgpt.com/*", "https://claude.ai/*"],
+  "side_panel": {"default_path": "sidepanel.html"},
+  "action": {"default_title": "Open Research Ledger Capture"},
+  "background": {"service_worker": "service-worker.js"},
+  "content_scripts": [{"matches":["https://chatgpt.com/*","https://claude.ai/*"],"js":["content.js"],"run_at":"document_idle"}]
+}
