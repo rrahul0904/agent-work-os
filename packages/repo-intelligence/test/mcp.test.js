@@ -48,7 +48,7 @@ async function connect(root) {
   return client;
 }
 
-test("Repo Atlas MCP exposes bounded read-only M1-M9 tools over current stdio protocol", async () => {
+test("Repo Atlas MCP exposes bounded read-only M1-M9 tools and versioned evidence over current stdio protocol", async () => {
   await withFixture(async (root) => {
     const workspace = path.join(root, "workspace");
     await put(workspace, "package.json", JSON.stringify({ name: "mcp-fixture", private: true }));
@@ -77,7 +77,8 @@ test("Repo Atlas MCP exposes bounded read-only M1-M9 tools over current stdio pr
         "repo_atlas_drift",
         "repo_atlas_impact",
         "repo_atlas_semantic_impact",
-        "repo_atlas_bundle"
+        "repo_atlas_bundle",
+        "repo_atlas_semantic_bundle"
       ]);
 
       const overview = await client.callTool({ name: "repo_atlas_overview", arguments: { path: "workspace" } });
@@ -159,6 +160,32 @@ test("Repo Atlas MCP exposes bounded read-only M1-M9 tools over current stdio pr
       assert.equal(bundle.structuredContent.artifacts.some((artifact) => artifact.kind === "repo-resolution"), false);
       assert.equal(JSON.stringify(bundle.structuredContent).includes("repo-atlas-test@example.com"), false);
       assert.equal(JSON.stringify(bundle.structuredContent).includes("semanticChanged"), false);
+
+      const semanticBundle = await client.callTool({
+        name: "repo_atlas_semantic_bundle",
+        arguments: {
+          path: "workspace",
+          task: "shared alias change",
+          previousMapPath: "previous-map.json",
+          includeGit: true,
+          maxDepth: 3,
+          gitMaxCommits: 20,
+          repository: "example/mcp-fixture",
+          ref: "main",
+          commit: "abc123"
+        }
+      });
+      assert.notEqual(semanticBundle.isError, true);
+      assert.equal(semanticBundle.structuredContent.schemaVersion, "repo-evidence-bundle/v2");
+      assert.equal(semanticBundle.structuredContent.producer.contractVersion, 2);
+      for (const kind of ["repo-git", "repo-imports", "repo-resolution", "repo-semantic-impact"]) {
+        assert.ok(semanticBundle.structuredContent.artifacts.some((artifact) => artifact.kind === kind));
+      }
+      assert.ok(semanticBundle.structuredContent.claims.some((claim) => claim.type === "repository-module-resolution"));
+      assert.ok(semanticBundle.structuredContent.claims.some((claim) => claim.type === "repository-semantic-change-impact"));
+      assert.ok(semanticBundle.structuredContent.summary.aliasResolvedEdges >= 1);
+      assert.equal(JSON.stringify(semanticBundle.structuredContent).includes("repo-atlas-test@example.com"), false);
+      assert.equal(JSON.stringify(semanticBundle.structuredContent).includes("semanticChanged"), false);
     } finally {
       await client.close();
     }
