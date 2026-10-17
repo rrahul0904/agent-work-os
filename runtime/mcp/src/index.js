@@ -5,12 +5,15 @@ import { localhostHostValidation, localhostOriginValidation, toNodeHandler } fro
 import * as z from "zod/v4";
 import { createMachinePolicyFromEnv } from "../../daemon/src/machine-policy.js";
 import { createMachineTools } from "../../daemon/src/machine-tools.js";
+import { createMachineTaskManagerFromEnv } from "../../daemon/src/machine-tasks.js";
 
 const host = process.env.AGENT_WORK_OS_MCP_HOST ?? "127.0.0.1";
 const port = Number(process.env.AGENT_WORK_OS_MCP_PORT ?? 8790);
 const localToken = process.env.AGENT_WORK_OS_MCP_TOKEN ?? "";
+if (!new Set(["127.0.0.1", "localhost", "::1"]).has(host)) throw new Error("mcp_host_must_be_loopback");
 const policy = createMachinePolicyFromEnv();
 const machineTools = createMachineTools(policy);
+const machineTasks = createMachineTaskManagerFromEnv(policy);
 
 function toolResult(value) {
   return {
@@ -33,8 +36,16 @@ function guarded(fn) {
   };
 }
 
+const executionInput = z.object({
+  program: z.string().min(1),
+  args: z.array(z.string()).max(256).default([]),
+  cwd: z.string().default("."),
+  timeoutMs: z.number().int().positive().optional()
+});
+const taskIdInput = z.string().regex(/^task-[a-f0-9-]{36}$/);
+
 function buildServer() {
-  const server = new McpServer({ name: "agent-work-os-machine", version: "0.1.0" });
+  const server = new McpServer({ name: "agent-work-os-machine", version: "0.2.0" });
   const grants = new Set(policy.describe().permissions);
 
   server.registerTool(
@@ -84,15 +95,55 @@ function buildServer() {
     server.registerTool(
       "execution_run",
       {
-        description: "Run one explicitly allowlisted executable with argv (never an implicit shell) in a granted workspace, with bounded time and output.",
-        inputSchema: z.object({
-          program: z.string().min(1),
-          args: z.array(z.string()).max(256).default([]),
-          cwd: z.string().default("."),
-          timeoutMs: z.number().int().positive().optional()
-        })
+        description: "Run one short explicitly allowlisted executable with argv (never an implicit shell) in a granted workspace, with bounded time and output.",
+        inputSchema: executionInput
       },
       guarded(async (request) => machineTools.run(request))
+    );
+    server.registerTool(
+      "execution_start",
+      {
+        description: "Start a durable allowlisted process. Returns a persisted task handle that can be inspected after the MCP client or main daemon reconnects.",
+        inputSchema: executionInput
+      },
+      guarded(async (request) => machineTasks.start(request))
+    );
+    server.registerTool(
+      "execution_status",
+      {
+        description: "Read the persisted lifecycle record for a durable execution task.",
+        inputSchema: z.object({ taskId: taskIdInput })
+      },
+      guarded(async ({ taskId }) => machineTasks.status(taskId))
+    );
+    server.registerTool(
+      "execution_output",
+      {
+        description: "Read a bounded stdout or stderr segment from a durable task using byte offsets for resumable polling.",
+        inputSchema: z.object({
+          taskId: taskIdInput,
+          stream: z.enum(["stdout", "stderr"]).default("stdout"),
+          offset: z.number().int().nonnegative().default(0),
+          maxBytes: z.number().int().positive().max(65536).default(65536)
+        })
+      },
+      guarded(async ({ taskId, stream, offset, maxBytes }) => machineTasks.output(taskId, { stream, offset, maxBytes }))
+    );
+    server.registerTool(
+      "execution_cancel",
+      {
+        description: "Request cancellation of a durable task through its persisted runner handle.",
+        inputSchema: z.object({ taskId: taskIdInput })
+      },
+      guarded(async ({ taskId }) => machineTasks.cancel(taskId))
+    );
+    server.registerTool(
+      "execution_list",
+      {
+        description: "List persisted durable execution task records, newest first.",
+        inputSchema: z.object({})
+      },
+      guarded(async () => machineTasks.list())
     );
   }
 
