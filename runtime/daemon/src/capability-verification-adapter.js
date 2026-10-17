@@ -1,47 +1,64 @@
 import path from "node:path";
 import { verifyCapabilityWithAdapter } from "./capability-verifier.js";
 import { verifyCodexNativeDiscovery } from "./codex-native-verifier.js";
+import { verifyClaudeNativeDiscovery } from "./claude-native-verifier.js";
 
 export class CapabilityVerificationAdapter {
   name = "capability-verify";
-  #codex;
+  #adapters = new Map();
   #active = new Map();
 
-  constructor(codexAdapter) {
-    this.#codex = codexAdapter;
+  constructor(codexAdapter = null, claudeCodeAdapter = null) {
+    if (codexAdapter) this.#adapters.set("codex", codexAdapter);
+    if (claudeCodeAdapter) this.#adapters.set("claude-code", claudeCodeAdapter);
   }
 
   capability() {
-    const codex = this.#codex?.capability?.();
-    if (!codex) return null;
+    const available = [...this.#adapters.entries()]
+      .map(([harnessId, adapter]) => ({ harnessId, capability: adapter?.capability?.() }))
+      .filter((entry) => entry.capability);
+    if (!available.length) return null;
+    const harnessModes = Object.fromEntries(available.map(({ harnessId }) => [
+      harnessId,
+      ["artifact-context", "native-discovery"]
+    ]));
     return {
       name: this.name,
       executable: "builtin",
-      version: "1",
-      harnesses: ["codex"],
-      modes: ["artifact-context", "native-discovery"],
-      nestedHarness: { name: codex.name, version: codex.version ?? null }
+      version: "3",
+      harnesses: available.map((entry) => entry.harnessId),
+      modes: [...new Set(Object.values(harnessModes).flat())],
+      harnessModes,
+      nestedHarnesses: available.map(({ harnessId, capability }) => ({
+        harnessId,
+        name: capability.name,
+        version: capability.version ?? null
+      }))
     };
   }
 
   async run(request, emit) {
-    if (!this.capability()) throw new Error("Codex CLI is unavailable for capability verification");
+    const capability = this.capability();
+    if (!capability) throw new Error("No supported harness CLI is available for capability verification");
     const payload = parsePayload(request.prompt);
     if (payload.approveWrite !== true) throw new Error("capability verification requires approveWrite=true");
-    if ((payload.harnessId ?? "codex") !== "codex") throw new Error("only the codex harness is currently supported");
+    const harnessId = payload.harnessId ?? "codex";
+    const nestedAdapter = this.#adapters.get(harnessId);
+    if (!nestedAdapter?.capability?.()) throw new Error(`harness ${harnessId} is unavailable for capability verification`);
     const mode = payload.mode ?? "artifact-context";
-    if (!["artifact-context", "native-discovery"].includes(mode)) throw new Error(`unsupported capability verification mode ${mode}`);
+    const allowedModes = capability.harnessModes[harnessId] ?? [];
+    if (!allowedModes.includes(mode)) throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
     const workspace = path.resolve(request.cwd);
     const nestedSessions = new Set();
     let sequence = 0;
-    this.#active.set(request.sessionId, nestedSessions);
+    this.#active.set(request.sessionId, { adapter: nestedAdapter, nestedSessions });
     const sessionIdFactory = () => {
       const id = `${request.sessionId}:capability:${++sequence}`;
       nestedSessions.add(id);
       return id;
     };
 
-    emit({ kind: "status", status: "running", message: `Capability verification (${mode}) started`, at: new Date().toISOString() });
+    emit({ kind: "status", status: "running", message: `Capability verification (${harnessId}/${mode}) started`, at: new Date().toISOString() });
     try {
       let result;
       if (mode === "artifact-context") {
@@ -49,8 +66,8 @@ export class CapabilityVerificationAdapter {
         assertWithinWorkspace(workspace, targetRoot);
         result = await verifyCapabilityWithAdapter({
           spec: payload.spec,
-          harnessId: "codex",
-          adapter: this.#codex,
+          harnessId,
+          adapter: nestedAdapter,
           cwd: workspace,
           targetRoot,
           approveWrite: true,
@@ -59,18 +76,33 @@ export class CapabilityVerificationAdapter {
           receiptPath: null,
           sessionIdFactory
         });
-      } else {
+      } else if (mode === "native-discovery") {
         if (payload.workspaceRoot && path.resolve(payload.workspaceRoot) !== workspace) {
           throw new Error("native-discovery workspaceRoot must match the session cwd");
         }
-        result = await verifyCodexNativeDiscovery({
-          spec: payload.spec,
-          adapter: this.#codex,
-          workspaceRoot: workspace,
-          approveWrite: true,
-          receiptPath: null,
-          sessionIdFactory
-        });
+        if (harnessId === "codex") {
+          result = await verifyCodexNativeDiscovery({
+            spec: payload.spec,
+            adapter: nestedAdapter,
+            workspaceRoot: workspace,
+            approveWrite: true,
+            receiptPath: null,
+            sessionIdFactory
+          });
+        } else if (harnessId === "claude-code") {
+          result = await verifyClaudeNativeDiscovery({
+            spec: payload.spec,
+            adapter: nestedAdapter,
+            workspaceRoot: workspace,
+            approveWrite: true,
+            receiptPath: null,
+            sessionIdFactory
+          });
+        } else {
+          throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
+        }
+      } else {
+        throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
       }
 
       emit({
@@ -84,6 +116,7 @@ export class CapabilityVerificationAdapter {
         kind: "text",
         text: JSON.stringify({
           capabilityId: result.receipt.capabilityId,
+          harnessId: result.receipt.harnessId,
           verificationMode: result.receipt.verificationMode,
           passed: result.receipt.passed,
           score: result.receipt.score,
@@ -105,9 +138,9 @@ export class CapabilityVerificationAdapter {
   }
 
   async interrupt(sessionId) {
-    const nested = this.#active.get(sessionId);
-    if (!nested) return;
-    await Promise.all([...nested].map((id) => this.#codex.interrupt(id)));
+    const active = this.#active.get(sessionId);
+    if (!active) return;
+    await Promise.all([...active.nestedSessions].map((id) => active.adapter.interrupt(id)));
   }
 }
 
