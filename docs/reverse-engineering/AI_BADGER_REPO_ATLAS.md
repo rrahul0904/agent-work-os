@@ -14,7 +14,7 @@ Do **not** build an AI Badger clone.
 
 Owned flow:
 
-`Repository snapshot → map/topology/parser imports/risk/Git/drift → bounded change impact → task context + evidence bundle → Evidence Ledger ID → ContextPack → bounded agent`
+`Repository snapshot → map/topology/parser imports → semantic module resolution → risk/Git/drift → bounded semantic change impact → task context + evidence bundle → Evidence Ledger ID → ContextPack → bounded agent`
 
 Repo Atlas is an Agent Work OS repository-intelligence capability, not a separate product authority.
 
@@ -48,20 +48,22 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 - snapshot drift/diff;
 - privacy-preserving Git churn/ownership signals;
 - parser-backed JS/TS dependency extraction with explicit lexical fallback provenance;
-- bounded change-impact propagation over exact import edges;
-- digest-bound evidence bundles;
+- static `tsconfig.json` / `jsconfig.json` alias and `baseUrl` resolution;
+- workspace-package root/subpath resolution;
+- bounded semantic change-impact propagation;
+- digest-bound evidence bundles with explicit v1/v2 compatibility boundaries;
 - wide/deep/monorepo stress fixtures;
-- self-contained offline HTML report including parser/impact evidence;
-- bounded MCP v2 tool surface rooted to an explicitly configured directory.
+- self-contained offline HTML report for M1–M8 evidence;
+- bounded MCP tool surface rooted to an explicitly configured directory.
 
 ### NEXT / NEW
 
-- additional workspace/build ecosystems;
-- semantic/package-resolution improvements beyond local relative JS/TS file resolution;
+- workspace/build ecosystems beyond npm/TypeScript conventions;
+- richer package `exports` / conditional export semantics without executing project code;
 - test/coverage and richer complexity overlays;
 - canonical Evidence Ledger persistence and ContextPack integration after its authority lands;
 - richer graph/treemap interactions where they materially improve navigation;
-- production-like parser/impact performance receipts and Shipping OS certification.
+- production-like resolution/impact performance receipts and Shipping OS certification.
 
 ## Implemented contracts
 
@@ -72,9 +74,12 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 - `repo-diff/v1` — exact previous/current snapshot drift;
 - `repo-git-signals/v1` — bounded Git churn/ownership metadata with opaque contributor IDs;
 - `repo-import-analysis/v1` — parser-backed JS/TS import metadata with parser/fallback provenance;
-- `repo-impact/v1` — bounded reverse-dependency blast radius for changed/added current files;
-- `repo-evidence-bundle/v1` — content-addressed references, provenance and claims;
-- `repo-report/v1` — self-contained offline HTML view over the metadata contracts.
+- `repo-impact/v1` — M8 bounded reverse-dependency blast radius over parser-resolved relative imports;
+- `repo-module-resolution/v1` — M9 static alias/baseUrl/workspace resolution bound to exact parser-import evidence;
+- `repo-impact/v2` — M9 bounded semantic blast radius over resolved repository-file edges;
+- `repo-evidence-bundle/v1` — backward-compatible M1–M8 evidence references;
+- `repo-evidence-bundle/v2` — M9 semantic resolution/impact evidence with stronger replay bindings;
+- `repo-report/v1` — self-contained offline HTML view over M1–M8 metadata contracts.
 
 ## Implementation slices
 
@@ -104,7 +109,7 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 - intra-module and cross-module relationships;
 - module degree centrality.
 
-`repo-topology/v1` remains unchanged in M8 to protect existing consumers. Parser-grade dependency evidence is additive through `repo-import-analysis/v1` rather than silently changing topology semantics.
+`repo-topology/v1` remains unchanged through M9. Parser-grade and semantic dependency evidence are additive contracts rather than silent topology-schema mutations.
 
 ### M3 — structural hotspots and evidence
 
@@ -112,9 +117,9 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 
 - file hotspot scoring from size + import fan-in/fan-out;
 - module hotspot scoring from size + dependency degree;
-- methodology explicitly states scores are structural heuristics, not vulnerability/defect probabilities;
-- evidence bundles reference artifact digests rather than embedding source bodies;
-- cross-repository and topology mismatches fail closed.
+- scores are structural heuristics, not vulnerability/defect probabilities;
+- v1 evidence bundles reference artifact digests rather than source bodies;
+- cross-repository and dependency mismatches fail closed.
 
 ### M4 — snapshot drift
 
@@ -132,11 +137,12 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 - one self-contained HTML artifact;
 - no CDN, remote image, remote script, server or provider dependency;
 - summary cards, language/directory distributions, searchable file metadata, module centrality, structural hotspots, Git signals and optional drift;
-- M8 parser import coverage and change-impact sections are available through explicit report flags;
+- M8 parser import coverage and change-impact sections through explicit report flags;
 - embedded data contains paths/metadata/relationships, not source bodies;
 - script-breaking HTML characters are escaped before JSON embedding;
-- static Git and parser summaries are pre-rendered before browser JavaScript executes;
 - report artifacts stream to stdout or are written only through explicit `--output`.
+
+M9 deliberately does not mutate `repo-report/v1`; a semantic-report contract can be versioned separately if richer alias-resolution visualization materially improves navigation.
 
 ### M6 — bounded MCP v2 adapter
 
@@ -147,8 +153,22 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 - configured-root symlinks are rejected;
 - lexical and physical realpath boundary checks prevent `../` and symlink escapes;
 - compact tool responses avoid dumping complete repository state into model context;
-- current tools: overview, task context, topology, parser imports, structural hotspots, Git signals, drift, change impact and evidence bundle;
 - real-process integration tests use the official MCP client/stdio transport and modern `2026-07-28` protocol negotiation.
+
+Current read-only tools:
+
+1. `repo_atlas_overview`
+2. `repo_atlas_context`
+3. `repo_atlas_topology`
+4. `repo_atlas_imports`
+5. `repo_atlas_resolution`
+6. `repo_atlas_hotspots`
+7. `repo_atlas_git_signals`
+8. `repo_atlas_drift`
+9. `repo_atlas_impact`
+10. `repo_atlas_semantic_impact`
+11. `repo_atlas_bundle`
+12. `repo_atlas_semantic_bundle`
 
 ### M7 — privacy-preserving Git signals
 
@@ -160,7 +180,7 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 - tracked recognized files, commit touches, additions/deletions/churn and last-change timestamp;
 - contributor counts and top-contributor signal use SHA-256-derived opaque IDs;
 - author email addresses are never emitted into Repo Atlas artifacts;
-- timestamps are normalized to a canonical UTC representation;
+- timestamps are normalized to canonical UTC;
 - Git signals flow through CLI, MCP, evidence bundles and offline reports.
 
 ### M8 — parser-backed imports and bounded change impact
@@ -169,29 +189,64 @@ Repo Atlas is an Agent Work OS repository-intelligence capability, not a separat
 
 Parser import analysis:
 
-- uses the TypeScript 6 compiler API compatibility package `@typescript/typescript6` (`6.0.2`) for JS/TS/JSX/TSX parsing;
+- uses `@typescript/typescript6` `6.0.2` for JS/TS/JSX/TSX parsing;
 - classifies static imports, type imports, export-from, type export-from, dynamic imports, CommonJS `require`, and TypeScript import-equals;
 - resolves local relative imports against exact recognized RepoMap files;
-- records package references without executing or loading imported code;
-- records non-literal dynamic-import counts rather than guessing a target;
-- parser errors are explicit: affected files switch to `lexical-fallback` and retain a diagnostic count;
-- parser mode avoids false edges from import-like strings and comments;
-- file reads are lexical- and realpath-confined to the repository root;
-- source text is transient parser input and is never retained in the artifact.
+- records package references without executing imported code;
+- records non-literal dynamic imports rather than guessing targets;
+- parser errors switch only affected files to explicit `lexical-fallback` with diagnostic counts;
+- parser mode avoids false edges from import-like strings/comments;
+- source text is transient parser input and is never retained.
 
-Change impact:
+Change impact v1:
 
-- traverses reverse resolved-file imports from current changed/added files;
+- traverses reverse parser-resolved relative-file imports from current changed/added files;
 - hard-bounds propagation depth (`1..20`, default `5`);
 - separates direct and transitive dependents;
-- records impacted module boundaries when topology is supplied;
-- can incorporate privacy-preserving Git churn as one scoring signal;
-- scores are explicitly structural blast-radius heuristics, not defect, vulnerability or failure probabilities;
-- cycles are handled deterministically;
-- removed-file downstream propagation is intentionally not inferred without a previous-snapshot import-analysis artifact;
-- every impact artifact is digest-bound to RepoMap, import analysis, diff and any supplied topology/Git artifact.
+- optionally includes topology and privacy-preserving Git churn signals;
+- cycles are deterministic;
+- removed-file downstream propagation is intentionally not inferred without previous-snapshot dependency evidence.
 
-M8 is additive. Existing `repo-topology/v1` consumers do not need a schema migration.
+### M9 — semantic module resolution and impact evidence
+
+`packages/repo-intelligence/src/module-resolution.js`, `impact-v2.js`, and `evidence-v2.js`
+
+#### `repo-module-resolution/v1`
+
+- consumes exact `repo-import-analysis/v1` evidence rather than reparsing an independent graph;
+- statically reads repository-local `tsconfig.json` / `jsconfig.json`;
+- resolves `compilerOptions.paths` exact/single-wildcard aliases;
+- resolves `baseUrl` imports;
+- follows only repository-local relative `extends`, with a hard depth bound and explicit cycle rejection;
+- package-based `extends` are recorded as external/unsupported rather than loaded from dependency trees;
+- discovers workspace packages from repository `package.json` files;
+- resolves package roots using bounded metadata (`types`, `typings`, `module`, `main`, simple root export, `src/index`, `index`);
+- resolves workspace package subpaths against exact RepoMap files;
+- records resolution provenance per import: `relative-file`, `tsconfig-path`, `base-url`, `workspace-package`, `external-package`, or explicit unresolved state;
+- never executes config or project code;
+- config/package reads enforce lexical containment, regular non-symlink final files and physical realpath containment;
+- source/config bodies are not retained in the artifact.
+
+#### `repo-impact/v2`
+
+- builds reverse dependency propagation from semantic `targetFile` resolutions;
+- makes tsconfig/baseUrl/workspace aliases participate in blast radius;
+- remains depth-bounded (`1..20`), cycle-safe and deterministic;
+- binds exactly to RepoMap, parser-import analysis, semantic resolution and diff;
+- additionally binds topology/Git when supplied;
+- exposes semantic-resolution coverage metrics alongside impact metrics;
+- remains a structural heuristic, never a defect/vulnerability/failure probability;
+- removed-file propagation remains explicitly unsupported without previous semantic-resolution evidence.
+
+#### `repo-evidence-bundle/v2`
+
+- leaves `repo-evidence-bundle/v1` untouched for backward compatibility;
+- adds `repo-resolution` and `repo-semantic-impact` artifact references;
+- requires resolution to match the exact parser-import digest;
+- requires semantic impact to match exact parser imports, module resolution and diff;
+- if impact declares topology/Git bindings, those exact artifacts must be supplied to make the bundle replayable;
+- emits semantic-resolution and semantic-impact claims without source bodies;
+- producer `contractVersion` is explicitly `2`.
 
 ## Read-only CLI
 
@@ -199,12 +254,15 @@ M8 is additive. Existing `repo-topology/v1` consumers do not need a schema migra
 npm run repo:atlas -- map <repo-path> [--output=<file>]
 npm run repo:atlas -- topology <repo-path> [--output=<file>]
 npm run repo:atlas -- imports <repo-path> [--output=<file>]
+npm run repo:atlas -- resolve <repo-path> [--output=<file>]
 npm run repo:atlas -- impact <repo-path> --previous-map=<repo-map.json> [--max-depth=5] [--include-git]
+npm run repo:atlas -- semantic-impact <repo-path> --previous-map=<repo-map.json> [--max-depth=5] [--include-git]
 npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000]
 npm run repo:atlas -- risk <repo-path> [--top=25]
 npm run repo:atlas -- git <repo-path> [--max-commits=500]
 npm run repo:atlas -- diff <previous-map.json> <current-map.json>
 npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [provenance flags]
+npm run repo:atlas -- semantic-bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--max-depth=5] [provenance flags]
 npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--title=<text>] [--output=<file.html>]
 npm run repo:atlas:mcp -- --root=<directory>
 ```
@@ -213,73 +271,79 @@ The CLI and MCP server perform no provider/network writes. File artifacts are cr
 
 ## ContextPack integration rule
 
-PR #195 remains the separate owner of the provider-neutral Delegation Runtime `ContextPack` and is still draft/unmerged as of the M8 verification pass. Repo Atlas does not define a competing ContextPack type.
+PR #195 remains the separate owner of the provider-neutral Delegation Runtime `ContextPack` and is still open, draft and unmerged as of the M9 verification pass. Repo Atlas does not define a competing ContextPack type.
 
 ```text
-RepoMap / Topology / Imports / Risk / Git / Diff / Impact
-  → repo-evidence-bundle/v1
+RepoMap / Topology / Imports / Resolution / Risk / Git / Diff / Semantic Impact
+  → repo-evidence-bundle/v2
   → canonical Evidence Ledger ID
   → ContextPack.evidenceIds[]
   → bounded child agent
 ```
 
-This leaves repository intelligence independently versioned while preserving one delegation authority.
+Until that authority merges, Repo Atlas stops at content-addressed evidence artifacts/bundles; it does not persist or inject a substitute ContextPack.
 
 ## Security and privacy invariants
 
-- source contents are never stored in RepoMap, topology, parser-import, risk, Git, diff, impact or evidence-bundle artifacts;
-- parser source text is read transiently and discarded after metadata extraction;
-- report data contains metadata/relationships, not source bodies;
+- source contents are never stored in RepoMap, topology, parser-import, module-resolution, risk, Git, diff, impact or evidence-bundle artifacts;
+- parser source text and config/package text are read transiently and discarded after metadata extraction;
 - symlink roots are rejected and repository scan symlink entries are skipped;
-- parser file reads verify lexical containment, regular non-symlink final files and physical realpath containment;
-- MCP additionally checks both lexical paths and physical realpaths against its configured root;
-- known dependency/build/cache directories are excluded by default;
+- parser/resolver file reads verify lexical containment, regular non-symlink final files and physical realpath containment;
+- MCP checks lexical and physical paths against its configured root;
+- no project code, package code or config code is executed by semantic resolution;
+- package-based tsconfig extends are not loaded from dependencies;
+- known dependency/build/cache directories remain excluded by default;
 - scans and Git history analysis fail closed at configured bounds;
-- recognized NUL-containing binary-like files are excluded;
-- context, topology, parser imports, risk, Git, drift and impact artifacts are digest-bound to exact snapshots/evidence dependencies;
-- evidence bundles reject mismatched snapshots and mismatched impact dependencies;
 - contributor email addresses are transformed to opaque hashes before entering artifacts;
-- offline report JSON escapes script-breaking characters;
+- all semantic evidence is digest-bound to the exact upstream artifacts used to derive it;
+- v2 evidence rejects missing/mismatched reproducibility dependencies;
 - source-content ContextPack materialization remains out of scope until secret scanning/redaction policy is canonical.
 
 ## Stress and adversarial coverage
 
-The test corpus includes:
+The test corpus now includes:
 
 - 500+ recognized files in a wide repository;
-- a deep tree that succeeds inside the configured depth and fails beyond it;
-- explicit file-count and file-size limit failures;
-- a synthetic 30-package monorepo plus root module;
-- deterministic rescan/topology/diff/evidence/Git/parser/impact results;
+- depth/file-count/file-size fail-closed limits;
+- synthetic 30-package monorepo coverage;
+- deterministic map/topology/diff/evidence/Git/parser/impact/resolution digests;
 - symlink-root refusal and symlink-entry skipping;
 - invalid package manifest failure;
-- source-secret non-retention in map/evidence/report/parser/MCP artifacts;
-- adversarial `</script>` report title escaping;
-- drift/evidence/report snapshot mismatch rejection;
-- Git artifact-to-RepoMap mismatch rejection;
-- parser import false-positive checks for comment/string import text;
-- malformed JS/TS explicit lexical-fallback coverage;
-- dynamic, type-only, export-from, CommonJS and scoped-package import classification;
-- impact-depth bounding and cyclic dependency coverage;
-- impact/import/diff cross-snapshot mismatch rejection;
-- contributor-email non-retention across Git artifacts, evidence bundles, reports, CLI and MCP;
-- real MCP process tool discovery/calls, parser-import and impact calls, plus root-escape denial;
-- offline M8 report verification for parser coverage, change impact and source-secret non-retention.
+- source-secret non-retention across map/evidence/report/parser/resolution/CLI/MCP artifacts;
+- adversarial report JSON/script escaping;
+- parser false-positive rejection for comment/string import text;
+- malformed JS/TS explicit lexical fallback;
+- dynamic, type-only, export-from, CommonJS and scoped-package imports;
+- tsconfig `paths` and `baseUrl` resolution;
+- workspace package root and subpath resolution;
+- bounded local tsconfig extends plus package-extends non-loading;
+- local config-extends cycle rejection;
+- alias-aware direct/transitive impact propagation;
+- impact depth bounding and cyclic dependency coverage;
+- cross-snapshot/import/resolution/diff/topology/Git mismatch rejection;
+- v1/v2 evidence-bundle separation;
+- contributor-email non-retention across artifacts, bundles, report, CLI and MCP;
+- real MCP process tool discovery/calls plus configured-root escape denial.
 
 ## Verification boundary
 
-The latest implementation head before this documentation-only update is `470d923c36a8c157c69a7a54414b499b1b3441fa`. GitHub Actions run `38996024406` passed repository-wide `npm test` and `npm run acceptance` on that exact SHA, including the M8 parser/import, impact, CLI, real MCP and offline-report tests.
+The latest M9 implementation head before this documentation-only update is `8a4369f7335bf6a2e7b98e72e4695aa3dc5dca33`.
 
-An earlier M8 integration run exposed a transient unrelated control-plane identity timing assertion. Current `main` (`46f3b8a9101fe228268f1ca6a36b89eb5820474b`) independently passed full tests and acceptance in run `38995778081`, and the fully synchronized Repo Atlas branch subsequently passed the same gates. No control-plane test was weakened or changed by Repo Atlas.
+GitHub Actions run `39003800838` passed on that exact SHA:
 
-The branch must receive one additional exact-head CI receipt after this dossier commit before PR metadata is treated as the final M8 verification record. Verification here does **not** imply production deployment, shippability or Shipping OS certification.
+- repository-wide `npm test` — **passed**;
+- `npm run acceptance` — **passed**.
+
+Earlier M9 checkpoints separately proved the core resolver/impact contracts and the semantic evidence-bundle binding layer before those surfaces were integrated. A pre-existing control-plane identity lifecycle timing assertion (`processing` vs `complete`) flaked on two earlier M9 runs; every Repo Atlas test passed in those runs, the exact same assertion had appeared before M9, and the final implementation run above passed without weakening or changing that unrelated test.
+
+The branch must receive one additional exact-head CI receipt after this dossier commit before PR metadata is treated as the final M9 verification record. Verification does **not** imply production deployment, shippability or Shipping OS certification.
 
 ## Remaining gates
 
-- support workspace/build ecosystems beyond npm `package.json` boundaries;
-- add richer semantic/module resolution (aliases, tsconfig paths and ecosystem-specific resolution) without executing project code;
+- support workspace/build ecosystems beyond npm/TypeScript boundaries (`pnpm`, Yarn workspace metadata, Go workspaces/modules, Cargo, Maven/Gradle, .NET, Python packaging, Terraform/Compose/Kubernetes ownership);
+- enrich package `exports` / conditional export resolution without executing package code;
 - add test/coverage and richer complexity overlays;
+- add a separately versioned semantic report/graph surface only if it materially improves navigation;
 - integrate with canonical Evidence Ledger and ContextPack after their authority contract is merged;
-- add richer interactive graph/treemap views if they materially improve navigation;
-- capture production-like parser/impact scale and performance receipts;
+- capture production-like semantic-resolution and impact scale/performance receipts;
 - complete Shipping OS exact-SHA certification and deployment gates before any shippable/shipped claim.
