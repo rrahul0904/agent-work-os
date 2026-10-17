@@ -51,12 +51,14 @@ test("hydrate marks unrecoverable running work lost without erasing its history"
   const running = original.transition("work-1", { expectedSequence: 0, to: "running", reason: "started" }).work;
 
   const restarted = createWorkLedger({ now: clock(500) });
-  const [hydrated] = restarted.hydrate([running]);
+  const [{ work: hydrated, recovered, receipt }] = restarted.hydrate([running]);
+  assert.equal(recovered, true);
   assert.equal(hydrated.state, "lost");
   assert.equal(hydrated.sequence, 2);
   assert.equal(hydrated.transitionReceipts.length, 2);
   assert.equal(hydrated.transitionReceipts[0].reason, "started");
   assert.equal(hydrated.transitionReceipts[1].reason, "runtime_restart");
+  assert.equal(receipt.reason, "runtime_restart");
 });
 
 test("wake queue deduplicates delivery keys and keeps user input ahead of machine wakes", () => {
@@ -86,6 +88,21 @@ test("wake settlement keeps causal provenance and cannot be applied twice", () =
   assert.equal(settled.receipt.causalDeliveryId, "wake-parent");
   assert.match(settled.receipt.digest, /^sha256:[0-9a-f]{64}$/);
   assert.throws(() => queue.settle("wake-child", "failed"), /wake_delivery_already_settled/);
+});
+
+test("wake queue restores persisted queued and settled deliveries without changing identity", () => {
+  const original = createWakeQueue({ now: clock(100, 110, 120) });
+  original.enqueue({ id: "wake-queued", deliveryKey: "work:queued", sessionId: "session-1", source: "work" });
+  original.enqueue({ id: "wake-done", deliveryKey: "work:done", sessionId: "session-1", source: "work" });
+  original.settle("wake-done", "delivered", { reason: "done" });
+  const snapshot = original.list();
+
+  const restarted = createWakeQueue({ now: clock(999) });
+  restarted.hydrate(snapshot);
+  assert.equal(restarted.next().id, "wake-queued");
+  assert.equal(restarted.get("wake-done").settlementReceipt.digest, snapshot[1].settlementReceipt.digest);
+  const fresh = restarted.enqueue({ id: "wake-fresh", deliveryKey: "user:fresh", sessionId: "session-1", source: "user" });
+  assert.equal(fresh.delivery.sequence, 3);
 });
 
 test("wake queue bounds self-caused chains", () => {
