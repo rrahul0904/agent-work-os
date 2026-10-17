@@ -51,3 +51,15 @@ test("read and list are bounded to granted workspace", async () => {
   assert.equal((await tools.read(path.join(root, "hello.txt"))).content, "hello\n");
   assert.ok((await tools.list(root)).entries.some((entry) => entry.name === "hello.txt"));
 });
+
+test("write supports expected-sha optimistic concurrency", async () => {
+  const root = fixture();
+  const file = path.join(root, "hello.txt");
+  const policy = createMachinePolicy({ workspaceRoots: [root], permissions: ["read", "write"] });
+  const tools = createMachineTools(policy);
+  const before = await tools.read(file);
+  const written = await tools.write({ path: file, content: "changed\n", expectedSha256: before.sha256 });
+  assert.equal(written.replaced, true);
+  assert.equal((await tools.read(file)).content, "changed\n");
+  await assert.rejects(() => tools.write({ path: file, content: "stale", expectedSha256: before.sha256 }), /precondition_failed/);
+});
