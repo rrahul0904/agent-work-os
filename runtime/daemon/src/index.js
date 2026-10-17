@@ -7,6 +7,7 @@ import { ShippingStore } from "../../../services/control-api/src/shipping-store.
 import { ClaudeCodeAdapter, CodexAdapter, EchoAdapter } from "./adapters.js";
 import { OpenCodeAdapter } from "./opencode-adapter.js";
 import { CursorAdapter } from "./cursor-adapter.js";
+import { BrowserReadAdapter } from "./browser-read-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
@@ -33,6 +34,8 @@ const cursor = new CursorAdapter();
 if (cursor.capability()) adapters.set("cursor", cursor);
 const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode, openCode, cursor);
 if (capabilityVerification.capability()) adapters.set("capability-verify", capabilityVerification);
+const browserRead = new BrowserReadAdapter();
+if (browserRead.capability()) adapters.set("browser-read", browserRead);
 
 let ws; let heartbeat; let reconnectTimer; let reconnectAttempt = 0; let shuttingDown = false;
 console.log(`[daemon] machine id ${machineId}`);

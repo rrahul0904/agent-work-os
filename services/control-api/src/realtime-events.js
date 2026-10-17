@@ -39,6 +39,44 @@ export function createOpaqueCursorCodec(secret) {
   };
 }
 
+export async function persistRealtimeEvent(pool, event, {
+  eventKey = crypto.randomUUID(),
+  originId = `external-${crypto.randomUUID()}`,
+} = {}) {
+  if (!pool || typeof pool.connect !== "function") throw new TypeError("pool must implement connect()");
+  if (!event || typeof event !== "object" || Array.isArray(event)) throw new TypeError("event must be an object");
+  if (typeof eventKey !== "string" || !eventKey) throw new TypeError("eventKey must be a non-empty string");
+  if (typeof originId !== "string" || !originId) throw new TypeError("originId must be a non-empty string");
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("SELECT pg_advisory_xact_lock(hashtext($1)::bigint)", [WRITE_LOCK]);
+    const inserted = await client.query(
+      `INSERT INTO agent_work_os_realtime_events_v1 (event_key, origin_id, event)
+       VALUES ($1, $2, $3::jsonb)
+       ON CONFLICT (event_key) DO NOTHING
+       RETURNING event_id`,
+      [eventKey, originId, JSON.stringify(event)]
+    );
+    if (inserted.rows[0]) {
+      await client.query("SELECT pg_notify($1, $2)", [CHANNEL, String(inserted.rows[0].event_id)]);
+      await client.query("COMMIT");
+      return { eventId: Number(inserted.rows[0].event_id), eventKey, inserted: true };
+    }
+    const existing = await client.query(
+      "SELECT event_id FROM agent_work_os_realtime_events_v1 WHERE event_key = $1",
+      [eventKey]
+    );
+    await client.query("COMMIT");
+    return { eventId: existing.rows[0] ? Number(existing.rows[0].event_id) : null, eventKey, inserted: false };
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export class PostgresEventFanout {
   constructor(pool, onEvent, {
     onError = console.warn,
@@ -166,8 +204,6 @@ export class PostgresEventFanout {
     this.retryTimer = null;
     if (this.retentionTimer) clearInterval(this.retentionTimer);
     this.retentionTimer = null;
-    // The API stops accepting work before this is called. Keep retrying queued
-    // events until they are persisted, then release the listener connection.
     const deadline = Date.now() + this.shutdownDrainTimeoutMs;
     while (this.publishQueue.length && Date.now() < deadline) {
       if (this.publishRetryTimer) {
@@ -264,13 +300,8 @@ export class PostgresEventFanout {
       client.on("error", (error) => this.#listenerFailed(client, error));
       await client.query(`LISTEN ${CHANNEL}`);
       this.listener = client;
-      if (this.lastEventId === null) {
-        // Clients cannot be connected until start() returns, so begin at the
-        // sequence high-water mark and only deliver events committed later.
-        this.lastEventId = await this.#sequenceHighWater();
-      } else {
-        await this.#drain();
-      }
+      if (this.lastEventId === null) this.lastEventId = await this.#sequenceHighWater();
+      else await this.#drain();
       this.ready = Boolean(!this.publishQueue.length);
     } catch (error) {
       if (client === this.listener) this.listener = null;
@@ -323,8 +354,6 @@ export class PostgresEventFanout {
           this.onGap();
           break;
         }
-        // Retention may remove the entire table. The sequence retains evidence
-        // that event IDs existed, even when no rows remain to expose the gap.
         if (!result.rows.length) {
           if (this.lastEventId < sequenceHighWater) {
             this.lastEventId = sequenceHighWater;
