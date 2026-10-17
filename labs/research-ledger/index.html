@@ -55,9 +55,10 @@
   </div>
   <dialog id="sourceDialog"><form method="dialog"><h3 id="dialogTitle">Add source</h3><p id="dialogHelp">Add a URL or paste source material. Nothing is captured until you confirm.</p><input id="sourceTitle" placeholder="Source title (optional)"/><input id="sourceUrl" placeholder="https://…"/><textarea id="sourceText" placeholder="Paste text, notes, an AI chat, or an REA evidence bundle"></textarea><div class="dialog-actions"><button value="cancel">Cancel</button><button value="default" id="confirmSource" class="primary">Add source</button></div></form></dialog>
   <dialog id="passageDialog"><form method="dialog"><div class="passage-dialog-head"><div><span class="eyebrow" id="passageId">PASSAGE</span><h3 id="passageTitle">Source passage</h3></div><button value="cancel" class="icon-close" aria-label="Close">×</button></div><pre id="passageText"></pre><div class="dialog-actions"><button value="cancel">Close</button></div></form></dialog>
-  <script type="module" src="/db-schema.js"></script>
-  <script type="module" src="/app.js"></script>
+  <script src="/db-schema.js"></script>
+  <script src="/app.js"></script>
   <script type="module" src="/completion.js"></script>
   <script type="module" src="/semantic-search.js"></script>
+  <script src="/hybrid-brief.js"></script>
 </body>
 </html>
