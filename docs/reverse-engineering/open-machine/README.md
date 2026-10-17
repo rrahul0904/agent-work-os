@@ -1,178 +1,260 @@
-# REA Intake — Open Machine local-machine MCP provider
+# REA Intake — Open Machine → Agent Work OS local-machine provider
 
-Status: implementation active on `rea/open-machine-local-mcp`  
-Canonical tracker: https://github.com/rrahul0904/agent-work-os/issues/265
+Status: **implementation active** on `rea/open-machine-local-mcp`  
+Tracker: https://github.com/rrahul0904/agent-work-os/issues/265  
+Implementation PR: https://github.com/rrahul0904/agent-work-os/pull/268
 
-## Source provenance
+## 0. Repository classification
+
+**DONOR / PROVIDER → `rrahul0904/agent-work-os`**.
+
+Do not create a standalone Open Machine clone. Agent Work OS already owns machine identity, sessions, durable command routing, coding-agent adapters, receipts, capability verification, replay/shipping and policy. The missing owned capability is a governed local-machine provider that can be exposed through MCP without turning MCP into the authority.
+
+## 1. Source provenance
 
 - Intake: https://www.reddit.com/r/ChatGPT/s/fVIaj6sUiw
-- Upstream repository: https://github.com/OpenMachineLabs/openmachine
-- Upstream inspected commit: `9c65109767b29db3ec434ab35a765835ab2af98e`
+- Upstream: https://github.com/OpenMachineLabs/openmachine
+- Upstream inspected `main`: `9c65109767b29db3ec434ab35a765835ab2af98e`
 - Upstream license observed during intake: MIT
-- Classification: **donor/provider**, not a standalone owned clone
+- Implementation method: clean-room; source used as observable product/capability/architecture evidence, not copied implementation code.
 
-This implementation is clean-room. Upstream is used as observable evidence for product behavior, capability boundaries, and architectural patterns. Agent Work OS code and contracts are independently implemented.
+## 2. User / problem / JTBD
 
-## Problem / JTBD
+**User:** developer or technical operator using ChatGPT or another MCP-capable agent.
 
-Coding assistants can reason about a project but ordinary chat interfaces often cannot safely act on the developer's machine. The owned capability should let an approved AI client inspect a deliberately granted project, make bounded changes, execute allowed tools, continue durable jobs, and return evidence without turning the entire host into an unrestricted remote shell.
+**Problem:** the agent can reason about code but cannot safely operate the user's actual development machine for file edits, tests and long-running work without either manual copy/paste or overly broad host access.
 
-## Observed product workflow
+**JTBD:** “Let my approved agent inspect and change only the projects I grant, execute only the programs I allow, continue durable work across reconnects, and give me evidence of what happened.”
 
-1. A persistent service runs on the user's computer.
-2. The user chooses what the service may access.
-3. An MCP-capable client connects through a supported remote/private transport.
-4. The client discovers only locally granted tools.
-5. Each request is checked locally against permissions.
-6. Filesystem, process, task, Git/GitHub/SSH, or optional browser work executes locally.
-7. Results are returned to the agent and activity remains observable.
-8. Long-running work can be revisited rather than being tied to one short request.
+## 3. Product workflow
 
-## Capability map
+1. Start Agent Work OS locally.
+2. Configure one or more workspace roots.
+3. Grant an explicit subset of `read`, `write`, `execute`.
+4. Allow specific executables; no wildcard shell authority.
+5. Start the loopback MCP provider.
+6. Connect a supported AI workspace through the supported MCP path / Secure MCP Tunnel.
+7. The client discovers only the tools allowed by the configured grants.
+8. Read files, hash them, perform guarded writes, or run a short command.
+9. For longer work, start a durable task and retain its task ID.
+10. Poll status/output by offset, reconnect without losing the task record, or cancel it.
+11. Later phases route all MCP-originated actions through the canonical evidence/approval ledger and add Git/GitHub/SSH/browser providers.
 
-| Capability | Open Machine evidence | Agent Work OS ownership decision |
+## 4. Capability extraction and ownership
+
+| Capability | Donor evidence | Owned decision |
 | --- | --- | --- |
-| Persistent local service | local service / server modules | Extend existing daemon |
-| Machine identity | environment/local-machine surfaces | Existing machine identity remains canonical |
-| Workspace read/write/patch | workspace modules | Owned machine-tool contract + policy |
-| Terminal/process execution | execution modules | Owned bounded executor, no implicit shell |
-| Durable tasks | task store/transitions | Integrate with durable work/session model |
-| Git/worktrees | workspace Git/worktree modules | Provider under Agent Work OS policy |
-| GitHub | GitHub integration modules | Provider; existing governance applies |
-| SSH | SSH integration modules | Provider with host allowlist + secret isolation |
-| Browser tasks | optional integration | High-risk optional provider |
-| Skills | skills feature | Capability Fabric / Harness Fabric integration |
-| MCP | MCP modules/contracts | Transport surface only; not authority |
-| Resilience/contracts | extensive contract/resilience tests | Adopt as acceptance discipline |
+| Persistent local service | local service/server modules | Extend Agent Work OS runtime |
+| Machine identity | environment/local-machine surface | Existing Agent Work OS machine identity |
+| Workspace inspect/read/write | workspace modules | Owned machine policy + tools |
+| Process execution | execution modules | Owned argv executor, never implicit shell |
+| Durable tasks | task store/transitions | Owned detached task runner + persisted records |
+| Git/worktrees | Git/worktree modules | Next provider behind existing gates |
+| GitHub | GitHub integration | Reuse canonical GitHub governance |
+| SSH | SSH integration | Future host-allowlisted provider |
+| Browser/computer use | optional integration | Future high-risk provider with explicit grant |
+| Skills | skills surface | Capability Fabric / Harness Fabric |
+| MCP | MCP modules/contracts | Transport/provider only, not authority |
+| Resilience/contracts | contract/resilience tests | Adopt as acceptance discipline |
 
-## Owned architecture
+## 5. Owned architecture
 
 ```text
-ChatGPT / MCP client
-        |
-        | supported MCP transport / Secure MCP Tunnel
-        v
-MCP provider adapter
-        |
-        v
-Agent Work OS authority
-  identity • grants • approvals • work/session • audit
-        |
-        v
-Durable command routing / receipts / replay
-        |
-        v
-Local daemon
-        |
-        +-- workspace tools
-        +-- bounded execution
-        +-- durable tasks
-        +-- Git / GitHub / SSH providers
-        `-- optional browser/computer-use provider
+ChatGPT / MCP-capable client
+          |
+          | supported MCP transport / Secure MCP Tunnel
+          v
+Loopback MCP provider
+  tool discovery follows grants
+          |
+          v
+Agent Work OS machine policy
+  roots • read/write/execute • executable allowlist
+          |
+          +----------------------+----------------------+
+          |                      |                      |
+          v                      v                      v
+ workspace tools          short execution       durable task manager
+ list/read/write          argv + bounds         persisted task handle
+ hash/precondition        shell:false            start/status/output/cancel
+          |                      |                      |
+          +----------------------+----------------------+
+                                 |
+                                 v
+                     receipts / evidence / replay
+                         (canonicalization next)
 ```
 
-MCP is deliberately a transport adapter. The local daemon and Agent Work OS policy are the trust boundary.
+Agent Work OS remains the authority for identity, grants, approvals, work/session state, evidence and shipping. MCP is a client-facing adapter.
 
-## Security model
+## 6. Security / permissions
 
-The implementation starts **disabled** unless explicit machine grants are configured.
+The machine provider is **disabled by default** until roots and grants are configured.
 
-Environment contract:
+Configuration:
 
-- `AGENT_WORK_OS_WORKSPACE_ROOTS`: OS path-delimiter-separated workspace roots.
-- `AGENT_WORK_OS_MACHINE_PERMISSIONS`: comma-separated `read`, `write`, `execute` grants.
-- `AGENT_WORK_OS_EXEC_ALLOW`: comma-separated executable names or absolute executable paths.
-- `AGENT_WORK_OS_MCP_HOST`: loopback host by default (`127.0.0.1`).
-- `AGENT_WORK_OS_MCP_PORT`: local MCP port (`8790` by default).
-- `AGENT_WORK_OS_MCP_TOKEN`: optional local bearer check when direct/local transport requires it.
+- `AGENT_WORK_OS_WORKSPACE_ROOTS` — OS-delimited canonical workspace roots.
+- `AGENT_WORK_OS_MACHINE_PERMISSIONS` — comma-separated subset of `read,write,execute`.
+- `AGENT_WORK_OS_EXEC_ALLOW` — explicit executable names or absolute executable paths; no wildcard.
+- `AGENT_WORK_OS_MACHINE_TASKS_STATE` — local durable task state directory.
+- `AGENT_WORK_OS_MACHINE_TASK_MAX_MS` — maximum durable-task runtime.
+- `AGENT_WORK_OS_MACHINE_TASK_LOG_BYTES` — per-stream durable log cap.
+- `AGENT_WORK_OS_MCP_HOST` — enforced loopback host only.
+- `AGENT_WORK_OS_MCP_PORT` — local MCP port.
+- `AGENT_WORK_OS_MCP_TOKEN` — optional additional direct/local bearer check.
 
-Rules:
+Security invariants:
 
-1. Workspace roots are canonicalized with `realpath`.
-2. Requested paths are canonicalized through their nearest existing ancestor, preventing traversal through symlinked directories.
-3. Read/write/execute grants are independent and ungranted MCP tools are not registered.
-4. No wildcard command execution exists in the initial contract.
-5. Process spawning uses argv and `shell: false`.
-6. Agent Work OS machine/auth tokens are removed from child process environments.
-7. File reads/writes, directory listings, execution time, and captured output are bounded.
-8. Writes are atomic and can require an expected SHA-256 to prevent stale overwrites.
-9. The MCP listener binds to loopback by default and applies Host/Origin validation before dispatch.
-10. Deployment, publishing, destructive Git operations, browser control, and broad network/SSH authority stay behind later explicit policy/approval gates.
+1. Workspace roots are resolved with `realpath`.
+2. Requested paths resolve through their nearest existing ancestor, blocking traversal and symlink escape even for a new file.
+3. Read, write and execute are independent grants.
+4. MCP does not register tools for ungranted capabilities.
+5. Writes are size-bounded, atomic and can require the expected SHA-256 of the current file.
+6. Commands are explicit argv with `shell: false` and an executable allowlist.
+7. Agent Work OS machine/control/MCP credentials are stripped from spawned process environments.
+8. Short-command runtime and captured output are bounded.
+9. Durable tasks have bounded runtime and bounded stdout/stderr journals.
+10. The MCP server refuses non-loopback bind configuration and applies Host/Origin validation.
+11. Public inbound exposure is not required; use the supported secure tunnel/private transport.
+12. Deploy/publish/merge, broad SSH/network access and browser/computer use remain separately gated.
 
-## Implemented slice
+For production, prefer absolute executable paths rather than relying on `PATH` lookup.
 
-### Machine policy/runtime
+## 7. Implemented now
 
-- `runtime/daemon/src/machine-policy.js`
-  - default-deny grants
-  - canonical workspace roots
-  - symlink-escape protection
-  - executable allowlist
-- `runtime/daemon/src/machine-tools.js`
-  - `info`
-  - bounded `list`
-  - bounded UTF-8 `read` with SHA-256
-  - atomic `write` with optional expected-SHA optimistic concurrency
-  - bounded argv `run`
-- daemon command routing
-  - `machine.info`
-  - `machine.workspace.list`
-  - `machine.workspace.read`
-  - `machine.execution.run`
-  - structured command results are included in daemon command receipts/acks
+### Workspace / execution policy
+
+`runtime/daemon/src/machine-policy.js`
+
+- default deny
+- canonical workspace roots
+- `read` / `write` / `execute` grants
+- symlink escape protection
+- explicit executable allowlist
+
+### Local machine tools
+
+`runtime/daemon/src/machine-tools.js`
+
+- `info`
+- bounded `list`
+- bounded UTF-8 `read` + SHA-256
+- atomic `write` + optional `expectedSha256`
+- bounded `run` with `shell:false`
+
+### Durable execution
+
+`runtime/daemon/src/machine-tasks.js`  
+`runtime/daemon/src/machine-task-runner.js`
+
+- `start`
+- `status`
+- `output` with resumable byte offset
+- `cancel`
+- `list`
+- detached runner process independent of the main daemon/client connection
+- local JSON lifecycle record + bounded stdout/stderr journals
+- timeout + SIGTERM then forced termination fallback
+- runner revalidates workspace and executable policy before spawning the actual process
+
+### Existing daemon integration
+
+`runtime/daemon/src/index.js`
+
+- advertises `machine-tools` only when configured
+- `machine.info`
+- `machine.workspace.list`
+- `machine.workspace.read`
+- `machine.execution.run`
+- structured command result in command receipt/ack
+
+The MCP path additionally exposes write and durable-task lifecycle. Canonical daemon/control-plane routing for those newer actions is a follow-up so both surfaces share one persisted evidence path.
 
 ### MCP provider
 
-- `runtime/mcp/src/index.js`
-  - official MCP v2 server/runtime packages
-  - current Streamable HTTP server shape
-  - `system_info`
-  - conditional `workspace_list` / `workspace_read`
-  - conditional `workspace_write`
-  - conditional `execution_run`
-  - tool discovery follows configured grants
-  - loopback bind + Host/Origin validation
-  - optional bearer check
-- `npm run start:mcp`
+`runtime/mcp/src/index.js`
 
-### Verification
+- official current MCP v2 packages
+- Streamable HTTP `/mcp`
+- loopback-only bind
+- Host/Origin validation
+- optional bearer check
+- `system_info`
+- conditional `workspace_list`
+- conditional `workspace_read`
+- conditional `workspace_write`
+- conditional `execution_run`
+- conditional `execution_start`
+- conditional `execution_status`
+- conditional `execution_output`
+- conditional `execution_cancel`
+- conditional `execution_list`
 
-`runtime/daemon/test/machine-policy.test.js` covers:
+## 8. Verification
+
+Unit coverage already implemented:
 
 - deny-by-default
 - root confinement
 - symlink escape rejection
-- command allowlisting
-- read/list/exec happy paths
-- expected-SHA optimistic write concurrency
+- executable allowlisting
+- read/list/foreground-exec
+- expected-SHA stale-write rejection
+- durable task completion/output recovery through a fresh task-manager instance
+- durable task cancellation through the persisted runner handle
 
-Local clean-room validation at implementation time: **6 tests, 6 passed**. Repository CI also syntax-checks the MCP entry point before the existing test suite.
+The repository PR triggers the existing GitHub Actions gate: dependency install → full `npm test` → full acceptance suite. Earlier local clean-room policy/tool validation passed 6/6 before the durable-task additions; the PR CI is the authoritative integration gate for the expanded slice.
 
-## Current run path
+## 9. Current local run path
 
-Example least-privilege local setup on macOS/Linux:
+Example least-privilege development setup on macOS/Linux:
 
 ```bash
 export AGENT_WORK_OS_WORKSPACE_ROOTS="$PWD"
 export AGENT_WORK_OS_MACHINE_PERMISSIONS="read,write,execute"
-export AGENT_WORK_OS_EXEC_ALLOW="node,npm,git"
+export AGENT_WORK_OS_EXEC_ALLOW="$(command -v node),$(command -v npm),$(command -v git)"
 npm install
 npm run start:mcp
 ```
 
-The local MCP endpoint is `http://127.0.0.1:8790/mcp`. Keep it loopback-bound. For supported ChatGPT workspaces, connect the local endpoint through OpenAI Secure MCP Tunnel rather than publishing the port to the internet.
+Local endpoint: `http://127.0.0.1:8790/mcp`.
 
-## Remaining slices
+Do not publish that port to the Internet. Connect supported ChatGPT workspaces through OpenAI Secure MCP Tunnel or the supported private connection mechanism.
 
-1. Persist MCP-originated calls into the same Agent Work OS receipt/event ledger as routed daemon commands.
-2. Add durable execution handles: `start/status/output/cancel/list` across daemon restart.
-3. Add patch/diff tools and Git worktree receipts.
-4. Add per-client access profiles, approval levels, token rotation, and activity UI.
-5. Add governed GitHub and SSH providers.
-6. Add optional browser/computer-use provider behind explicit high-risk grants.
-7. Package/install/update/doctor and verify on macOS, Windows, and Linux.
-8. Add MCP protocol/compatibility and tunnel acceptance tests against supported ChatGPT environments.
+## 10. Remaining roadmap
 
-## Non-goal: quota circumvention
+### P1 — unify evidence and authority
 
-The Reddit headline discusses usage limits, but the post itself states that Open Machine does not bypass rate limits, extend quotas, or unlock subscription features. Agent Work OS preserves that boundary: this capability is a governed local-machine tool provider, not a mechanism for avoiding provider limits or protective measures.
+- route MCP calls into the same persisted Agent Work OS command/evidence ledger
+- add immutable action receipts with input/output digests and exact workspace state
+- add approval tiers for write/execute/high-risk actions
+- add replay/idempotency tests across control-plane and daemon restart
+
+### P2 — coding workflow
+
+- patch/diff tool with expected-base hash
+- Git status/diff/commit/worktree provider
+- branch/commit receipts and exact-SHA verification
+- governed GitHub PR/issue provider through existing GitHub integration
+
+### P3 — extended machine integrations
+
+- SSH provider with host allowlist, credential isolation and no secret echo
+- optional browser/computer-use provider behind explicit high-risk grant
+- capability/skill compilation through Agent Work OS Capability Fabric
+
+### P4 — productization
+
+- install/update/doctor
+- management UI for roots, grants, executable allowlist, running tasks, approvals and activity
+- macOS/Windows/Linux packaging and acceptance matrix
+- Secure MCP Tunnel acceptance test against a supported ChatGPT workspace
+- fault-injection/resilience suite for disconnect, daemon restart, runner crash, stale write and partial output
+
+## 11. Acceptance target
+
+A supported ChatGPT workspace can connect through the secure MCP path, discover only granted tools, inspect an explicitly granted project, read/hash a file, perform an expected-hash guarded write, run an allowlisted test, start and recover a durable task, receive bounded output and evidence, and be unable to read outside the root or execute an unapproved program.
+
+## 12. Non-goal: quota circumvention
+
+The Reddit headline discusses usage limits, but the source post itself says Open Machine does not bypass rate limits, extend provider quotas or unlock subscription features. Agent Work OS preserves that boundary. This feature is a governed local-machine provider, not a mechanism for avoiding provider usage limits or other protective measures.
