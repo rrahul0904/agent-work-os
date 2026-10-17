@@ -24,7 +24,7 @@ assert.deepEqual(new Set(fused[0].sources), new Set(['lexical', 'semantic']));
 assert.ok(fused.find(item => item.id === 'A').score > fused.find(item => item.id === 'C').score, 'cross-ranking evidence should beat one-list-only evidence');
 
 assert.match(html, /<script src="\/db-schema\.js"><\/script>/, 'schema shim must execute as a classic script');
-assert.match(html, /<script src="\/app\.js"><\/script>/, 'app must execute as a classic script so the bounded hybrid bridge can reuse existing state/render functions');
+assert.match(html, /<script src="\/app\.js"><\/script>/, 'app must execute as a classic script so the bounded experimental bridge can reuse existing state/render functions');
 assert.match(html, /<script type="module" src="\/semantic-search\.js"><\/script>/);
 assert.match(html, /<script src="\/hybrid-brief\.js"><\/script>/);
 assert.ok(html.indexOf('src="/db-schema.js"') < html.indexOf('src="/app.js"'));
@@ -34,16 +34,19 @@ assert.match(app, /const state =/);
 assert.match(app, /function retrieve\(/);
 assert.match(app, /function localBrief\(/);
 assert.match(app, /function renderBrief\(/);
-assert.match(semantic, /window\.ResearchLedgerSemantic = Object\.freeze\(\{ hybridRetrieve \}\)/);
+assert.match(semantic, /window\.ResearchLedgerSemantic = Object\.freeze\(\{ semanticRetrieve, hybridRetrieve \}\)/);
 assert.match(semantic, /reciprocalRankFusion\(/);
 assert.match(semantic, /<option value="lexical">Lexical · default<\/option>/);
+assert.match(semantic, /<option value="semantic">Semantic · experimental<\/option>/);
 assert.match(semantic, /<option value="hybrid">Hybrid RRF · experimental<\/option>/);
-assert.match(hybrid, /window\.ResearchLedgerSemantic/);
+assert.match(hybrid, /bridge\.semanticRetrieve\(question, 10\)/);
 assert.match(hybrid, /bridge\.hybridRetrieve\(question, lexical, 10\)/);
+assert.match(hybrid, /mode: 'semantic-e5'/);
 assert.match(hybrid, /mode: 'hybrid-rrf'/);
 assert.match(hybrid, /mode: 'lexical-fallback'/);
+assert.match(hybrid, /requestedMode/);
 assert.match(hybrid, /originalCreateBrief\?\.call/, 'lexical mode must delegate back to the original app path');
-assert.match(hybrid, /event\.stopImmediatePropagation\(\)/, 'hybrid keyboard shortcut must prevent the original lexical handler from also firing');
+assert.match(hybrid, /event\.stopImmediatePropagation\(\)/, 'experimental keyboard shortcut must prevent the original lexical handler from also firing');
 assert.match(runtime, /'hybrid-brief\.js'/);
 
 // Prove the browser-language seam used by the bridge: global lexical declarations in
@@ -51,7 +54,7 @@ assert.match(runtime, /'hybrid-brief\.js'/);
 // attached as object properties.
 const classicContext = vm.createContext({ globalThis: {} });
 vm.runInContext('const state={mode:"answer"}; function retrieve(){return state.mode;} function renderBrief(v){state.value=v;}', classicContext);
-vm.runInContext('state.mode="hybrid"; renderBrief(retrieve()); globalThis.result=state.value;', classicContext);
-assert.equal(classicContext.globalThis.result, 'hybrid');
+vm.runInContext('state.mode="semantic"; renderBrief(retrieve()); globalThis.result=state.value;', classicContext);
+assert.equal(classicContext.globalThis.result, 'semantic');
 
-console.log('research-ledger hybrid brief retrieval contract passed');
+console.log('research-ledger semantic/hybrid brief retrieval contract passed');
