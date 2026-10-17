@@ -190,7 +190,7 @@ test("cross-company events and secret-shaped persisted material fail closed", ()
       createdAt: "2026-10-17T04:45:00Z"
     },
     budgetPolicyRef: "sk-123456789012345678901234"
-  }), /secret_material_forbidden/);
+  }), (error) => error instanceof CompanyValidationError && error.code === "secret_material_forbidden");
 });
 
 test("event replay rebuilds the exact deterministic company snapshot", () => {
@@ -257,7 +257,7 @@ test("open blockers prevent certification even when evidence exists", () => {
       category: "verification_failed",
       status: "open",
       reason: "Browser acceptance failed.",
-      evidenceRefs: ["fixture:browser_uat"],
+      evidenceRefs: ["fixture_browser_uat"],
       requiresHuman: false,
       firstObservedAt: "2026-10-17T04:55:00Z"
     }
