@@ -13,7 +13,7 @@ async function authorize({ principal, identities, organizationId, mutate = false
 }
 
 function route(pathname) {
-  const match = pathname.match(/^\/api\/work-items\/([^/]+)\/source-intake(?:\/(block|resume))?$/);
+  const match = pathname.match(/^\/api\/work-items\/([^/]+)\/source-intake(?:\/(block|resume|observe))?$/);
   if (!match) return null;
   return { workItemId: decodeURIComponent(match[1]), action: match[2] ?? 'inspect' };
 }
@@ -26,6 +26,7 @@ export async function handleSourceIntakeRequest({
   identities,
   workItems,
   sourceIntakeSupervisor,
+  sourceIntakeBrowserObserver = null,
   readJson,
   json,
   broadcast = () => {},
@@ -44,11 +45,13 @@ export async function handleSourceIntakeRequest({
     return true;
   }
 
-  if (req.method === 'POST' && ['block', 'resume'].includes(matched.action)) {
+  if (req.method === 'POST' && ['block', 'resume', 'observe'].includes(matched.action)) {
     const body = await readJson(req);
     const required = matched.action === 'block'
       ? ['organizationId', 'commandId', 'expectedVersion', 'transition', 'accessRequest']
-      : ['organizationId', 'commandId', 'expectedVersion', 'accessObservation', 'verificationRunId'];
+      : matched.action === 'resume'
+        ? ['organizationId', 'commandId', 'expectedVersion', 'accessObservation', 'verificationRunId']
+        : ['organizationId', 'expectedVersion', 'verificationRunId', 'machineId'];
     const missing = requireBodyFields(body, required);
     if (missing.length) {
       json(res, 400, { error: 'source_intake_fields_required', fields: missing });
@@ -68,6 +71,25 @@ export async function handleSourceIntakeRequest({
     }
 
     const actorId = principal.userId;
+    if (matched.action === 'observe') {
+      if (!sourceIntakeBrowserObserver || typeof sourceIntakeBrowserObserver.launch !== 'function') {
+        json(res, 503, { error: 'source_intake_browser_observer_unavailable' });
+        return true;
+      }
+      const result = await sourceIntakeBrowserObserver.launch({
+        organizationId: body.organizationId,
+        workItemId: item.id,
+        expectedVersion: body.expectedVersion,
+        verificationRunId: body.verificationRunId,
+        machineId: body.machineId,
+        actorId,
+        ...(typeof body.cwd === 'string' && body.cwd ? { cwd: body.cwd } : {}),
+      });
+      if (!result.replayed) broadcast({ type: 'session.created', session: result.session });
+      json(res, result.replayed ? 200 : 202, result);
+      return true;
+    }
+
     const common = {
       workItem: item,
       organizationId: body.organizationId,
