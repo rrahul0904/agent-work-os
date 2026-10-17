@@ -18,7 +18,10 @@ const staticFiles = new Set([
   'semantic-core.js',
   'semantic-worker.js',
   'semantic-search.js',
-  'hybrid-brief.js'
+  'hybrid-brief.js',
+  'retrieval-benchmark.html',
+  'retrieval-benchmark-core.js',
+  'retrieval-benchmark.js'
 ]);
 const mime = {
   '.html': 'text/html; charset=utf-8',
@@ -41,7 +44,7 @@ function send(res, status, payload, type = 'application/json; charset=utf-8') {
 async function readJson(req) {
   let total = 0;
   const chunks = [];
-  for await (const chunk of req) {
+  for await(const chunk of req) {
     total += chunk.length;
     if (total > maxBody) throw Object.assign(new Error('Request body too large'), { status: 413 });
     chunks.push(chunk);
