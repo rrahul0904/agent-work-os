@@ -1,4 +1,5 @@
 import { CapabilityRegistry } from '../../../packages/capability-fabric/src/index.js';
+import { createSourceIntakeBrowserObserver } from './source-intake-browser-observer.js';
 import { createSourceIntakeSupervisor } from './source-intake-supervisor.js';
 import {
   assertSourceAccessProviderMachineAdvertisement,
@@ -17,6 +18,25 @@ async function snapshotRegistry(repository, organizationId) {
   return registry;
 }
 
+function supportsBrowserObservationStore(store) {
+  return store
+    && ['createSessionWithCommand', 'listSessionsByOrganization', 'listSessions', 'getMachine', 'getSession']
+      .every((method) => typeof store[method] === 'function');
+}
+
+function scheduleRestartReconciliation(observer, attempt = 0) {
+  const delay = Math.min(5_000, 100 * (2 ** attempt));
+  const timer = setTimeout(async () => {
+    try {
+      await observer.reconcileAll();
+    } catch (error) {
+      if (attempt < 5) scheduleRestartReconciliation(observer, attempt + 1);
+      else console.warn('[source-intake] restart reconciliation failed', error.message);
+    }
+  }, delay);
+  timer.unref?.();
+}
+
 export function createTenantSourceIntakeSupervisor({
   workItems,
   capabilityRegistryRepository,
@@ -32,7 +52,7 @@ export function createTenantSourceIntakeSupervisor({
     return action(supervisor);
   };
 
-  return Object.freeze({
+  const api = {
     block(args) {
       return withSupervisor(args.organizationId, (supervisor) => supervisor.block(args));
     },
@@ -59,5 +79,35 @@ export function createTenantSourceIntakeSupervisor({
         capabilityVerificationReceipt: run.receipt,
       }));
     },
-  });
+  };
+
+  const sessionStore = capabilityVerificationRepository.store;
+  let browserObserver = null;
+  if (supportsBrowserObservationStore(sessionStore)
+      && typeof workItems.get === 'function'
+      && typeof capabilityRegistryRepository.resolve === 'function') {
+    browserObserver = createSourceIntakeBrowserObserver({
+      store: sessionStore,
+      workItems,
+      capabilityRegistryRepository,
+      capabilityVerificationRepository,
+      tenantSourceIntakeSupervisor: api,
+    });
+    if (typeof capabilityVerificationRepository.registerSessionEventConsumer === 'function') {
+      capabilityVerificationRepository.registerSessionEventConsumer(async ({ sessionId, event }) => {
+        const session = await sessionStore.getSession(sessionId);
+        if (!session) return null;
+        return browserObserver.handleSessionEvent({ session, event });
+      });
+    }
+    scheduleRestartReconciliation(browserObserver);
+  }
+
+  api.observe = (args) => {
+    if (!browserObserver) throw new Error('source intake browser observer is unavailable');
+    return browserObserver.launch(args);
+  };
+  api.reconcileBrowserObservations = () => browserObserver?.reconcileAll() ?? Promise.resolve([]);
+
+  return Object.freeze(api);
 }
