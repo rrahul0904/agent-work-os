@@ -83,6 +83,19 @@ test('first-party browser-read advertises only when an enabled browser executabl
   assert.deepEqual(capability.observationContracts, ['source-access-observation/v1']);
 });
 
+test('first-party browser-read accepts an explicit absolute browser executable outside PATH discovery', () => {
+  const adapter = new BrowserReadAdapter({
+    command: '',
+    firstPartyEnabled: true,
+    browserCommand: process.execPath,
+    browserFound: undefined,
+  });
+  const capability = adapter.capability();
+  assert.equal(capability.observerKind, 'agent-work-os-chromium');
+  assert.equal(capability.browserExecutable, process.execPath);
+  assert.ok(typeof capability.browserVersion === 'string' || capability.browserVersion === undefined);
+});
+
 test('first-party provider request rejects non-Reddit and malformed inputs', () => {
   assert.equal(parseBrowserReadProviderRequest(providerRequest()).requestedUrl, shareUrl);
   assert.throws(() => parseBrowserReadProviderRequest(providerRequest({ contractVersion: 'wrong' })), /must use/);
