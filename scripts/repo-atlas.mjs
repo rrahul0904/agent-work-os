@@ -12,6 +12,7 @@ import { analyzeModuleResolution } from "../packages/repo-intelligence/src/modul
 import { analyzeRepositoryImpact } from "../packages/repo-intelligence/src/impact.js";
 import { analyzeSemanticRepositoryImpact } from "../packages/repo-intelligence/src/impact-v2.js";
 import { createRepositoryEvidenceBundle } from "../packages/repo-intelligence/src/evidence.js";
+import { createRepositoryEvidenceBundleV2 } from "../packages/repo-intelligence/src/evidence-v2.js";
 import { diffRepositoryMaps } from "../packages/repo-intelligence/src/diff.js";
 import { renderRepoAtlasHtml } from "../packages/repo-intelligence/src/report.js";
 
@@ -137,12 +138,50 @@ try {
       gitSignals,
       importAnalysis,
       impact,
-      provenance: {
-        repository: getFlag(flags, "--repository=") ?? undefined,
-        ref: getFlag(flags, "--ref=") ?? undefined,
-        commit: getFlag(flags, "--commit=") ?? undefined,
-        source: getFlag(flags, "--source=") ?? "local-checkout"
-      }
+      provenance: provenanceFromFlags(flags)
+    });
+    await emit(result, getFlag(flags, "--output="));
+  } else if (command === "semantic-bundle") {
+    const map = await scanRepository(repoArg);
+    const topology = await analyzeRepositoryTopology(repoArg, map);
+    const risk = analyzeStructuralRisk(map, topology, { topN: parseIntegerFlag(flags, "--top=", 25) });
+    const task = getFlag(flags, "--task=");
+    const context = task
+      ? selectRepositoryContext(map, {
+          task,
+          maxFiles: parseIntegerFlag(flags, "--max-files=", 24),
+          maxEstimatedTokens: parseIntegerFlag(flags, "--max-tokens=", 24_000)
+        })
+      : null;
+    const previousMapPath = getFlag(flags, "--previous-map=");
+    const diff = previousMapPath ? diffRepositoryMaps(await readJson(previousMapPath), map) : null;
+    const gitSignals = hasFlag(flags, "--include-git")
+      ? await analyzeGitSignals(repoArg, map, { maxCommits: parseIntegerFlag(flags, "--git-max-commits=", 500) })
+      : null;
+    const importAnalysis = await analyzeRepositoryImports(repoArg, map);
+    const moduleResolution = await analyzeModuleResolution(repoArg, map, importAnalysis);
+    const semanticImpact = diff
+      ? analyzeSemanticRepositoryImpact({
+          repoMap: map,
+          importAnalysis,
+          moduleResolution,
+          diff,
+          topology,
+          gitSignals,
+          maxDepth: parseIntegerFlag(flags, "--max-depth=", 5)
+        })
+      : null;
+    const result = createRepositoryEvidenceBundleV2({
+      repoMap: map,
+      topology,
+      risk,
+      context,
+      diff,
+      gitSignals,
+      importAnalysis,
+      moduleResolution,
+      semanticImpact,
+      provenance: provenanceFromFlags(flags)
     });
     await emit(result, getFlag(flags, "--output="));
   } else if (command === "report") {
@@ -199,7 +238,8 @@ try {
       "  npm run repo:atlas -- context <repo-path> --task=<objective> [--max-files=24] [--max-tokens=24000] [--output=<file>]\n" +
       "  npm run repo:atlas -- risk <repo-path> [--top=25] [--output=<file>]\n" +
       "  npm run repo:atlas -- git <repo-path> [--max-commits=500] [--output=<file>]\n" +
-      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--git-max-commits=500] [--repository=<owner/name>] [--ref=<ref>] [--commit=<sha>] [--source=<kind>] [--output=<file>]\n" +
+      "  npm run repo:atlas -- bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--git-max-commits=500] [provenance flags] [--output=<file>]\n" +
+      "  npm run repo:atlas -- semantic-bundle <repo-path> [--task=<objective>] [--previous-map=<repo-map.json>] [--include-git] [--max-depth=5] [--git-max-commits=500] [provenance flags] [--output=<file>]\n" +
       "  npm run repo:atlas -- report <repo-path> [--previous-map=<repo-map.json>] [--include-git] [--include-imports] [--include-impact] [--max-depth=5] [--git-max-commits=500] [--top=25] [--title=<text>] [--output=<file.html>]\n" +
       "  npm run repo:atlas -- diff <previous-map.json> <current-map.json> [--output=<file>]\n"
     );
@@ -240,6 +280,15 @@ async function emitHtml(html, outputPath, repositoryDigest) {
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, html, "utf8");
   process.stdout.write(`${JSON.stringify({ ok: true, output: target, schemaVersion: "repo-report/v1", repositoryDigest })}\n`);
+}
+
+function provenanceFromFlags(flags) {
+  return {
+    repository: getFlag(flags, "--repository=") ?? undefined,
+    ref: getFlag(flags, "--ref=") ?? undefined,
+    commit: getFlag(flags, "--commit=") ?? undefined,
+    source: getFlag(flags, "--source=") ?? "local-checkout"
+  };
 }
 
 function getFlag(flags, prefix) {
