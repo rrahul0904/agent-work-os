@@ -95,10 +95,21 @@ export class BrowserReadAdapter {
 
     let stdout = '';
     let stderr = '';
+    let streamError = null;
     let timer;
+    const collect = (stream, label, limit) => (chunk) => {
+      if (streamError) return;
+      try {
+        if (stream === 'stdout') stdout = boundedAppend(stdout, chunk, limit, label);
+        else stderr = boundedAppend(stderr, chunk, limit, label);
+      } catch (error) {
+        streamError = error;
+        child.kill('SIGTERM');
+      }
+    };
     try {
-      child.stdout.on('data', (chunk) => { stdout = boundedAppend(stdout, chunk, MAX_STDOUT_BYTES, 'browser-read stdout'); });
-      child.stderr.on('data', (chunk) => { stderr = boundedAppend(stderr, chunk, MAX_STDERR_BYTES, 'browser-read stderr'); });
+      child.stdout.on('data', collect('stdout', 'browser-read stdout', MAX_STDOUT_BYTES));
+      child.stderr.on('data', collect('stderr', 'browser-read stderr', MAX_STDERR_BYTES));
       child.stdin.end(JSON.stringify({
         contractVersion: PROVIDER_REQUEST_CONTRACT,
         sourceId: accessRequest.sourceId,
@@ -113,6 +124,7 @@ export class BrowserReadAdapter {
         child.once('error', reject);
         child.once('close', (code, signal) => resolve({ code, signal }));
       });
+      if (streamError) throw streamError;
       if (exit.code !== 0) throw new Error(`browser-read provider failed (${exit.code ?? exit.signal ?? 'unknown'}): ${stderr.trim().slice(0, 1000)}`);
       const providerResult = parseProviderResult(stdout);
       const observation = createSourceAccessObservation({
