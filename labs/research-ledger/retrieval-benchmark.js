@@ -5,6 +5,7 @@ import {
   BENCHMARK_CASES,
   evaluateRanking,
   aggregateMetrics,
+  aggregateGroupedMetrics,
   lexicalBenchmarkResults,
   hybridBenchmarkResults
 } from './retrieval-benchmark-core.js';
@@ -36,7 +37,7 @@ function ensureWorker() {
   worker.onmessage = event => {
     const message = event.data || {};
     if (message.type === 'model-status') {
-      setStatus(message.state === 'ready' ? 'Pinned semantic model ready.' : 'Loading pinned semantic model…', message.state);
+      setStatus(message.state === 'ready' ? 'Pinned semantic model ready.' : 'Loading pinned multilingual embedding model…', message.state);
       return;
     }
     if (message.type === 'model-progress') {
@@ -163,12 +164,16 @@ async function runBenchmark() {
         semantic: aggregateMetrics(rows, 'semantic'),
         hybrid: aggregateMetrics(rows, 'hybrid')
       },
+      breakdown: {
+        byKind: aggregateGroupedMetrics(rows, 'kind'),
+        byLanguage: aggregateGroupedMetrics(rows, 'language')
+      },
       rows
     };
     window.__researchLedgerBenchmarkReport = report;
     renderSummary(report);
     renderRows(rows);
-    setStatus('Benchmark complete. Review metrics and download the JSON receipt before making retrieval-default decisions.', 'ready');
+    setStatus('Benchmark complete. Review overall and grouped metrics and download the JSON receipt before making retrieval-default decisions.', 'ready');
     download.disabled = false;
     download.onclick = () => downloadReport(report);
   } catch (error) {
