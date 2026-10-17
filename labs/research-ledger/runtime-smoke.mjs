@@ -104,8 +104,9 @@ try {
 
   const benchmarkCore = await fetch(`${base}/retrieval-benchmark-core.js`);
   const benchmarkCoreText = await benchmarkCore.text();
-  assert.match(benchmarkCoreText, /research-ledger\/retrieval-benchmark\.v1/);
+  assert.match(benchmarkCoreText, /research-ledger\/retrieval-benchmark\.v2/);
   assert.match(benchmarkCoreText, /BENCHMARK_CASES/);
+  assert.match(benchmarkCoreText, /aggregateGroupedMetrics/);
 
   const head = await fetch(`${base}/retrieval-benchmark.js`, { method: 'HEAD' });
   assert.equal(head.status, 200);
