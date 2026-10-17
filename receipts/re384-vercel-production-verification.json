@@ -1,0 +1,73 @@
+{
+  "schema_version": "re384/vercel-production-verification/v1",
+  "re_id": "RE-384",
+  "recorded_at": "2026-10-08T04:04:00Z",
+  "product": "Warehouse Refactor Engine",
+  "boundary": "Hosted safe operator surface only; Agent Work OS remains governance/evidence, not the warehouse runtime repository.",
+  "source_artifact": {
+    "name": "refactor-warehouse-phase-a-v3.zip",
+    "sha256": "eb2e0966e0778ee777a1f2155001bf7f1d65e655bd1a748e220788d7fb32570c",
+    "local_verification": {
+      "passed": 47,
+      "skipped_duckdb_native": 4,
+      "failed": 0,
+      "compileall": "pass"
+    }
+  },
+  "vercel": {
+    "team_id": "team_zmEezpOKGZy2sH5nqTfO44LD",
+    "project_id": "prj_S424kl5ZEnadscAt0AlCoNzpH6yq",
+    "project_name": "warehouse-refactor-engine",
+    "deployment_id": "dpl_6pJg1JTGDDsfcK2DnhxdY7R6Hepw",
+    "target": "production",
+    "region": "iad1",
+    "stable_alias": "https://warehouse-refactor-engine.vercel.app",
+    "ready_state": "READY",
+    "alias_error": null,
+    "deployment_protection": {
+      "password": false,
+      "sso": false,
+      "trusted_ips": false
+    },
+    "build_evidence": {
+      "python": "3.12",
+      "dependency_install": "pass",
+      "python_bytecode_compile": "pass",
+      "deployment_completed": true
+    },
+    "runtime_health": {
+      "http_status": 200,
+      "status": "ready",
+      "build": "hosted-v1",
+      "artifact_sha256": "eb2e0966e0778ee777a1f2155001bf7f1d65e655bd1a748e220788d7fb32570c",
+      "duckdb_available": true,
+      "destructive_operations": false,
+      "actions": ["demo", "validate", "plan", "diff"]
+    },
+    "runtime_error_scan": {
+      "window": "1h after release verification",
+      "errors": 0
+    },
+    "deployed_source_tree": [
+      "index.html",
+      "api/index.py",
+      "requirements.txt",
+      "vercel.json"
+    ]
+  },
+  "hosted_behavior_boundary": {
+    "safe_actions": ["demo", "validate", "plan", "diff"],
+    "remote_warehouse_write": false,
+    "delete_endpoint": false,
+    "provider_credentials": false,
+    "sqlbuild_parity_claim": false
+  },
+  "verification_gap": {
+    "hosted_duckdb_import": "verified true by production health endpoint",
+    "hosted_demo_post": "not independently captured by available GET-only Vercel fetch tool",
+    "followup_get_receipt_deploy": "blocked by Vercel Hobby API daily deployment quota after the successful production release",
+    "dedicated_runtime_github_repo": false,
+    "full_v3_exact_git_sha_ci": false
+  },
+  "release_claim": "DEPLOYED PRODUCTION SAFE SURFACE; DUCKDB RUNTIME HEALTH VERIFIED; FULL PHASE-A EXACT-REPO CERTIFICATION REMAINS OPEN"
+}
