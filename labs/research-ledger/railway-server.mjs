@@ -8,7 +8,17 @@ import sourceStatusHandler from './api/source-status.js';
 const port = Number(process.env.PORT || 3000);
 const root = dirname(fileURLToPath(import.meta.url));
 const maxBody = 256 * 1024;
-const staticFiles = new Set(['index.html', 'styles.css', 'completion.css', 'db-schema.js', 'app.js', 'completion.js']);
+const staticFiles = new Set([
+  'index.html',
+  'styles.css',
+  'completion.css',
+  'db-schema.js',
+  'app.js',
+  'completion.js',
+  'semantic-core.js',
+  'semantic-worker.js',
+  'semantic-search.js'
+]);
 const mime = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -19,7 +29,7 @@ const securityHeaders = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
   'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob: https://cdn.jsdelivr.net; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://cdn.jsdelivr.net https://huggingface.co https://*.huggingface.co https://*.hf.co https://*.xethub.hf.co; worker-src 'self' blob:; img-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 };
 
 function send(res, status, payload, type = 'application/json; charset=utf-8') {
