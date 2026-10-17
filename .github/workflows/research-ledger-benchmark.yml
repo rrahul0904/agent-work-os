@@ -6,12 +6,16 @@ on:
       - 'labs/research-ledger/retrieval-benchmark*'
       - 'labs/research-ledger/semantic-*'
       - 'labs/research-ledger/benchmark-browser.mjs'
+      - 'labs/research-ledger/railway-server.mjs'
+      - 'labs/research-ledger/vercel.json'
       - '.github/workflows/research-ledger-benchmark.yml'
   pull_request:
     paths:
       - 'labs/research-ledger/retrieval-benchmark*'
       - 'labs/research-ledger/semantic-*'
       - 'labs/research-ledger/benchmark-browser.mjs'
+      - 'labs/research-ledger/railway-server.mjs'
+      - 'labs/research-ledger/vercel.json'
       - '.github/workflows/research-ledger-benchmark.yml'
   workflow_dispatch:
 
