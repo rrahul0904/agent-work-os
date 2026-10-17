@@ -21,6 +21,8 @@ async function atomicWriteJson(destination, value) {
   await fs.rename(temp, destination);
 }
 
+function sleep(ms) { return new Promise((resolve) => setTimeout(resolve, ms)); }
+
 export class MachineTaskManager {
   constructor(policy, options = {}) {
     this.policy = policy;
@@ -75,8 +77,18 @@ export class MachineTaskManager {
       shell: false,
       stdio: "ignore"
     });
+    await new Promise((resolve, reject) => {
+      runner.once("spawn", resolve);
+      runner.once("error", reject);
+    });
     runner.unref?.();
-    return { ...record, runnerPid: runner.pid };
+
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const current = await this.status(taskId);
+      if (current.runnerPid || current.status !== "starting") return current;
+      await sleep(25);
+    }
+    return { ...(await this.status(taskId)), launchPid: runner.pid };
   }
 
   async status(taskId) {
