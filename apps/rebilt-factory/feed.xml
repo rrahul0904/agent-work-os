@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0"><channel><title>Remake Atlas</title><link>https://remake-atlas.vercel.app/</link><description>Software alternatives and reverse-engineering build lanes.</description><lastBuildDate>Sun, 11 Oct 2026 06:50:00 GMT</lastBuildDate>
+<item><title>Remake Atlas catalog initialized with 22 build lanes</title><link>https://github.com/rrahul0904/agent-work-os/issues/118</link><guid>remake-atlas-2026-10-11-22</guid><pubDate>Sun, 11 Oct 2026 06:50:00 GMT</pubDate><description>The initial evidence-backed catalog covers all 22 projects currently listed by the source directory and opens a proof-gated build lane for each.</description></item>
+</channel></rss>

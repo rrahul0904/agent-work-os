@@ -1,0 +1,31 @@
+{
+  "project": "remake-atlas",
+  "capturedAt": "2026-10-11T06:50:00Z",
+  "sourceDirectory": "https://rebilt.xyz",
+  "sourceReddit": "https://www.reddit.com/r/sideprojects/comments/1x2thgm/i_built_a_directory_for_people_to_list_and_find/",
+  "roadmap": "source -> evidence -> workflows -> capability/failure decomposition -> feedback/competition -> donor/license audit -> boundary -> behavior contracts/tests -> implementation -> runtime verification -> UAT -> hosted exact-SHA verification -> production certification -> tracker truth",
+  "products": [
+    {"slug":"kri","name":"KRI","replaces":["Fresha","Booksy"],"source":"https://app.kri.rocks/en/login","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"meetily","name":"Meetily","replaces":["Otter.ai","Granola"],"source":"https://github.com/Zackriya-Solutions/meetily/releases/latest","repo":"https://github.com/Zackriya-Solutions/meetily","license":"MIT","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"karnakpanel","name":"KarnakPanel","replaces":["cPanel"],"source":"https://karnakpanel.com/","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"comoji","name":"Comoji","replaces":["Rocket"],"source":"https://www.comoji.io/install","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"openscreen","name":"OpenScreen","replaces":["Screen Studio","Loom"],"source":"https://getopenscreen.com/download/","repo":"https://github.com/getopenscreen/openscreen","license":"MIT","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"pikimov","name":"Pikimov","replaces":["After Effects","CapCut"],"source":"https://pikimov.com/app/","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"capture-studio","name":"Capture Studio","replaces":["Screen Studio","Loom"],"source":"https://tenzen.studio/capture/#download","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"photon-studio","name":"Photon Studio","replaces":["Photoshop"],"source":"https://tenzen.studio/photon/#get-photon","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"pelican","name":"Pelican","replaces":["Pterodactyl"],"source":"https://demo.pelican.dev/","repo":"https://github.com/pelican/panel","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"papra","name":"Papra","replaces":["Paperless-ngx"],"source":"https://demo.papra.app/","repo":"https://github.com/papra-hq/papra","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"burly","name":"Burly","replaces":["Velja","Choosy"],"source":"https://www.burly.click/download/Burly.dmg","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"openpencil","name":"OpenPencil","replaces":["Figma"],"source":"https://app.openpencil.dev/","repo":"https://github.com/open-pencil/open-pencil","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"rybbit","name":"Rybbit","replaces":["Google Analytics"],"source":"https://demo.rybbit.com/81","repo":"https://github.com/rybbit-io/rybbit","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"checkmate","name":"Checkmate","replaces":["UptimeRobot","Pingdom"],"source":"https://demo.checkmate.so/","repo":"https://github.com/bluewave-labs/checkmate","license":"AGPL-3.0","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"light-studio","name":"Light Studio","replaces":["Lightroom"],"source":"https://tenzen.studio/light/#waiting-list","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"premail","name":"Premail","replaces":["SaneBox"],"source":"https://premail.pro/download","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"spectrum-studio","name":"Spectrum Studio","replaces":["Adobe Firefly"],"source":"https://tenzen.studio/spectrum/studio/","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"teable","name":"Teable","replaces":["Airtable"],"source":"https://app.teable.ai/auth/signup","repo":"https://github.com/teableio/teable","license":"AGPL-3.0","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"panelalpha-engine","name":"PanelAlpha Engine","replaces":["Coolify","cPanel"],"source":"https://github.com/panelalpha/panelalpha-engine#get-your-project-running","repo":"https://github.com/panelalpha/panelalpha-engine","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"vector-studio","name":"Vector Studio","replaces":["Illustrator"],"source":"https://tenzen.studio/vector/#waiting-list","repo":null,"strategy":"clean-room","gate":"evidence"},
+    {"slug":"arcane","name":"Arcane","replaces":["Portainer","Dockge"],"source":"https://demo.getarcane.app/","repo":"https://github.com/getarcaneapp/arcane","strategy":"source-assisted","gate":"license-audit"},
+    {"slug":"handy","name":"Handy","replaces":["Wispr Flow","Superwhisper"],"source":"https://handy.computer/download","repo":"https://github.com/cjpais/Handy","strategy":"source-assisted","gate":"license-audit"}
+  ]
+}
