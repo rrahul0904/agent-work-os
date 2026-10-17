@@ -1,0 +1,110 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "rigspark-local-compute-router-phase-a",
+    "repoPath": "."
+  },
+  "release": {
+    "version": "phase-a"
+  },
+  "worktree": {
+    "baseRef": "HEAD",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": {
+      "name": "local-compute-router-builder",
+      "command": "codex exec --full-auto 'Implement only Phase A from docs/reverse-engineering/rigspark-local-compute-router.md. Build an independently authored, dependency-free local-compute-capability/v1 domain module plus deterministic Node tests. Implement MachineProfile and WorkloadManifest validation/canonical digests, CapabilityPlan fit|degraded|refuse|unknown semantics, and a separate pure ExecutionGrant contract. Unknown must never be coerced to zero. Capability must never imply authorization. Offload/stage behavior must be explicit. Integrity and loopback-only requirements are non-bypassable. Do not copy RigSpark source/catalog/tests. Do not add network, shell, Git mutation, model download, runtime launch, ComfyUI calls, deployment, or provider writes. Preserve existing behavior and run the narrowest focused tests before returning.'"
+    },
+    "repairCommand": {
+      "name": "local-compute-router-repair",
+      "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE plus docs/reverse-engineering/rigspark-local-compute-router.md. Repair only the failing Phase A Local Compute Router gate. Preserve fit-vs-authorization separation and fail-closed unknown/integrity/loopback semantics. Do not broaden scope, use network, copy donor code, push, merge, deploy, install models, or execute a local inference/media runtime. Run the narrowest relevant tests.'"
+    },
+    "maxRepairAttempts": 2
+  },
+  "verification": [
+    {
+      "name": "local-compute-router-focused",
+      "command": "node --test services/control-api/test/local-compute-router.test.js"
+    },
+    {
+      "name": "repository-unit",
+      "command": "npm test"
+    },
+    {
+      "name": "repository-acceptance",
+      "command": "npm run acceptance"
+    }
+  ],
+  "preview": {
+    "required": false
+  },
+  "production": {
+    "required": false
+  },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": {
+      "name": "tested-sha",
+      "command": "git rev-parse HEAD"
+    }
+  },
+  "goldenPath": [
+    {
+      "id": "LCR-A-001",
+      "description": "A known machine profile and workload produce a stable canonical capability-plan digest and fit verdict."
+    },
+    {
+      "id": "LCR-A-002",
+      "description": "Missing required machine or workload evidence yields unknown and never silently substitutes zero or fit."
+    },
+    {
+      "id": "LCR-A-003",
+      "description": "A workload that exceeds resident capacity may become degraded only when the manifest explicitly supports an offload or stage-swap path that fits."
+    },
+    {
+      "id": "LCR-A-004",
+      "description": "A known workload that cannot fit any declared execution path is refused."
+    },
+    {
+      "id": "LCR-A-005",
+      "description": "A capability plan has no execution authority; a separate exact-digest policy decision is required to create an execution grant."
+    },
+    {
+      "id": "LCR-A-006",
+      "description": "Unknown/refused plans cannot be granted, and degraded plans require explicit degraded-mode allowance."
+    },
+    {
+      "id": "LCR-A-007",
+      "description": "Integrity requirements and loopback-only endpoint policy cannot be bypassed by an approval or fit override."
+    },
+    {
+      "id": "LCR-A-008",
+      "description": "Changed machine observations, workload requirements or plan identity invalidate stale grants rather than silently replaying authority."
+    },
+    {
+      "id": "LCR-A-009",
+      "description": "Expired execution grants are not reusable after restart and receipt payloads contain identities/digests rather than secret literals."
+    }
+  ],
+  "excludedFromRelease": [
+    "RigSpark source or catalog reuse",
+    "GPU discovery certification",
+    "network access",
+    "model download or installation",
+    "local LLM process launch",
+    "ComfyUI API execution",
+    "custom ComfyUI workflows",
+    "provider or cloud writes",
+    "Git mutation",
+    "scheduler integration",
+    "browser or device UAT",
+    "preview deployment",
+    "production deployment",
+    "RigSpark parity"
+  ],
+  "policy": {
+    "commandTimeoutMs": 600000,
+    "retainFailureLogs": true
+  }
+}
