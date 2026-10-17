@@ -2,15 +2,19 @@ import path from "node:path";
 import { verifyCapabilityWithAdapter } from "./capability-verifier.js";
 import { verifyCodexNativeDiscovery } from "./codex-native-verifier.js";
 import { verifyClaudeNativeDiscovery } from "./claude-native-verifier.js";
+import { verifyOpenCodeNativeDiscovery } from "./opencode-native-verifier.js";
+import { verifyCursorNativeDiscovery } from "./cursor-native-verifier.js";
 
 export class CapabilityVerificationAdapter {
   name = "capability-verify";
   #adapters = new Map();
   #active = new Map();
 
-  constructor(codexAdapter = null, claudeCodeAdapter = null) {
+  constructor(codexAdapter = null, claudeCodeAdapter = null, openCodeAdapter = null, cursorAdapter = null) {
     if (codexAdapter) this.#adapters.set("codex", codexAdapter);
     if (claudeCodeAdapter) this.#adapters.set("claude-code", claudeCodeAdapter);
+    if (openCodeAdapter) this.#adapters.set("opencode", openCodeAdapter);
+    if (cursorAdapter) this.#adapters.set("cursor", cursorAdapter);
   }
 
   capability() {
@@ -18,14 +22,11 @@ export class CapabilityVerificationAdapter {
       .map(([harnessId, adapter]) => ({ harnessId, capability: adapter?.capability?.() }))
       .filter((entry) => entry.capability);
     if (!available.length) return null;
-    const harnessModes = Object.fromEntries(available.map(({ harnessId }) => [
-      harnessId,
-      ["artifact-context", "native-discovery"]
-    ]));
+    const harnessModes = Object.fromEntries(available.map(({ harnessId }) => [harnessId, ["artifact-context", "native-discovery"]]));
     return {
       name: this.name,
       executable: "builtin",
-      version: "3",
+      version: "6",
       harnesses: available.map((entry) => entry.harnessId),
       modes: [...new Set(Object.values(harnessModes).flat())],
       harnessModes,
@@ -81,23 +82,13 @@ export class CapabilityVerificationAdapter {
           throw new Error("native-discovery workspaceRoot must match the session cwd");
         }
         if (harnessId === "codex") {
-          result = await verifyCodexNativeDiscovery({
-            spec: payload.spec,
-            adapter: nestedAdapter,
-            workspaceRoot: workspace,
-            approveWrite: true,
-            receiptPath: null,
-            sessionIdFactory
-          });
+          result = await verifyCodexNativeDiscovery({ spec: payload.spec, adapter: nestedAdapter, workspaceRoot: workspace, approveWrite: true, receiptPath: null, sessionIdFactory });
         } else if (harnessId === "claude-code") {
-          result = await verifyClaudeNativeDiscovery({
-            spec: payload.spec,
-            adapter: nestedAdapter,
-            workspaceRoot: workspace,
-            approveWrite: true,
-            receiptPath: null,
-            sessionIdFactory
-          });
+          result = await verifyClaudeNativeDiscovery({ spec: payload.spec, adapter: nestedAdapter, workspaceRoot: workspace, approveWrite: true, receiptPath: null, sessionIdFactory });
+        } else if (harnessId === "opencode") {
+          result = await verifyOpenCodeNativeDiscovery({ spec: payload.spec, adapter: nestedAdapter, workspaceRoot: workspace, approveWrite: true, receiptPath: null, sessionIdFactory });
+        } else if (harnessId === "cursor") {
+          result = await verifyCursorNativeDiscovery({ spec: payload.spec, adapter: nestedAdapter, workspaceRoot: workspace, approveWrite: true, receiptPath: null, sessionIdFactory });
         } else {
           throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
         }
@@ -105,13 +96,7 @@ export class CapabilityVerificationAdapter {
         throw new Error(`unsupported capability verification mode ${mode} for harness ${harnessId}`);
       }
 
-      emit({
-        kind: "tool",
-        name: "capability.verification.receipt",
-        phase: "completed",
-        payload: result.receipt,
-        at: new Date().toISOString()
-      });
+      emit({ kind: "tool", name: "capability.verification.receipt", phase: "completed", payload: result.receipt, at: new Date().toISOString() });
       emit({
         kind: "text",
         text: JSON.stringify({
@@ -148,12 +133,9 @@ function parsePayload(raw) {
   let payload;
   try { payload = JSON.parse(raw); }
   catch { throw new Error("capability verification prompt must be a JSON payload"); }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.spec) {
-    throw new Error("capability verification payload requires spec");
-  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload) || !payload.spec) throw new Error("capability verification payload requires spec");
   return payload;
 }
-
 function assertWithinWorkspace(workspace, target) {
   if (target === workspace) return;
   if (!target.startsWith(`${workspace}${path.sep}`)) throw new Error("capability verification targetRoot must stay inside the session cwd");
