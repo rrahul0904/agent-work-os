@@ -8,9 +8,10 @@ export class CapabilityVerificationAdapter {
   #adapters = new Map();
   #active = new Map();
 
-  constructor(codexAdapter = null, claudeCodeAdapter = null) {
+  constructor(codexAdapter = null, claudeCodeAdapter = null, openCodeAdapter = null) {
     if (codexAdapter) this.#adapters.set("codex", codexAdapter);
     if (claudeCodeAdapter) this.#adapters.set("claude-code", claudeCodeAdapter);
+    if (openCodeAdapter) this.#adapters.set("opencode", openCodeAdapter);
   }
 
   capability() {
@@ -20,12 +21,12 @@ export class CapabilityVerificationAdapter {
     if (!available.length) return null;
     const harnessModes = Object.fromEntries(available.map(({ harnessId }) => [
       harnessId,
-      ["artifact-context", "native-discovery"]
+      harnessId === "opencode" ? ["artifact-context"] : ["artifact-context", "native-discovery"]
     ]));
     return {
       name: this.name,
       executable: "builtin",
-      version: "3",
+      version: "4",
       harnesses: available.map((entry) => entry.harnessId),
       modes: [...new Set(Object.values(harnessModes).flat())],
       harnessModes,
