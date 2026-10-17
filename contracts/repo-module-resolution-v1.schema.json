@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-module-resolution-v1.schema.json",
+  "title": "Agent Work OS Repository Module Resolution v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "importAnalysisDigest", "configs", "workspacePackages", "resolutions", "metrics", "methodology", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-module-resolution/v1" },
+    "repositoryDigest": { "$ref": "#/$defs/digest" },
+    "importAnalysisDigest": { "$ref": "#/$defs/digest" },
+    "configs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "directory", "resolvedExtends", "externalExtends", "baseUrl", "paths"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "directory": { "type": "string", "minLength": 1 },
+          "resolvedExtends": { "type": ["string", "null"] },
+          "externalExtends": { "type": ["string", "null"] },
+          "baseUrl": {
+            "anyOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["raw", "rootRelative", "sourceConfig"],
+                "properties": {
+                  "raw": { "type": "string", "minLength": 1 },
+                  "rootRelative": { "type": "string", "minLength": 1 },
+                  "sourceConfig": { "type": "string", "minLength": 1 }
+                }
+              }
+            ]
+          },
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pattern", "targets", "baseDirectory", "sourceConfig"],
+              "properties": {
+                "pattern": { "type": "string", "minLength": 1 },
+                "targets": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+                "baseDirectory": { "type": "string", "minLength": 1 },
+                "sourceConfig": { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "workspacePackages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "packageJson", "entryFile"],
+        "properties": {
+          "name": { "type": ["string", "null"] },
+          "path": { "type": "string", "minLength": 1 },
+          "packageJson": { "type": "string", "minLength": 1 },
+          "entryFile": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "resolutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "specifier", "importKind", "typeOnly", "resolutionKind", "targetFile", "packageName", "configPath", "workspaceModulePath"],
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "specifier": { "type": "string", "minLength": 1 },
+          "importKind": { "type": "string", "minLength": 1 },
+          "typeOnly": { "type": "boolean" },
+          "resolutionKind": { "enum": ["relative-file", "tsconfig-path", "base-url", "workspace-package", "external-package", "unresolved-relative", "unresolved-alias"] },
+          "targetFile": { "type": ["string", "null"] },
+          "packageName": { "type": ["string", "null"] },
+          "configPath": { "type": ["string", "null"] },
+          "workspaceModulePath": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["configs", "workspacePackages", "imports", "resolvedFiles", "tsconfigPathResolved", "baseUrlResolved", "workspaceResolved", "relativeResolved", "externalPackages", "unresolved", "unsupportedExtends", "unsupportedPathPatterns"],
+      "properties": {
+        "configs": { "type": "integer", "minimum": 0 },
+        "workspacePackages": { "type": "integer", "minimum": 0 },
+        "imports": { "type": "integer", "minimum": 0 },
+        "resolvedFiles": { "type": "integer", "minimum": 0 },
+        "tsconfigPathResolved": { "type": "integer", "minimum": 0 },
+        "baseUrlResolved": { "type": "integer", "minimum": 0 },
+        "workspaceResolved": { "type": "integer", "minimum": 0 },
+        "relativeResolved": { "type": "integer", "minimum": 0 },
+        "externalPackages": { "type": "integer", "minimum": 0 },
+        "unresolved": { "type": "integer", "minimum": 0 },
+        "unsupportedExtends": { "type": "integer", "minimum": 0 },
+        "unsupportedPathPatterns": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "configExecution", "projectCodeExecution", "localRelativeExtendsOnly", "pathPatternSupport", "note"],
+      "properties": {
+        "label": { "const": "static-semantic-module-resolution" },
+        "configExecution": { "const": false },
+        "projectCodeExecution": { "const": false },
+        "localRelativeExtendsOnly": { "const": true },
+        "pathPatternSupport": { "const": "exact-or-single-wildcard" },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
