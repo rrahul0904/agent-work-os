@@ -1,0 +1,47 @@
+{
+  "version": "auth-assurance-run/v1",
+  "targetId": "fixture-local-login",
+  "authorizationId": "authz_fixture_local_login",
+  "observation": {
+    "captureDom": true,
+    "captureAccessibilityTree": true,
+    "captureScreenshots": true,
+    "captureNetworkMetadata": true,
+    "captureResponseBodies": false
+  },
+  "inference": {
+    "mode": "rule-first",
+    "llmFallback": true,
+    "minimumConfidence": 0.8
+  },
+  "testCases": [
+    {
+      "id": "known-valid-fixture",
+      "credentialFixtureId": "fixture_valid_user",
+      "expected": "success"
+    },
+    {
+      "id": "known-invalid-fixture",
+      "credentialFixtureId": "fixture_invalid_user",
+      "expected": "failure"
+    }
+  ],
+  "stopConditions": {
+    "onLockout": true,
+    "onRateLimit": true,
+    "onUnexpectedTargetNavigation": true
+  },
+  "resultPolicy": {
+    "allowedClassifications": [
+      "expected-success",
+      "expected-failure",
+      "mfa-required",
+      "locked",
+      "rate-limited",
+      "unknown",
+      "error"
+    ],
+    "writeEvidenceReceipt": true,
+    "includeSecretsInReceipt": false
+  }
+}
