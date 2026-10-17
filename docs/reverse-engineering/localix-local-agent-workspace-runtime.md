@@ -177,7 +177,7 @@ This is intentionally not yet a top-level runtime-work query API. The canonical 
 
 ## Verification coverage
 
-Unit coverage now includes:
+Unit coverage includes:
 
 - stale transition refusal;
 - terminal double-completion protection;
@@ -192,6 +192,8 @@ Unit coverage now includes:
 Acceptance coverage separately exercises concurrent supervisor persistence so filesystem scheduling does not perturb the control-plane replica test suite.
 
 During this lane a pre-existing asynchronous assertion in the control-plane identity test was exposed: session failure can become observable while durable daemon-ack reconciliation is still `processing`. The test now waits for the documented reconciliation completion state rather than relying on timing; production reconciliation semantics are unchanged.
+
+The authoritative CI result is always the GitHub Actions result for the current branch head; do not infer branch readiness from an older passing SHA.
 
 ## Next gates
 
