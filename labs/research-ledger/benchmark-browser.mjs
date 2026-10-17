@@ -4,6 +4,7 @@ import { writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
+import { RETRIEVAL_BENCHMARK_VERSION, BENCHMARK_CASES } from './retrieval-benchmark-core.js';
 
 const labDir = dirname(fileURLToPath(import.meta.url));
 const serverFile = resolve(labDir, 'railway-server.mjs');
@@ -29,6 +30,46 @@ async function waitForServer() {
     await new Promise(resolveDelay => setTimeout(resolveDelay, 100));
   }
   throw new Error(`benchmark server did not become ready\n${serverErr}`);
+}
+
+function compareModes(a, b) {
+  const recallDelta = a.recallAtK - b.recallAtK;
+  if (Math.abs(recallDelta) > 1e-12) return recallDelta;
+  return a.mrr - b.mrr;
+}
+
+function buildDecision(report) {
+  const lexical = report.metrics.lexical;
+  const semantic = report.metrics.semantic;
+  const hybrid = report.metrics.hybrid;
+  const ordered = [
+    ['lexical', lexical],
+    ['semantic', semantic],
+    ['hybrid', hybrid]
+  ].sort(([, a], [, b]) => compareModes(b, a));
+  const fixtureLeader = ordered[0][0];
+  const hybridStrictlyBeatsLexical = hybrid.recallAtK > lexical.recallAtK && hybrid.mrr > lexical.mrr;
+  const hybridNotWorseThanSemantic = hybrid.recallAtK >= semantic.recallAtK && hybrid.mrr >= semantic.mrr;
+  const promotionEligibleOnFixture = report.corpus.cases >= 20 && hybridStrictlyBeatsLexical && hybridNotWorseThanSemantic;
+
+  let fixtureSignal = `${fixtureLeader}-leading`;
+  let rationale = `On this ${report.corpus.cases}-case fixture, ${fixtureLeader} leads when Recall@${report.k} is compared first and MRR breaks ties.`;
+  if (hybrid.recallAtK > lexical.recallAtK && hybrid.mrr <= lexical.mrr) {
+    fixtureSignal = 'hybrid-improves-recall-not-rank-quality';
+    rationale = `Hybrid improves Recall@${report.k} over lexical but does not improve MRR, so it remains experimental.`;
+  } else if (semantic.recallAtK >= hybrid.recallAtK && semantic.mrr > hybrid.mrr) {
+    fixtureSignal = 'semantic-ranks-better-than-hybrid';
+    rationale = `Semantic matches or exceeds hybrid Recall@${report.k} and has higher MRR, so the current equal-weight RRF is not a default candidate.`;
+  }
+
+  return {
+    promoteHybridDefault: false,
+    promotionEligibleOnFixture,
+    fixtureLeader,
+    fixtureSignal,
+    rationale,
+    rule: 'Never auto-promote a retrieval mode from this benchmark alone. Hybrid can become a default candidate only if it strictly improves both Recall@k and MRR over lexical, is not worse than semantic on either metric, and broader representative notebook evaluation also passes.'
+  };
 }
 
 let browser;
@@ -85,24 +126,25 @@ try {
 
   const report = outcome.report;
   assert.ok(report, `benchmark produced no report; status=${outcome.status}; diagnostics=${browserErrors.join(' | ')}`);
-  assert.equal(report.schema, 'research-ledger/retrieval-benchmark.v1');
+  assert.equal(report.schema, RETRIEVAL_BENCHMARK_VERSION);
   assert.equal(report.k, 5);
-  assert.equal(report.corpus.cases, 9);
+  assert.equal(report.corpus.cases, BENCHMARK_CASES.length);
+  assert.ok(report.corpus.cases >= 20);
   for (const mode of ['lexical', 'semantic', 'hybrid']) {
     assert.equal(report.metrics[mode].cases, report.corpus.cases);
     assert.ok(report.metrics[mode].recallAtK >= 0 && report.metrics[mode].recallAtK <= 1);
     assert.ok(report.metrics[mode].mrr >= 0 && report.metrics[mode].mrr <= 1);
   }
+  assert.ok(report.breakdown?.byKind?.multilingual, 'benchmark receipt must include by-kind metrics');
+  assert.ok(report.breakdown?.byLanguage?.en, 'benchmark receipt must include by-language metrics');
+
   report.execution = {
     runner: 'playwright-chromium',
     browserVersion: browser.version(),
     source: 'research-ledger-benchmark-ci',
     browserErrors
   };
-  report.decision = {
-    promoteHybridDefault: report.metrics.hybrid.recallAtK > report.metrics.lexical.recallAtK && report.metrics.hybrid.mrr >= report.metrics.lexical.mrr,
-    rule: 'promote only when hybrid Recall@5 strictly exceeds lexical and hybrid MRR is not worse on this fixture; broader representative evaluation is still required before product-default promotion'
-  };
+  report.decision = buildDecision(report);
   await writeFile(receiptFile, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
   console.log(JSON.stringify({
