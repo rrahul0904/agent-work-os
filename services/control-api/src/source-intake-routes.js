@@ -13,7 +13,7 @@ async function authorize({ principal, identities, organizationId, mutate = false
 }
 
 function route(pathname) {
-  const match = pathname.match(/^\/api\/work-items\/([^/]+)\/source-intake(?:\/(block|resume|observe))?$/);
+  const match = pathname.match(/^\/api\/work-items\/([^/]+)\/source-intake(?:\/(block|resume))?$/);
   if (!match) return null;
   return { workItemId: decodeURIComponent(match[1]), action: match[2] ?? 'inspect' };
 }
@@ -26,7 +26,6 @@ export async function handleSourceIntakeRequest({
   identities,
   workItems,
   sourceIntakeSupervisor,
-  sourceIntakeBrowserObserver = null,
   readJson,
   json,
   broadcast = () => {},
@@ -45,13 +44,22 @@ export async function handleSourceIntakeRequest({
     return true;
   }
 
-  if (req.method === 'POST' && ['block', 'resume', 'observe'].includes(matched.action)) {
+  if (req.method === 'POST' && ['block', 'resume'].includes(matched.action)) {
     const body = await readJson(req);
+    const browserObserve = matched.action === 'resume' && body.observationMode === 'browser-read';
+    if (matched.action === 'resume' && body.observationMode !== undefined && !browserObserve) {
+      json(res, 400, { error: 'source_intake_observation_mode_invalid' });
+      return true;
+    }
+    if (browserObserve && body.accessObservation !== undefined) {
+      json(res, 400, { error: 'source_intake_browser_observation_must_be_server_generated' });
+      return true;
+    }
     const required = matched.action === 'block'
       ? ['organizationId', 'commandId', 'expectedVersion', 'transition', 'accessRequest']
-      : matched.action === 'resume'
-        ? ['organizationId', 'commandId', 'expectedVersion', 'accessObservation', 'verificationRunId']
-        : ['organizationId', 'expectedVersion', 'verificationRunId', 'machineId'];
+      : browserObserve
+        ? ['organizationId', 'expectedVersion', 'verificationRunId', 'machineId']
+        : ['organizationId', 'commandId', 'expectedVersion', 'accessObservation', 'verificationRunId'];
     const missing = requireBodyFields(body, required);
     if (missing.length) {
       json(res, 400, { error: 'source_intake_fields_required', fields: missing });
@@ -71,12 +79,12 @@ export async function handleSourceIntakeRequest({
     }
 
     const actorId = principal.userId;
-    if (matched.action === 'observe') {
-      if (!sourceIntakeBrowserObserver || typeof sourceIntakeBrowserObserver.launch !== 'function') {
+    if (browserObserve) {
+      if (typeof sourceIntakeSupervisor.observe !== 'function') {
         json(res, 503, { error: 'source_intake_browser_observer_unavailable' });
         return true;
       }
-      const result = await sourceIntakeBrowserObserver.launch({
+      const result = await sourceIntakeSupervisor.observe({
         organizationId: body.organizationId,
         workItemId: item.id,
         expectedVersion: body.expectedVersion,
