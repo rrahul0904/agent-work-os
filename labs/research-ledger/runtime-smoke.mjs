@@ -42,6 +42,8 @@ try {
   assert.match(homeText, /Research Ledger/);
   const csp = home.headers.get('content-security-policy') || '';
   assert.match(csp, /frame-ancestors 'none'/);
+  assert.match(csp, /'wasm-unsafe-eval'/, 'semantic inference CSP must allow WebAssembly without enabling general JS eval');
+  assert.doesNotMatch(csp, /'unsafe-eval'/, 'CSP must not enable general JavaScript eval');
   assert.match(csp, /https:\/\/huggingface\.co/);
   assert.match(csp, /https:\/\/\*\.hf\.co/);
   assert.ok(homeText.indexOf('src="/db-schema.js"') < homeText.indexOf('src="/app.js"'), 'schema guard must load before app');
