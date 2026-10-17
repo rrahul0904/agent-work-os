@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Context Continuity Capture",
+  "version": "0.1.0",
+  "description": "Capture selected browser tabs and AI chats into source-grounded research briefs.",
+  "permissions": ["tabs", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Capture research",
+    "default_popup": "popup.html"
+  }
+}
