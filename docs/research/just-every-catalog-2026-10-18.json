@@ -1,0 +1,369 @@
+{
+  "schema": "rea-external-portfolio-catalog/v1",
+  "source": "https://justevery.com/products",
+  "capturedDate": "2026-10-18",
+  "sourceScope": "Public website only. Not a live test or full repo audit.",
+  "listed": 31,
+  "comingSoon": 20,
+  "catalogueCount": 51,
+  "discrepancy": "Homepage text says 30 available + 21 planned; visible catalog shows 31 listed + 20 coming soon.",
+  "items": [
+    {
+      "name": "HappyToHelp",
+      "group": "customers-and-sales",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Orbit",
+      "group": "customers-and-sales",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Mango",
+      "group": "customers-and-sales",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Dial",
+      "group": "customers-and-sales",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Penny",
+      "group": "customers-and-sales",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Nook",
+      "group": "teamwork",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Cradle",
+      "group": "teamwork",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Vector",
+      "group": "teamwork",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Slate",
+      "group": "teamwork",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Pencil",
+      "group": "teamwork",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Chest",
+      "group": "teamwork",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Uptime",
+      "group": "engineering",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Lamp",
+      "group": "engineering",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Oncall",
+      "group": "engineering",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Spool",
+      "group": "engineering",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Coaster",
+      "group": "finance",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Easel",
+      "group": "finance",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Nectar",
+      "group": "finance",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Pantry",
+      "group": "finance",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Purse",
+      "group": "finance",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Beam",
+      "group": "people",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Gauge",
+      "group": "people",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Lodge",
+      "group": "people",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Willow",
+      "group": "people",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Balm",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Gasket",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Glove",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Larder",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Linen",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Locket",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Pier",
+      "group": "operations",
+      "catalogStatus": "listed",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Auth",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Barrow",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Blotter",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Buoy",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Cabin",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Coffer",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Crank",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Evidence",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Inkwell",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Lanyard",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Mallet",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Pane",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Placemat",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Platter",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Plinth",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Satchel",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Stall",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Strap",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Terrace",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    },
+    {
+      "name": "Vane",
+      "group": "coming-soon",
+      "catalogStatus": "coming_soon",
+      "validation": "NOT_VERIFIED",
+      "route": "DONOR_COMPARATOR_REQUIRES_TRIAGE"
+    }
+  ]
+}
