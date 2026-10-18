@@ -10,13 +10,14 @@ import {
 } from "../lib/session-fabric.js";
 
 function json(res, status, body) {
-  res.status(status).setHeader("content-type", "application/json; charset=utf-8").send(JSON.stringify(body));
+  res.status(status).setHeader("cache-control", "no-store").setHeader("content-type", "application/json; charset=utf-8").send(JSON.stringify(body));
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "POST required" });
   try {
     const body = req.body ?? {};
+    if (Buffer.byteLength(JSON.stringify(body), "utf8") > 1_500_000) return json(res, 413, {error: "Request exceeds the 1.5 MB processing limit"});
     const action = body.action ?? "handoff";
     if (action === "detect-limit") return json(res, 200, detectRateLimit(body.text));
     if (action === "import") return json(res, 200, { session: importSessionBundle(body.bundle) });

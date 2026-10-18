@@ -1,0 +1,51 @@
+name: context-continuity-release
+on:
+  push:
+    paths:
+      - 'apps/context-workbench/**'
+      - '.github/workflows/context-continuity-release.yml'
+  pull_request:
+    paths:
+      - 'apps/context-workbench/**'
+      - '.github/workflows/context-continuity-release.yml'
+permissions:
+  contents: read
+jobs:
+  tests-and-http-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/context-workbench
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Unit and syntax tests
+        run: |
+          npm test
+          node --check server.mjs
+          node --check api/brief.js
+          node --check api/session.js
+          node --check app.js
+      - name: HTTP smoke and static-source isolation
+        run: |
+          set -euo pipefail
+          PORT=38887 node server.mjs > /tmp/context-continuity-server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:38887/api/health > /tmp/context-health.json; then break; fi
+            sleep 1
+          done
+          node -e 'const h=require("/tmp/context-health.json");if(h.ok!==true)process.exit(1)'
+          curl -fsS http://127.0.0.1:38887/ | grep -q 'Context Continuity'
+          curl -fsS http://127.0.0.1:38887/app.js > /dev/null
+          curl -fsS -X POST -H 'content-type: application/json' \
+            -d '{"action":"detect-limit","text":"rate limit reached"}' \
+            http://127.0.0.1:38887/api/session > /tmp/context-session.json
+          node -e 'const h=require("/tmp/context-session.json");if(typeof h.limited!=="boolean")process.exit(1)'
+          for blocked in server.mjs package.json lib/safe-url.js api/session.js desktop/macos/Package.swift; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:38887/$blocked")"
+            test "$code" = 404
+          done

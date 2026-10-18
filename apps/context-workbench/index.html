@@ -4,7 +4,6 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Cross-agent handoff and source-grounded research memory for Agent Work OS.">
-  <meta name="api-base" content="https://cikxzxxreryycfjumwsd.supabase.co/functions/v1/context-continuity-api">
   <title>Context Continuity — Agent Work OS</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
@@ -137,21 +136,6 @@
   </main>
 
   <footer>Agent Work OS · Context Continuity · clean-room implementation</footer>
-  <script>
-    (() => {
-      const configured = document.querySelector('meta[name="api-base"]')?.content?.replace(/\/+$/, '') || '';
-      if (!configured || /^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
-      const nativeFetch = window.fetch.bind(window);
-      window.fetch = (input, init) => {
-        if (typeof input === 'string' && input.startsWith('/api/')) return nativeFetch(`${configured}${input}`, init);
-        if (input instanceof Request && new URL(input.url).origin === location.origin && new URL(input.url).pathname.startsWith('/api/')) {
-          const u = new URL(input.url);
-          return nativeFetch(new Request(`${configured}${u.pathname}${u.search}`, input), init);
-        }
-        return nativeFetch(input, init);
-      };
-    })();
-  </script>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
