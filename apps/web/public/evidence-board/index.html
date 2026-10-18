@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence Canvas · Visual Intelligence</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,system-ui,-apple-system,sans-serif;background:#08131c;color:#e8f1f5}
+*{box-sizing:border-box}body{margin:0}button,input,textarea,select{font:inherit}button{cursor:pointer;background:#17313c;color:#e8f1f5;border:1px solid #345562;border-radius:9px;padding:9px 12px}
+button:hover{background:#244b5a}button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #4bd0bd;outline-offset:2px}
+button[disabled]{opacity:.4;cursor:not-allowed}.primary{background:#137c77;border-color:#26a89e;color:white}.active{background:#24585d;border-color:#4bd0bd}
+header{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#0d202c;border-bottom:1px solid #284451;flex-wrap:wrap}
+header strong{font-size:16px;letter-spacing:.02em}header input{min-width:145px;max-width:290px;flex:1;background:#091722;color:#e8f1f5;padding:9px;border:1px solid #35515e;border-radius:9px}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap}main{height:calc(100dvh - 75px);min-height:450px;display:grid;grid-template-columns:minmax(0,1fr) 310px}
+#stage{position:relative;overflow:hidden;touch-action:none;background-color:#102531;background-image:radial-gradient(#4a6874 1px,transparent 1px);background-size:22px 22px;cursor:grab}
+#stage:active{cursor:grabbing}#scene{position:absolute;inset:0;transform-origin:0 0}#edges{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none}
+.node{position:absolute;width:230px;min-height:150px;border:1px solid #5c8392;border-radius:12px;background:#173543;box-shadow:0 9px 25px #030d1388;overflow:hidden;touch-action:none;user-select:none}
+.node.source{background:#25394a;border-color:#b19665}.node.selected{outline:3px solid #53dfc7}
+.node-head{padding:10px 13px;display:flex;align-items:center;justify-content:space-between;gap:9px;background:#ffffff0b;cursor:move}
+.node-head span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#b4d6de}
+.node h3{margin:10px 13px 5px;font-size:15px;word-break:break-word}.node p{margin:0 13px 12px;color:#b1cbd6;font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:100px;overflow:hidden}
+.node small{display:block;margin:0 13px 10px;color:#70d5c4}aside{overflow:auto;background:#0e202b;border-left:1px solid #284451;padding:17px}
+h2{font-size:16px;margin:0 0 12px}label{display:block;color:#c0d5dc;font-size:12px;margin:14px 0 5px}aside input,aside textarea,aside select,header select{width:100%;border:1px solid #3b5b69;border-radius:8px;background:#0b1822;color:#f0f7f9;padding:9px}
+aside textarea{resize:vertical;min-height:110px}aside p,aside small{color:#a8c2cd;line-height:1.5}#status{font-size:12px;color:#87cfbb}#help{position:absolute;bottom:18px;left:16px;background:#081d27d9;border:1px solid #365665;border-radius:9px;color:#c1dae0;padding:9px 12px;font-size:12px;max-width:min(520px,90%)}
+#edgeList{display:grid;gap:7px}#edgeList button{text-align:left;font-size:12px}.pill{font-size:10px;background:#174f50;color:#b7ffe9;padding:4px 7px;border-radius:20px}
+@media(max-width:780px){header{padding:9px;gap:7px}header strong{width:100%}header input{max-width:none}main{height:calc(100dvh - 140px);grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(300px,1fr) 280px}aside{border-left:0;border-top:1px solid #284451}#help{font-size:10px}}
+</style></head>
+<body><header><strong>Evidence Canvas <span class="pill">Owned P0</span></strong>
+<input id="boardTitle" aria-label="Board title" maxlength="150">
+<div class="toolbar">
+<button id="addNote" class="primary">+ Note</button><button id="addSource">+ Source</button>
+<button id="link" aria-pressed="false">Connect</button>
+<button id="undo" title="Undo (Ctrl/⌘ Z)">Undo</button><button id="redo" title="Redo (Ctrl/⌘ Shift Z)">Redo</button>
+<button id="delete" title="Delete selected card">Delete</button>
+<button id="export">Export JSON</button><button id="import">Import JSON</button>
+<input id="file" type="file" accept="application/json,.json" hidden>
+</div><span id="status" role="status" aria-live="polite">Local only</span></header>
+<main><div id="stage" aria-label="Evidence board canvas">
+<div id="scene"></div><div id="help">Drag card headers to move · Drag empty space to pan · Scroll to zoom · Connect: choose two cards · Data stays in this browser</div></div>
+<aside><h2>Evidence inspector</h2><div id="editor"><p>Select a card to edit its details and see its relationships. You can build a board without signing in or sending data to a server.</p></div>
+<p><small>This is an independent REA prototype, not the original Caseboard app. Source references are plain text; no URLs are fetched automatically.</small></p>
+</aside></main>
+<script type="module">
+import { emptyBoard, importBoard, exportBoard, applyBoardAction, MAX_IMPORT_BYTES } from './model.mjs'
+const KEY = 'awos-evidence-board-v1', NS = 'http://www.w3.org/2000/svg'
+const $ = (id) => document.getElementById(id)
+let board = emptyBoard(), selected = null, connectFrom = null, connecting = false
+let past = [], future = []
+function status(message){ $('status').textContent = message }
+try {
+  const saved = localStorage.getItem(KEY)
+  if(saved) board = importBoard(saved)
+} catch(e){ status('Saved board unavailable: ' + e.message) }
+function persist(){
+  try {localStorage.setItem(KEY, exportBoard(board));status('Saved locally · rev ' + board.revision)}
+  catch(e){status('Storage unavailable; export a backup')}
+}
+function act(action, history=true){
+  try{
+    const next = applyBoardAction(board,action)
+    if(exportBoard(next).length > MAX_IMPORT_BYTES) throw new Error('Board too large; export a backup')
+    if(history){past.push(board); if(past.length>70)past.shift();future=[]}
+    board=next;persist();render()
+  }catch(e){status(e.message)}
+}
+function newId(prefix){return prefix + '-' + crypto.randomUUID()}
+function newCard(type){
+  const rect = $('stage').getBoundingClientRect()
+  const x = Math.round((rect.width/2 - board.viewport.x)/board.viewport.zoom - 115)
+  const y = Math.round((rect.height/2 - board.viewport.y)/board.viewport.zoom - 75)
+  const node={id:newId('n'),type,title:type==='source'?'Source reference':'New note',body:'',
+    x,y,confidence:'unknown',sourceRefs:[]}
+  act({type:'add-node',node});selected=node.id;render()
+}
+function el(tag, cls, text){
+  const item=document.createElement(tag);if(cls)item.className=cls;if(text!==undefined)item.textContent=text;return item
+}
+function render(){
+  $('boardTitle').value=board.title
+  $('link').classList.toggle('active',connecting)
+  $('link').setAttribute('aria-pressed',String(connecting))
+  $('undo').disabled=!past.length;$('redo').disabled=!future.length;$('delete').disabled=!selected
+  const scene=$('scene');scene.replaceChildren()
+  scene.style.transform='translate('+board.viewport.x+'px,'+board.viewport.y+'px) scale('+board.viewport.zoom+')'
+  const svg=document.createElementNS(NS,'svg');svg.id='edges'
+  for(const edge of board.edges){
+    const a=board.nodes.find(n=>n.id===edge.from),b=board.nodes.find(n=>n.id===edge.to)
+    if(!a||!b)continue
+    const line=document.createElementNS(NS,'line')
+    for(const [key,val] of Object.entries({x1:a.x+115,y1:a.y+75,x2:b.x+115,y2:b.y+75,
+      stroke:edge.relation==='contradicts'?'#e6a381':'#61dcc7','stroke-width':2.5,'stroke-dasharray':edge.relation==='depends'?'5 5':'none'}))
+      line.setAttribute(key,String(val))
+    svg.append(line)
+    const label=document.createElementNS(NS,'text')
+    label.setAttribute('x',String((a.x+b.x)/2+115));label.setAttribute('y',String((a.y+b.y)/2+68))
+    label.setAttribute('text-anchor','middle');label.setAttribute('fill','#dcf9f2')
+    label.setAttribute('font-size','12');label.textContent=edge.label||edge.relation;svg.append(label)
+  }
+  scene.append(svg)
+  for(const node of board.nodes){
+    const card=el('article','node '+node.type+(selected===node.id?' selected':''))
+    card.style.left=node.x+'px';card.style.top=node.y+'px';card.dataset.id=node.id
+    card.setAttribute('tabindex','0');card.setAttribute('aria-label',node.type+': '+node.title)
+    const head=el('div','node-head')
+    head.append(el('span','',node.type),el('span','',node.confidence))
+    card.append(head,el('h3','',node.title),el('p','',node.body||'Select to add details'))
+    if(node.sourceRefs.length) card.append(el('small','',node.sourceRefs.length+' source reference(s)'))
+    card.addEventListener('click',()=>choose(node.id))
+    card.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose(node.id)}})
+    head.addEventListener('pointerdown',e=>{
+      if(e.button!==0)return
+      e.preventDefault();e.stopPropagation()
+      let dragged=false;const sx=e.clientX,sy=e.clientY
+      const startX=node.x,startY=node.y;head.setPointerCapture(e.pointerId)
+      const move=ev=>{
+        const dx=(ev.clientX-sx)/board.viewport.zoom,dy=(ev.clientY-sy)/board.viewport.zoom
+        if(Math.abs(dx)+Math.abs(dy)>3)dragged=true
+        card.style.left=(startX+dx)+'px';card.style.top=(startY+dy)+'px'
+      }
+      const end=ev=>{
+        head.removeEventListener('pointermove',move);head.removeEventListener('pointerup',end)
+        head.removeEventListener('pointercancel',cancel)
+        if(dragged)act({type:'move-node',id:node.id,x:Math.round(startX+(ev.clientX-sx)/board.viewport.zoom),
+          y:Math.round(startY+(ev.clientY-sy)/board.viewport.zoom)})
+        else choose(node.id)
+      }
+      const cancel=()=>render()
+      head.addEventListener('pointermove',move);head.addEventListener('pointerup',end);head.addEventListener('pointercancel',cancel)
+    })
+    scene.append(card)
+  }
+  renderInspector()
+}
+function choose(id){
+  if(connecting){
+    if(!connectFrom){connectFrom=id;selected=id;status('Choose another card to connect');render();return}
+    if(connectFrom!==id){
+      const edge={id:newId('e'),from:connectFrom,to:id,relation:'related',label:'',sourceRefs:[]}
+      act({type:'add-edge',edge});connectFrom=null;connecting=false
+    }else{connectFrom=null;connecting=false}
+  }else selected=id
+  render()
+}
+function renderInspector(){
+  const host=$('editor');host.replaceChildren()
+  const n=board.nodes.find(x=>x.id===selected)
+  if(!n){host.append(el('p','','Select a card to edit; use Connect to draw labeled relationships.'));return}
+  function field(name,tag,value,handler){
+    const label=el('label','',name);const input=el(tag)
+    if(tag==='textarea')input.rows=4
+    input.value=value;input.addEventListener('change',()=>handler(input.value))
+    host.append(label,input);return input
+  }
+  field('Title','input',n.title,v=>act({type:'patch-node',id:n.id,patch:{title:v}}))
+  field('Details','textarea',n.body,v=>act({type:'patch-node',id:n.id,patch:{body:v}}))
+  field('Source references (one per line)','textarea',n.sourceRefs.join('\n'),
+    v=>act({type:'patch-node',id:n.id,patch:{sourceRefs:v.split('\n').map(s=>s.trim()).filter(Boolean)}}))
+  const label=el('label','','Evidence status');const select=el('select')
+  for(const v of ['unknown','hypothesis','reported','observed']){
+    const option=el('option','',v);option.value=v;select.append(option)
+  }
+  select.value=n.confidence
+  select.addEventListener('change',()=>act({type:'patch-node',id:n.id,patch:{confidence:select.value}}))
+  host.append(label,select,el('small','','Observed status requires at least one source reference.'))
+  const links=board.edges.filter(e=>e.from===n.id||e.to===n.id)
+  host.append(el('h2','','Relationships ('+links.length+')'))
+  const list=el('div');list.id='edgeList'
+  links.forEach(edge=>{
+    const other=board.nodes.find(x=>x.id===(edge.from===n.id?edge.to:edge.from))
+    const btn=el('button','',(other?.title||'Unknown')+' · '+edge.relation+' · Remove')
+    btn.addEventListener('click',()=>act({type:'remove-edge',id:edge.id}));list.append(btn)
+  });host.append(list)
+}
+$('addNote').addEventListener('click',()=>newCard('note'))
+$('addSource').addEventListener('click',()=>newCard('source'))
+$('link').addEventListener('click',()=>{connecting=!connecting;connectFrom=null;render();status(connecting?'Click two cards to connect':'Connection canceled')})
+$('delete').addEventListener('click',()=>{if(selected){act({type:'remove-node',id:selected});selected=null;render()}})
+$('boardTitle').addEventListener('change',e=>act({type:'rename',title:e.target.value}))
+$('undo').addEventListener('click',()=>{if(past.length){future.push(board);board=past.pop();persist();render()}})
+$('redo').addEventListener('click',()=>{if(future.length){past.push(board);board=future.pop();persist();render()}})
+$('export').addEventListener('click',()=>{
+  const blob=new Blob([exportBoard(board)],{type:'application/json'})
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='evidence-board-'+board.id+'.json'
+  a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);status('JSON backup exported')
+})
+$('import').addEventListener('click',()=>$('file').click())
+$('file').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return
+  try{
+    if(file.size>MAX_IMPORT_BYTES)throw new Error('Import too large')
+    const next=importBoard(await file.text());past.push(board);future=[];board=next;selected=null;persist();render()
+  }catch(err){status('Import refused: '+err.message)}
+  e.target.value=''
+})
+const stage=$('stage')
+stage.addEventListener('pointerdown',e=>{
+  if(e.target!==stage&&e.target!==$('scene'))return
+  if(e.button!==0)return
+  selected=null;renderInspector()
+  const startX=e.clientX,startY=e.clientY,x=board.viewport.x,y=board.viewport.y
+  stage.setPointerCapture(e.pointerId)
+  const move=ev=>$('scene').style.transform='translate('+(x+ev.clientX-startX)+'px,'+
+    (y+ev.clientY-startY)+'px) scale('+board.viewport.zoom+')'
+  const end=ev=>{
+    stage.removeEventListener('pointermove',move);stage.removeEventListener('pointerup',end)
+    stage.removeEventListener('pointercancel',cancel)
+    act({type:'viewport',viewport:{...board.viewport,x:x+ev.clientX-startX,y:y+ev.clientY-startY}},false)
+  }
+  const cancel=()=>render()
+  stage.addEventListener('pointermove',move);stage.addEventListener('pointerup',end);stage.addEventListener('pointercancel',cancel)
+})
+stage.addEventListener('wheel',e=>{
+  e.preventDefault()
+  const rect=stage.getBoundingClientRect(),px=e.clientX-rect.left,py=e.clientY-rect.top
+  const old=board.viewport.zoom,zoom=Math.max(.2,Math.min(3,old*(e.deltaY>0?.9:1.1)))
+  const x=px-(px-board.viewport.x)*zoom/old,y=py-(py-board.viewport.y)*zoom/old
+  act({type:'viewport',viewport:{x,y,zoom}},false)
+},{passive:false})
+document.addEventListener('keydown',e=>{
+  const editable=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)
+  if(editable)return
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){
+    e.preventDefault();$(e.shiftKey?'redo':'undo').click()
+  }else if(e.key==='Delete'||e.key==='Backspace')$('delete').click()
+  else if(e.key==='Escape'){connecting=false;connectFrom=null;selected=null;render()}
+})
+render()
+</script></body></html>

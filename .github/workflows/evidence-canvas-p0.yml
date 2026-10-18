@@ -1,0 +1,38 @@
+name: Evidence Canvas P0
+on:
+  push:
+    branches:
+      - rea/caseboard-evidence-canvas
+    paths:
+      - apps/web/public/evidence-board/**
+      - docs/reverse-engineering/caseboard-evidence-canvas/**
+      - .github/workflows/evidence-canvas-p0.yml
+  pull_request:
+    paths:
+      - apps/web/public/evidence-board/**
+      - .github/workflows/evidence-canvas-p0.yml
+permissions:
+  contents: read
+jobs:
+  model-and-syntax:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Validate domain model and unit tests
+        run: |
+          node --version
+          node --check apps/web/public/evidence-board/model.mjs
+          node --test apps/web/public/evidence-board/test/model.test.mjs
+      - name: Validate inline browser JavaScript syntax
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('apps/web/public/evidence-board/index.html').read_text()
+          start='<script type="module">'
+          assert p.count(start)==1
+          assert p.count('</script>')==1
+          script=p.split(start,1)[1].split('</script>',1)[0]
+          Path('/tmp/evidence-board-ui.mjs').write_text(script)
+          PY
+          node --check /tmp/evidence-board-ui.mjs
