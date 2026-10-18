@@ -1,0 +1,29 @@
+name: REA JustRead spoiler-boundary reference
+
+on:
+  pull_request:
+    paths:
+      - "research/justread-reading-intelligence/**"
+      - ".github/workflows/rea-justread-reading.yml"
+  push:
+    branches:
+      - "research/justread-spoiler-safe-reading"
+    paths:
+      - "research/justread-reading-intelligence/**"
+      - ".github/workflows/rea-justread-reading.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  boundary-fixtures:
+    name: Spoiler-boundary fixtures (Node 22)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Fail-closed context suite
+        run: node --test research/justread-reading-intelligence/spoiler-boundary.test.mjs
