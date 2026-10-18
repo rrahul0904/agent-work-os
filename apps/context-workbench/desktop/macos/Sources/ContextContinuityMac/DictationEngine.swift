@@ -17,7 +17,7 @@ final class DictationEngine: NSObject, ObservableObject {
         let speech = await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
         }
-        let mic = await AVAudioApplication.requestRecordPermission()
+        let mic = await AVCaptureDevice.requestAccess(for: .audio)
         return speech == .authorized && mic
     }
 
