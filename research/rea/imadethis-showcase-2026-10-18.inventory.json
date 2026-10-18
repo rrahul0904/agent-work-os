@@ -1,0 +1,140 @@
+{
+  "schema_version": "rea-showcase-inventory/v1",
+  "source": {
+    "supplied_url": "https://www.reddit.com/r/IMadeThis/s/5rJbCU07pi",
+    "canonical_url": "https://www.reddit.com/r/IMadeThis/comments/1x9eqce/",
+    "subreddit": "IMadeThis",
+    "post_author": "tashkan",
+    "captured_date": "2026-10-18",
+    "completeness": "public-html-visible-current-snapshot",
+    "comment_count_known": false
+  },
+  "governance_issue": "https://github.com/rrahul0904/agent-work-os/issues/290",
+  "overall_status": "PUBLIC_RESEARCH_ONLY",
+  "products": [
+    {
+      "id": "launchorbit",
+      "name": "LaunchOrbit",
+      "url": "https://launchorbit.co/",
+      "reddit_author": "tashkan",
+      "classification": "DONOR_EXISTING_PRODUCT",
+      "owner_repo": "rrahul0904/launchgrid",
+      "capabilities": [
+        "public spatial launch canvas",
+        "vote-driven organic ranking",
+        "weekly discovery",
+        "permanent listings",
+        "featured paid options"
+      ],
+      "competitors": [
+        "Product Hunt",
+        "Uneed",
+        "BetaList",
+        "Peerlist"
+      ],
+      "observed_pricing": [
+        {
+          "name": "Free",
+          "usd_one_time": 0
+        },
+        {
+          "name": "Premium",
+          "usd_one_time": 19
+        },
+        {
+          "name": "Premium+",
+          "usd_one_time": 39
+        }
+      ],
+      "verification": "PUBLIC_SITE_ONLY",
+      "source_urls": [
+        "https://launchorbit.co/",
+        "https://www.reddit.com/r/StartupSoloFounder/comments/1vzee9h/"
+      ],
+      "gap_priority": "P1"
+    },
+    {
+      "id": "scoutwand",
+      "name": "ScoutWand",
+      "url": "https://www.scoutwand.com/",
+      "reddit_author": "Little-Jump-5572",
+      "classification": "DONOR_EXISTING_PRODUCT",
+      "owner_repo": "rrahul0904/applyai",
+      "capabilities": [
+        "desktop job search",
+        "LinkedIn/Indeed/InfoJobs claim",
+        "local CV-based form fill",
+        "manual submit",
+        "signed offline-between-renewals license claim"
+      ],
+      "competitors": [
+        "Simplify",
+        "Teal"
+      ],
+      "observed_pricing": [
+        {
+          "name": "Free",
+          "eur_monthly": 0,
+          "listing_limit_daily": 5
+        },
+        {
+          "name": "Scout",
+          "eur_monthly": 10.99
+        }
+      ],
+      "verification": "PUBLIC_SITE_ONLY",
+      "source_urls": [
+        "https://www.scoutwand.com/"
+      ],
+      "gap_priority": "P0"
+    },
+    {
+      "id": "messynote",
+      "name": "MessyNote",
+      "url": "https://messynote.com/",
+      "reddit_author": "brandong453",
+      "classification": "DONOR_MODULE",
+      "owner_repo": "rrahul0904/agent-work-os",
+      "capabilities": [
+        "type/talk idea",
+        "clarifying dialogue",
+        "editable synthesized note",
+        "saved folders",
+        "cross-device and export"
+      ],
+      "competitors": [
+        "Reflect",
+        "Audionotes"
+      ],
+      "observed_pricing": [
+        {
+          "name": "Trial",
+          "days": 7,
+          "ai_responses": 50,
+          "voice_minutes": 5
+        },
+        {
+          "name": "Early adopter",
+          "usd_monthly": 13,
+          "ai_responses": 500,
+          "voice_minutes": 30
+        }
+      ],
+      "verification": "PUBLIC_SITE_ONLY",
+      "source_urls": [
+        "https://messynote.com/"
+      ],
+      "gap_priority": "P1"
+    }
+  ],
+  "gates": {
+    "source": true,
+    "first_pass_public_evidence": true,
+    "repository_classification": true,
+    "rea_runtime_capture": false,
+    "implementation": false,
+    "tests": false,
+    "replay": false,
+    "shipping": false
+  }
+}
