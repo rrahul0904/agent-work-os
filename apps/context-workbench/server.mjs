@@ -43,7 +43,8 @@ function adapter(res) {
 
 function applyHeaders(res) {
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", "default-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; script-src 'self'; style-src 'self'; connect-src 'self'");
   res.setHeader("Permissions-Policy", "camera=(), geolocation=(), payment=()");
 }
 
@@ -52,15 +53,18 @@ async function serveStatic(pathname, res) {
   const decoded = decodeURIComponent(clean);
   const absolute = path.resolve(root, `.${decoded}`);
   if (!absolute.startsWith(`${root}${path.sep}`)) return false;
-  if (absolute.includes(`${path.sep}api${path.sep}`) || absolute.includes(`${path.sep}lib${path.sep}`) || absolute.includes(`${path.sep}test${path.sep}`)) return false;
+  const publicPaths = new Set(["/index.html", "/styles.css", "/app.js", "/favicon.ico"]);
+  if (!publicPaths.has(decoded)) return false;
   try {
-    const stat = await fs.stat(absolute);
+    const resolved = await fs.realpath(absolute);
+    if (!resolved.startsWith(`${root}${path.sep}`)) return false;
+    const stat = await fs.stat(resolved);
     if (!stat.isFile()) return false;
     const ext = path.extname(absolute).toLowerCase();
     res.statusCode = 200;
     res.setHeader("Content-Type", contentTypes.get(ext) || "application/octet-stream");
     if ([".html", ".css", ".js"].includes(ext)) res.setHeader("Cache-Control", "public, max-age=60");
-    res.end(await fs.readFile(absolute));
+    res.end(await fs.readFile(resolved));
     return true;
   } catch {
     return false;
