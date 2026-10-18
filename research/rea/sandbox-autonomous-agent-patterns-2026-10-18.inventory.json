@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "rea-donor-intake/v1",
+  "id": "REA-SANDBOX-2026-10-18",
+  "date": "2026-10-18",
+  "title": "SandBox autonomous multi-agent workflows",
+  "source": {
+    "reddit": "https://www.reddit.com/r/aiagents/comments/1x9ce2h/",
+    "live": "https://sandboxes.live/",
+    "repo": "https://github.com/abozaralizadeh/SandBox",
+    "commit": "3d9f0410bf887920c5d45e3f7777eb545565c997",
+    "license": "MIT",
+    "copyright": "Copyright (c) 2024 Abozar Alizadeh"
+  },
+  "canonicalIssue": "https://github.com/rrahul0904/agent-work-os/issues/291",
+  "classification": "DONOR_REFERENCE",
+  "ownerRepo": "rrahul0904/agent-work-os",
+  "branch": "rea/sandbox-autonomous-reliability",
+  "modules": [
+    {
+      "name": "ComicBook",
+      "owner": "Agent Work OS / Creator Console",
+      "patterns": [
+        "missed-handoff recovery",
+        "multiagent chain",
+        "consistent localized content"
+      ]
+    },
+    {
+      "name": "AI Open Problem Solver",
+      "owner": "Memory Plane",
+      "patterns": [
+        "negative memory",
+        "iterative research",
+        "subprocess anti-pattern"
+      ]
+    },
+    {
+      "name": "AI Blog",
+      "owner": "Creator Console",
+      "patterns": [
+        "research with citations",
+        "token budget"
+      ]
+    },
+    {
+      "name": "Tomorrow News",
+      "owner": "Creator Console",
+      "patterns": [
+        "speculative multilingual publishing"
+      ]
+    },
+    {
+      "name": "GenBox",
+      "owner": "Worker Fabric + Creator Console",
+      "patterns": [
+        "async media affinity",
+        "scheduled generation"
+      ]
+    },
+    {
+      "name": "trAIde dashboard",
+      "owner": "Agent Work OS Observability",
+      "patterns": [
+        "read-only sanitized agent telemetry"
+      ]
+    }
+  ],
+  "status": "SOURCE_VERIFIED_P0_LIBRARY_ONLY",
+  "localTest": {
+    "runtime": "Node v22.16.0",
+    "passed": 6,
+    "failed": 0,
+    "scope": "isolated unit test of predecessor local code; exact branch CI not verified"
+  },
+  "gates": {
+    "sourceVerified": true,
+    "licenseVerified": true,
+    "staticAnalysis": true,
+    "classification": true,
+    "designSpecified": true,
+    "p0LibraryUploaded": true,
+    "branchCIVerified": false,
+    "donorBrowserUAT": false,
+    "runtimeIntegrated": false,
+    "durableCAS": false,
+    "sandboxSecurityReviewed": false,
+    "productionDeployed": false,
+    "shipped": false
+  },
+  "relatedIssues": [
+    9,
+    88,
+    166,
+    177,
+    249,
+    280,
+    285
+  ],
+  "securityFinding": "Upstream math subprocess is not hardened OS isolation. Generated HTML, untrusted web content and speculative news require independent safety checks."
+}
