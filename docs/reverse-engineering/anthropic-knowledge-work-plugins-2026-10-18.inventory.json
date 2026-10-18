@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "1",
+  "intakeDate": "2026-10-18",
+  "classification": "capability-donor",
+  "governanceIssue": 288,
+  "canonicalRepository": "rrahul0904/agent-work-os",
+  "branch": "research/rea-anthropic-knowledge-work-plugins-20261018",
+  "source": {
+    "reddit": "https://www.reddit.com/r/SATNA_PROJECT/s/4I7FVuwumT",
+    "redditCanonical": "https://www.reddit.com/r/SATNA_PROJECT/comments/1x9d2r1/",
+    "upstream": "https://github.com/anthropics/knowledge-work-plugins",
+    "sourceCommit": "33eeda1e8fd856455b05479d13a0f85b5f803744",
+    "rootLicense": "Apache-2.0",
+    "externalLicensesReviewRequired": true
+  },
+  "evidencePaths": [
+    ".claude-plugin/marketplace.json",
+    "LICENSE",
+    "README.md",
+    "marketing/.claude-plugin/plugin.json",
+    "marketing/.mcp.json",
+    "marketing/README.md",
+    "marketing/skills/brand-review/SKILL.md",
+    "marketing/CONNECTORS.md"
+  ],
+  "observedMarketingSkills": [
+    "brand-review",
+    "campaign-plan",
+    "competitive-brief",
+    "content-creation",
+    "draft-content",
+    "email-sequence",
+    "performance-report",
+    "seo-audit"
+  ],
+  "ownedRouting": {
+    "capability-fabric": "Agent Work OS",
+    "marketing": "Creator Console",
+    "data": "Agentic_AI_Data_Quality_Testing",
+    "product-management": "Agent Work OS Work Queue"
+  },
+  "implementation": {
+    "phase": "P0 read-only inspector + approval-gated import",
+    "automaticConnectorActivation": false,
+    "automaticInstall": false,
+    "productionVerified": false
+  },
+  "futureGates": [
+    "CI at exact SHA",
+    "partner-license-review",
+    "tenant-auth-and-approval",
+    "original Creator Console vertical",
+    "real harness discovery",
+    "replay/browser UAT",
+    "shipping review"
+  ]
+}
