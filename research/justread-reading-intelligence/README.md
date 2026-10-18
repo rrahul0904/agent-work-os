@@ -22,6 +22,7 @@
 | JR-005 | Readest official docs/source | Competing cross-platform reader with EPUB/PDF, notes, local library, TTS, sync | Comparator; upstream app license AGPL-3.0, not permissive donor source |
 | JR-006 | Readium Swift toolkit | Ebook/EPUB reader/navigation library, BSD-3-Clause | Potential dependency after pinned-commit dependency/license review |
 | JR-007 | Internal RE-227 history | Existing FreeReader research lane, related Andrea Reader/ShelfReader and StorySprout/Lumabook references | Tracker and product repo must be reconciled, no phantom completion |
+| JR-008 | Author's MobileRead 5.4 changelog (submitted 2026-10-15) | More granular explanation persistence, Catch Me Up after >=7 days and accessible in Book Details, *Highlights Digest* of highlights and notes, toggle in Settings > Reading | **Creator claim**, not observed app behavior; expands feature inventory beyond the original Reddit excerpt |
 
 Sources:
 - https://www.reddit.com/r/ebooks/comments/1x8xpcm/reading_assistant_for_justread_54_iphone_and_ipad/
@@ -32,6 +33,7 @@ Sources:
 - https://readest.com/docs
 - https://github.com/readest/readest
 - https://github.com/readium/swift-toolkit
+- https://www.mobileread.com/forums/showthread.php?t=372480
 
 No JustRead source license was established. Treat app code, UI artwork, commercial copy, assets and prompts as proprietary. Public facts, observed workflows, and independently written behavioral specifications are permitted research inputs. Never decompile or capture private user books without permission. Use licensed/public-domain fixtures for verification. Assess rights and DRM separately.
 
@@ -40,9 +42,10 @@ No JustRead source license was established. Treat app code, UI artwork, commerci
 **Reader-first / local-first / cross-platform / book-owner controlled**: all reading/import/navigation, highlights/notes, reading history, sync, and optional local AI in a unified library. We want:
 1. **Spoiler firewall** at a canonical reading locator, not a prompt-level honor policy.
 2. **Reader memory**: bounded incremental recaps and entity ledger scoped to the confirmed reading progress, not unrestricted whole-book search.
-3. **Explain and cite**: small explanations with source-backed citations and explicit uncertainty. Never pretend the book says something it doesn't.
-4. **Privacy proof**: per-platform local inference availability, explicit opt-in, local-only permission; no cloud fallback without a separate opt-in/product policy.
-5. **Multi-format core**: EPUB first; PDF, comics, audiobooks have different content/position proof models and must not be advertised as identical without certification.
+3. **Explain and cite**: small explanations with source-backed citations and explicit uncertainty. Never pretend the book says something it doesn't. Vendor's v5.4 changelog says explanations persist per book; our design must specify opt-in retention, deletion and revision invalidation.
+4. **Highlights Digest**: summarize highlights and notes, scoped to the current cursor by default. Old highlights from future chapters are an independent spoiler channel. 
+5. **Privacy proof**: per-platform local inference availability, explicit opt-in, local-only permission; no cloud fallback without a separate opt-in/product policy.
+6. **Multi-format core**: EPUB first; PDF, comics, audiobooks have different content/position proof models and must not be advertised as identical without certification.
 
 Prior related mapping: RE-227 owns the reader; Andrea/ShelfReader is a library UX evidence source; StorySprout/Lumabook is immersive reading; RE-374 Chronicle Author Studio owns authoring/export, not this consumer-reader boundary; Life Library/HowFarIn is analytics/reference. Agent Work OS owns work planning, receipts, replay and governance, not the end-user reading UI.
 
@@ -94,6 +97,8 @@ Do NOT let untrusted external providers receive the source `book` object; only t
 | A9 | iOS/iPadOS, macOS, Android, Windows, Web smoke/certification | NOT DONE |
 | A10 | Independent device replay and receipts pinned to exact source SHA | NOT DONE |
 | A11 | Copyright, DRM and dependency license audit | NOT DONE |
+| A12 | Highlights Digest bounded to progress and filtered annotations | NOT DONE; identified from JR-008 |
+| A13 | Persisted Explain answers must be source-scoped, encrypted/revision-keyed and deletable | NOT DONE; identified from JR-008 |
 
 Run local reference tests:
 ```sh
@@ -122,7 +127,7 @@ route: donor -> RE-227 FreeReader Rebuild
 validation: creator claim + official site; independent user/binary/device validation pending
 platform_strategy: portable context kernel + native UI/runtime adapters; Apple on-device first
 platforms_targeted: [iOS, iPadOS, macOS, Android, Windows, Web]
-flows: [import, shelf, reading, save-position, selection, character-help, catch-up, explain, highlights, settings-opt-out, privacy, optional sync]
+flows: [import, shelf, reading, save-position, selection, character-help, catch-up, explain, highlights-digest, explanation-history, settings-opt-out, privacy, optional sync]
 prd: initial F24 contract in this document
 build_stack: normalized EPUB parser/Readium candidate, local-only model adapters, Agent Work OS gated execution
 source_ownership: independent clean-room source; Readium BSD license review pending
