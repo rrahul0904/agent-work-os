@@ -4,9 +4,19 @@
 
 The canonical implementation lives in `apps/context-workbench` inside Agent Work OS.
 
-## Intended production host
+## Current production host
 
-A Vercel project named `context-continuity` is linked to this monorepo with root directory `apps/context-workbench`. The October 17, 2026 deployment was blocked by the connected Hobby team's 100-deployments-per-day quota. The project remains linked so a later Git push can deploy normally when account capacity is available.
+**Vercel production:** https://context-continuity.vercel.app
+
+Project: `prj_jp8JA3UeAdwWPJxIZJhKadWWvN2u`.
+The frontend uses **same-origin** `/api/session` and `/api/brief`; session
+payloads are not forwarded by the UI to the earlier Supabase fallback.
+Deployment target is `main` at root `apps/context-workbench`.
+
+The separate `context-continuity-release` GitHub Actions workflow covers unit
+tests, code syntax, local HTTP health, session endpoint, and static-source isolation.
+A Vercel `READY` deployment is necessary but does not independently verify a
+live browser's feature paths, native macOS compilation, or extension publishing.
 
 ## Live fallback API
 
@@ -22,15 +32,14 @@ Routes:
 - `POST /api/session`
 - `POST /api/brief`
 
-The function is intentionally public (`verify_jwt=false`) because the workbench is a public demo surface. CORS is enabled. Session conversion and research analysis are stateless.
+The function is currently public and stateless; it is **not** the primary
+production API. Do not use it for sensitive agent logs.
 
-## Public fallback frontend
+## Historical frontend fallback
 
-Until the Vercel quota clears, the static frontend can be served directly from this public repository through a static GitHub-content CDN. The frontend rewrites only `/api/*` requests to the Supabase Edge Function; local development continues to use the same-origin Node server.
-
-`https://raw.githack.com/rrahul0904/agent-work-os/main/apps/context-workbench/index.html`
-
-This CDN fallback is suitable for demonstration and verification, not the intended long-term production origin.
+The `raw.githack.com` HTML route is deprecated for production because it
+cannot support the new same-origin API design. Use the Vercel production URL.
+The Supabase function is retained only as a stateless compatibility fallback.
 
 ## Railway status
 
