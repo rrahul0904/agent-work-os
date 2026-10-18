@@ -1,30 +1,11 @@
-import dns from "node:dns/promises";
-import net from "node:net";
 import { answerFromBrief, buildBrief, briefToMarkdown, draftFromBrief, normalizeSources } from "../lib/research-frame.js";
+import { assertPublicSourceUrl } from "../lib/safe-url.js";
 
 const MAX_SOURCES = 8;
 const MAX_BYTES = 800_000;
 
 function json(res, status, body) {
-  res.status(status).setHeader("content-type", "application/json; charset=utf-8").send(JSON.stringify(body));
-}
-
-function privateIp(ip) {
-  if (!net.isIP(ip)) return false;
-  if (ip === "::1") return true;
-  if (ip.startsWith("10.") || ip.startsWith("127.") || ip.startsWith("169.254.") || ip.startsWith("192.168.")) return true;
-  const m = ip.match(/^172\.(\d+)\./);
-  if (m && Number(m[1]) >= 16 && Number(m[1]) <= 31) return true;
-  return ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe80:");
-}
-
-async function assertPublicUrl(raw) {
-  const url = new URL(raw);
-  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only http/https URLs are supported");
-  if (["localhost", "0.0.0.0"].includes(url.hostname)) throw new Error("Local URLs are not allowed");
-  const addresses = await dns.lookup(url.hostname, { all: true });
-  if (!addresses.length || addresses.some((a) => privateIp(a.address))) throw new Error("Private-network URLs are not allowed");
-  return url;
+  res.status(status).setHeader("cache-control", "no-store").setHeader("content-type", "application/json; charset=utf-8").send(JSON.stringify(body));
 }
 
 function htmlToText(html) {
@@ -45,25 +26,44 @@ function htmlToText(html) {
 }
 
 async function fetchSource(rawUrl) {
-  const url = await assertPublicUrl(rawUrl);
-  const response = await fetch(url, {
-    redirect: "follow",
-    signal: AbortSignal.timeout(10_000),
-    headers: { "user-agent": "AgentWorkOS-ResearchFrame/1.0" }
-  });
-  if (!response.ok) throw new Error(`Source fetch failed (${response.status}) for ${url.hostname}`);
-  const length = Number(response.headers.get("content-length") ?? 0);
-  if (length > MAX_BYTES) throw new Error(`Source too large: ${url.hostname}`);
+  let url = await assertPublicSourceUrl(rawUrl);
+  let response;
+  for (let hop = 0; hop < 4; hop++) {
+    const fetched = await fetch(url, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(10_000),
+      headers: {"user-agent": "AgentWorkOS-ResearchFrame/1.0"}
+    });
+    if (fetched.status >= 300 && fetched.status < 400) {
+      const next = fetched.headers.get("location");
+      if (!next || hop === 3) throw new Error("Source redirect missing or exceeded limit");
+      url = await assertPublicSourceUrl(new URL(next, url).toString());
+      continue;
+    }
+    response = fetched;
+    break;
+  }
+  if (!response?.ok) throw new Error("Source fetch failed");
+  const declaredSize = Number(response.headers.get("content-length") ?? 0);
+  if (declaredSize > MAX_BYTES) throw new Error("Source body exceeded the permitted size");
   const type = response.headers.get("content-type") ?? "";
   if (!type.includes("text/") && !type.includes("json") && !type.includes("html")) {
-    throw new Error(`Unsupported source content type: ${type}`);
+    throw new Error("Unsupported source content type");
   }
-  const text = await response.text();
+  const chunks = [];
+  let size = 0;
+  if (!response.body) throw new Error("Source body missing");
+  for await (const chunk of response.body) {
+    size += chunk.byteLength;
+    if (size > MAX_BYTES) throw new Error("Source body exceeded the permitted size");
+    chunks.push(Buffer.from(chunk));
+  }
+  const data = Buffer.concat(chunks).toString("utf8");
   return {
     title: url.hostname,
     url: url.toString(),
     kind: "web",
-    text: type.includes("html") ? htmlToText(text) : text.slice(0, 120_000)
+    text: type.includes("html") ? htmlToText(data) : data.slice(0, 120_000)
   };
 }
 
@@ -97,6 +97,7 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "POST required" });
   try {
     const body = req.body ?? {};
+    if (Buffer.byteLength(JSON.stringify(body), "utf8") > 1_500_000) return json(res, 413, {error: "Request exceeds the 1.5 MB processing limit"});
     const action = body.action ?? "create";
     if (action === "ask") {
       const result = answerFromBrief({ brief: body.brief, question: body.question });
