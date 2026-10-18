@@ -1,0 +1,111 @@
+{
+  "schema": "rea.app-inventory.v1",
+  "intake_date": "2026-10-18",
+  "target": "Drexius Terminal",
+  "source_type": "reddit_product_showcase",
+  "reddit_url": "https://www.reddit.com/r/saasbuild/s/A0vDcwRbEE",
+  "reddit_post_id": "1x9canl",
+  "source_repository": "DreyDreamer17/drexius-terminal",
+  "source_branch": "master",
+  "source_sha": "bc6a226a23942f0c5bc1fd4a7bacb282a8b7f88d",
+  "release": "v0.1.0-beta.1",
+  "source_license": "GPL-3.0-or-later",
+  "branding_license": "proprietary_author_marks_not_reusable",
+  "classification": "DONOR_EXTENSION",
+  "target_repository": "rrahul0904/agent-work-os",
+  "governance_issue": 297,
+  "lane": "remote-machine-provider/ssh-sftp",
+  "dedupe_issues": [
+    265,
+    267,
+    29,
+    99
+  ],
+  "category": "developer-infrastructure/remote-access/agent-workbench",
+  "problem": "Secure multi-device local-first SSH, SFTP and server sessions with bounded AI assistance",
+  "target_users": [
+    "developer",
+    "SRE/platform operator",
+    "homelab operator"
+  ],
+  "differentiation_owned": "Governed remote access with canonical work/session authority, approvals, receipts and verification; not a separate client clone",
+  "evidence": {
+    "public_repository": true,
+    "author_documentation": true,
+    "public_beta_installers_advertised": true,
+    "browser_demo_simulated": true,
+    "demand_validation": "not_established",
+    "third_party_security_audit": "not_established",
+    "independent_performance_verification": "not_performed"
+  },
+  "platform_strategy": "extend_existing_agent_workbench_and_local_daemon",
+  "upstream_advertised_platforms": [
+    "Linux",
+    "Windows",
+    "macOS",
+    "Android"
+  ],
+  "desired_platforms": [
+    "macOS",
+    "Windows",
+    "Linux",
+    "Android",
+    "iOS",
+    "iPadOS"
+  ],
+  "ios_ipados_feasibility": "unverified",
+  "flows": [
+    "manual-host-enrollment-and-key-verification",
+    "expiring-per-host-action-grant",
+    "credential-handle-resolution",
+    "ssh-session-connect-reconnect",
+    "approve-remote-command-catalog-action",
+    "sftp-bounded-read-write",
+    "explicit-tunnel-approval",
+    "redacted-receipt-and-replay",
+    "cross-device-authentication-consideration"
+  ],
+  "upstream_stack": [
+    "Rust",
+    "Tauri 2",
+    "React 19",
+    "xterm.js 6",
+    "SQLCipher",
+    "Argon2id"
+  ],
+  "owned_implementation_stack": [
+    "Node.js 22",
+    "Agent Work OS daemon policy contract"
+  ],
+  "implementation": {
+    "status": "p0_contract_written_draft_review",
+    "files": [
+      "runtime/daemon/src/remote-access-policy.js",
+      "runtime/daemon/test/remote-access-policy.test.js",
+      "docs/reverse-engineering/drexius-terminal.md"
+    ],
+    "tests": {
+      "cases": 13,
+      "passed_in_v8_isolate": 13,
+      "node_cli_not_yet_run": true
+    },
+    "actual_ssh_implemented": false,
+    "production_deployed": false
+  },
+  "limitations": [
+    "no_network_execution",
+    "no_credentials_imported",
+    "no_live_ssh_validation",
+    "GPL_code_not_copied",
+    "not_a_sandbox"
+  ],
+  "gates": [
+    "review_licensing",
+    "review_security_threat_model",
+    "verify_node_tests",
+    "synthetic_ssh_e2e",
+    "cross_platform_uat",
+    "exact_sha_receipt",
+    "human_approval_before_deploy"
+  ]
+}
