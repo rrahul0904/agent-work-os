@@ -1,0 +1,1207 @@
+{
+  "schema": "rea-portfolio-intake/v1",
+  "capturedAt": "2026-10-18",
+  "source": {
+    "reddit": "https://www.reddit.com/r/SideProject/comments/1x925vo/lets_discover_each_others_github_projects/",
+    "short": "https://www.reddit.com/r/SideProject/s/d0AyFgyR5f",
+    "postId": "1x925vo"
+  },
+  "governance": {
+    "repo": "rrahul0904/agent-work-os",
+    "issue": "https://github.com/rrahul0904/agent-work-os/issues/285",
+    "casebook": "research/rea/reddit-sideproject-github-showcase-2026-10-18.md",
+    "upstreamRea": "https://github.com/morluto/rea",
+    "note": "REA runtime not connected or executed; no local binary, APK, website recording or test receipt exists in this intake."
+  },
+  "statusVocabulary": [
+    "SOURCE_PINNED",
+    "ARCH_AUDIT_OPEN",
+    "SPEC_OPEN",
+    "REA_EXECUTION_NOT_STARTED",
+    "CODE_NOT_STARTED",
+    "CI_UNVERIFIED",
+    "UAT_OPEN",
+    "NOT_DEPLOYED"
+  ],
+  "count": {
+    "directRepos": 22,
+    "organizationRepos": 7,
+    "totalGitHubResources": 29
+  },
+  "requiredReceiptFields": [
+    "sourceSha",
+    "sourceArtifactDigest",
+    "licenseAudit",
+    "threatAssessment",
+    "behaviorCaseIds",
+    "ownedRepo",
+    "ownedCommit",
+    "fixtureHash",
+    "realCIJobUrl",
+    "runtimeCaptureDigest",
+    "approvalRef",
+    "deploymentUrl"
+  ],
+  "projects": [
+    {
+      "id": "REA-SG-01",
+      "name": "TokenTimer Core",
+      "upstreamRepo": "tokentimerch/tokentimer-core",
+      "sourceSha": "3a5e276c67467008f9c0bef50d1665bfa1bae794",
+      "sourceUrl": "https://github.com/tokentimerch/tokentimer-core/tree/3a5e276c67467008f9c0bef50d1665bfa1bae794",
+      "license": "AGPL-3.0",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "backend-service",
+      "priority": "P1",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-02",
+      "name": "TokenBill",
+      "upstreamRepo": "emrehangorgec/tokenbill",
+      "sourceSha": "afe16a9b19f34e3c0ac3b8d6834d36f90e4acf37",
+      "sourceUrl": "https://github.com/emrehangorgec/tokenbill/tree/afe16a9b19f34e3c0ac3b8d6834d36f90e4acf37",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "javascript-cli",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-03",
+      "name": "RunWield",
+      "upstreamRepo": "gandazgul/runwield",
+      "sourceSha": "9154e7bbd7bfa2f832feff2e233a621684faf707",
+      "sourceUrl": "https://github.com/gandazgul/runwield/tree/9154e7bbd7bfa2f832feff2e233a621684faf707",
+      "license": "RunWield Free Use License; no derivative redistribution",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "javascript-cli+desktop",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-04",
+      "name": "optimAIzr",
+      "upstreamRepo": "blendbunjaku/optimaizr",
+      "sourceSha": "4bd6fbc58be6d446fc408ab8ac9aaa652c6713d2",
+      "sourceUrl": "https://github.com/blendbunjaku/optimaizr/tree/4bd6fbc58be6d446fc408ab8ac9aaa652c6713d2",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "javascript-cli",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-05",
+      "name": "Posecode",
+      "upstreamRepo": "posecode-dev/posecode",
+      "sourceSha": "953ab3ef79d23d00310c3bb227f6aebd48fe82fe",
+      "sourceUrl": "https://github.com/posecode-dev/posecode/tree/953ab3ef79d23d00310c3bb227f6aebd48fe82fe",
+      "license": "Apache-2.0 spec; AGPL-3.0 renderer/product",
+      "classification": "STANDALONE_CANDIDATE",
+      "owner": "new-repo-after-dedupe",
+      "inspectionType": "javascript-web+3d",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": true,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-06",
+      "name": "Owlie",
+      "upstreamRepo": "mihaiiova/owlie",
+      "sourceSha": "1907ec41a1632982aaa305f7ffd0a12b499aca22",
+      "sourceUrl": "https://github.com/mihaiiova/owlie/tree/1907ec41a1632982aaa305f7ffd0a12b499aca22",
+      "license": "Apache-2.0",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "javascript-cli",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-07",
+      "name": "Lektra",
+      "upstreamRepo": "dheerajshenoy/lektra",
+      "sourceSha": "f292c61bfe07d93b52496fdb78f67a451e6c7dfa",
+      "sourceUrl": "https://github.com/dheerajshenoy/lektra/tree/f292c61bfe07d93b52496fdb78f67a451e6c7dfa",
+      "license": "AGPL-3.0",
+      "classification": "MODULE",
+      "owner": "reader-existing-repo-tbd",
+      "inspectionType": "native-cpp",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "inspect build artifacts/static source in isolated system; never execute untrusted installer without approval",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-08",
+      "name": "hpvis",
+      "upstreamRepo": "dheerajshenoy/hpvis",
+      "sourceSha": "c57799f9e8d128e8415072b9fdfdd73f6d465fa4",
+      "sourceUrl": "https://github.com/dheerajshenoy/hpvis/tree/c57799f9e8d128e8415072b9fdfdd73f6d465fa4",
+      "license": "AGPL-3.0",
+      "classification": "STANDALONE_CANDIDATE",
+      "owner": "new-repo-after-dedupe",
+      "inspectionType": "native-gpu",
+      "priority": "P3",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "inspect build artifacts/static source in isolated system; never execute untrusted installer without approval",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": true,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-09",
+      "name": "DrexiusTerminal",
+      "upstreamRepo": "DreyDreamer17/drexius-terminal",
+      "sourceSha": "bc6a226a23942f0c5bc1fd4a7bacb282a8b7f88d",
+      "sourceUrl": "https://github.com/DreyDreamer17/drexius-terminal/tree/bc6a226a23942f0c5bc1fd4a7bacb282a8b7f88d",
+      "license": "GPL-3.0",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "rust-tauri+android",
+      "priority": "P1",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-10",
+      "name": "Brambit",
+      "upstreamRepo": "morethanrealio/brambit",
+      "sourceSha": "1b53646e4d3a239891542205e7069a501c35bb40",
+      "sourceUrl": "https://github.com/morethanrealio/brambit/tree/1b53646e4d3a239891542205e7069a501c35bb40",
+      "license": "AGPL-3.0",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "javascript-service",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-11",
+      "name": "SUB/WAVE",
+      "upstreamRepo": "perminder-klair/subwave",
+      "sourceSha": "7cb507f517d7483c25c75918d1659804daddc357",
+      "sourceUrl": "https://github.com/perminder-klair/subwave/tree/7cb507f517d7483c25c75918d1659804daddc357",
+      "license": "MIT",
+      "classification": "STANDALONE_CANDIDATE",
+      "owner": "new-repo-after-dedupe",
+      "inspectionType": "container-web+audio",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": true,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-12",
+      "name": "LocalSend32",
+      "upstreamRepo": "fraaaaa4/LocalSend32",
+      "sourceSha": "dfcf3bdd419c694ff70591b0e85067d71cd02595",
+      "sourceUrl": "https://github.com/fraaaaa4/LocalSend32/tree/dfcf3bdd419c694ff70591b0e85067d71cd02595",
+      "license": "No identified redistribution license",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "native-c-win32",
+      "priority": "P3",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "inspect build artifacts/static source in isolated system; never execute untrusted installer without approval",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-13",
+      "name": "Ecureuil",
+      "upstreamRepo": "fraaaaa4/ecureuil",
+      "sourceSha": "db499632a6a6e9c3e36dbb15325c96d5ed3f51d2",
+      "sourceUrl": "https://github.com/fraaaaa4/ecureuil/tree/db499632a6a6e9c3e36dbb15325c96d5ed3f51d2",
+      "license": "No identified redistribution license",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "managed-dotnet",
+      "priority": "P3",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-14",
+      "name": "OpenCode Dollar Code Edition",
+      "upstreamRepo": "emperorofrome13/opencode-dollar-code-edition",
+      "sourceSha": "65625d35431b318b8046890d120e6897ea003f55",
+      "sourceUrl": "https://github.com/emperorofrome13/opencode-dollar-code-edition/tree/65625d35431b318b8046890d120e6897ea003f55",
+      "license": "MIT; check upstream fork",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "javascript-cli+desktop",
+      "priority": "P1",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-15",
+      "name": "WildCat Export Edition",
+      "upstreamRepo": "emperorofrome13/WildCat-Export-Edition",
+      "sourceSha": "3104d1fe69a0e03d6ce4fc36640b21717acecff5",
+      "sourceUrl": "https://github.com/emperorofrome13/WildCat-Export-Edition/tree/3104d1fe69a0e03d6ce4fc36640b21717acecff5",
+      "license": "No identified redistribution license",
+      "classification": "MODULE",
+      "owner": "creator-console-existing-repo-tbd",
+      "inspectionType": "python-web+image",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-16",
+      "name": "Scry",
+      "upstreamRepo": "R-Hatim/scry",
+      "sourceSha": "628f1196496b343254678505f6683efcf6b17f42",
+      "sourceUrl": "https://github.com/R-Hatim/scry/tree/628f1196496b343254678505f6683efcf6b17f42",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "beaconfind-existing-repo-tbd",
+      "inspectionType": "native-rust",
+      "priority": "P1",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "inspect build artifacts/static source in isolated system; never execute untrusted installer without approval",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-17",
+      "name": "Drizzle Cube",
+      "upstreamRepo": "cliftonc/drizzle-cube",
+      "sourceSha": "0824c7471212d03f046f369703fc928c126f43bf",
+      "sourceUrl": "https://github.com/cliftonc/drizzle-cube/tree/0824c7471212d03f046f369703fc928c126f43bf",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "rrahul0904/Agentic_AI_Data_Quality_Testing",
+      "inspectionType": "javascript-web",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-18",
+      "name": "PiP Companion",
+      "upstreamRepo": "kir4che/pip-companion",
+      "sourceSha": "e50c9d6a9644a0fa056c0a5ca294f314d633ae74",
+      "sourceUrl": "https://github.com/kir4che/pip-companion/tree/e50c9d6a9644a0fa056c0a5ca294f314d633ae74",
+      "license": "MIT",
+      "classification": "STANDALONE_CANDIDATE",
+      "owner": "new-repo-after-dedupe",
+      "inspectionType": "browser-extension",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": true,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-19",
+      "name": "WattLoom Cycling",
+      "upstreamRepo": "Ashikaga1974/WattLoom",
+      "sourceSha": "5454c0d3a532df3e2309d952247b5d6ab23d6adf",
+      "sourceUrl": "https://github.com/Ashikaga1974/WattLoom/tree/5454c0d3a532df3e2309d952247b5d6ab23d6adf",
+      "license": "AGPL-3.0",
+      "classification": "MODULE",
+      "owner": "forge-fitness-existing-repo-tbd",
+      "inspectionType": "python+react",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-20",
+      "name": "Quern",
+      "upstreamRepo": "quern-dev/quern",
+      "sourceSha": "b8514cd1774c49faae8f0bb3b66ad26f7a5cb24d",
+      "sourceUrl": "https://github.com/quern-dev/quern/tree/b8514cd1774c49faae8f0bb3b66ad26f7a5cb24d",
+      "license": "Apache-2.0",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "python+mcp+ios+android",
+      "priority": "P0",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-21",
+      "name": "bida",
+      "upstreamRepo": "theoldg/bida",
+      "sourceSha": "db708f07dfb15c63bbe88bdecf7b6e0d658a6bf7",
+      "sourceUrl": "https://github.com/theoldg/bida/tree/db708f07dfb15c63bbe88bdecf7b6e0d658a6bf7",
+      "license": "MIT",
+      "classification": "STANDALONE_CANDIDATE",
+      "owner": "new-repo-after-dedupe",
+      "inspectionType": "pwa-typescript",
+      "priority": "P2",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": true,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-22",
+      "name": "Cozy Watch",
+      "upstreamRepo": "Cozy-Watch/CozyWatch",
+      "sourceSha": "15962b29d2c8020249794417f2429fd1ed048dd3",
+      "sourceUrl": "https://github.com/Cozy-Watch/CozyWatch/tree/15962b29d2c8020249794417f2429fd1ed048dd3",
+      "license": "MIT; branding excluded",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "electron",
+      "priority": "P1",
+      "sourceKind": "reddit-comment-repository",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "analyze local JS/Electron bundle with rea-agents, produce module/import/IPC evidence, then bounded browser observation",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-23",
+      "name": "AniList Wrapper",
+      "upstreamRepo": "Api-Wrappers/anilist-wrapper",
+      "sourceSha": "ac7957b53c1db5d3ff2d3f5bbfa7711fcef56445",
+      "sourceUrl": "https://github.com/Api-Wrappers/anilist-wrapper/tree/ac7957b53c1db5d3ff2d3f5bbfa7711fcef56445",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "typescript-sdk",
+      "priority": "P3",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-24",
+      "name": "TMDB Wrapper",
+      "upstreamRepo": "Api-Wrappers/tmdb-wrapper",
+      "sourceSha": "f81258fc87218cbb1f2d7e0753e8ca6fb711eb46",
+      "sourceUrl": "https://github.com/Api-Wrappers/tmdb-wrapper/tree/f81258fc87218cbb1f2d7e0753e8ca6fb711eb46",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "typescript-sdk",
+      "priority": "P3",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-25",
+      "name": "IGDB Wrapper",
+      "upstreamRepo": "Api-Wrappers/igdb-wrapper",
+      "sourceSha": "9a505696fade6375e4fa5484a89cb9bef8117fb1",
+      "sourceUrl": "https://github.com/Api-Wrappers/igdb-wrapper/tree/9a505696fade6375e4fa5484a89cb9bef8117fb1",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "typescript-sdk",
+      "priority": "P3",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-26",
+      "name": "Awesome API Wrappers",
+      "upstreamRepo": "Api-Wrappers/awesome-api-wrappers",
+      "sourceSha": "e0600cc129c62833d68ade2dfa87aef8019a7e6e",
+      "sourceUrl": "https://github.com/Api-Wrappers/awesome-api-wrappers/tree/e0600cc129c62833d68ade2dfa87aef8019a7e6e",
+      "license": "NOASSERTION",
+      "classification": "RESOURCE",
+      "owner": "rea-evidence-index",
+      "inspectionType": "source-index",
+      "priority": "P3",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-27",
+      "name": "Trakt Wrapper",
+      "upstreamRepo": "Api-Wrappers/trakt-wrapper",
+      "sourceSha": "7a0977370745d07301525346a94a7a827a5b20ff",
+      "sourceUrl": "https://github.com/Api-Wrappers/trakt-wrapper/tree/7a0977370745d07301525346a94a7a827a5b20ff",
+      "license": "MIT; archived",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "typescript-sdk",
+      "priority": "P3",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-28",
+      "name": "API Core",
+      "upstreamRepo": "Api-Wrappers/api-core",
+      "sourceSha": "3f71b7a537ee6a5ff88e2d3636e7407d3243d26f",
+      "sourceUrl": "https://github.com/Api-Wrappers/api-core/tree/3f71b7a537ee6a5ff88e2d3636e7407d3243d26f",
+      "license": "MIT",
+      "classification": "DONOR",
+      "owner": "agent-work-os",
+      "inspectionType": "typescript-sdk-core",
+      "priority": "P2",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    },
+    {
+      "id": "REA-SG-29",
+      "name": "Api-Wrappers Organization Profile",
+      "upstreamRepo": "Api-Wrappers/.github",
+      "sourceSha": "62619b7e16bfd3ff9945c598db7db7fdd9127a44",
+      "sourceUrl": "https://github.com/Api-Wrappers/.github/tree/62619b7e16bfd3ff9945c598db7db7fdd9127a44",
+      "license": "UNSPECIFIED",
+      "classification": "RESOURCE",
+      "owner": "rea-evidence-index",
+      "inspectionType": "org-metadata",
+      "priority": "P3",
+      "sourceKind": "organization-resource",
+      "state": "SOURCE_PINNED",
+      "stageStatus": {
+        "identity": "FIRST_PASS_DONE",
+        "source_pin": "FIRST_PASS_DONE",
+        "product_flows": "NOT_DONE",
+        "architecture": "NOT_DONE",
+        "comparison": "NOT_DONE",
+        "clean_room_spec": "NOT_DONE",
+        "rea_execution": "NOT_DONE",
+        "license_security": "NOT_DONE",
+        "owned_implementation": "NOT_DONE",
+        "tests_replay": "NOT_DONE",
+        "review_shipping": "NOT_DONE",
+        "deployment_uat": "NOT_DONE"
+      },
+      "reaInspectionPlan": "reconstruct source and build in sandbox, instrument local runtime with approved REA provider where supported",
+      "gates": {
+        "externalWritesAllowed": false,
+        "productionDeployAllowed": false,
+        "unknownBinaryExecutionAllowed": false,
+        "signingSecretsAllowed": false,
+        "approvalRequired": true
+      },
+      "repoCreation": {
+        "requiredOnlyWhenStandaloneAndDedupeComplete": false,
+        "created": false
+      }
+    }
+  ]
+}
