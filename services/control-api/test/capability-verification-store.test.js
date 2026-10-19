@@ -95,6 +95,19 @@ test("session events drive normalized verification run lifecycle and receipt", a
   assert.equal(complete.completedAt, "2026-10-16T12:02:00.000Z");
 });
 
+test("session event consumers receive non-verification session events without fabricating a verification run", async () => {
+  const { repository } = await fixture();
+  const seen = [];
+  const unregister = repository.registerSessionEventConsumer(async (entry) => seen.push(entry));
+  const event = { kind: "tool", name: "source-access-observation", phase: "completed", payload: { ok: true } };
+  const result = await repository.updateFromSessionEvent("browser-session-1", event);
+  assert.equal(result, null);
+  assert.deepEqual(seen, [{ sessionId: "browser-session-1", event }]);
+  unregister();
+  await repository.updateFromSessionEvent("browser-session-2", event);
+  assert.equal(seen.length, 1);
+});
+
 test("completed status without receipt remains verifying until receipt arrives", async () => {
   const { repository } = await fixture();
   const { run, session, command } = records();

@@ -20,10 +20,17 @@ export class CapabilityVerificationRepository {
     this.localPath = `${store.filePath}.capability-verification-runs.json`;
     this.localWriteChain = Promise.resolve();
     this.migrationPromise = null;
+    this.sessionEventConsumers = new Set();
   }
 
   async initialize() {
     if (!this.store.pool) await this.#readLocalState();
+  }
+
+  registerSessionEventConsumer(consumer) {
+    if (typeof consumer !== "function") throw new TypeError("session event consumer must be a function");
+    this.sessionEventConsumers.add(consumer);
+    return () => this.sessionEventConsumers.delete(consumer);
   }
 
   async createWithSession(runInput, session, command) {
@@ -113,6 +120,8 @@ export class CapabilityVerificationRepository {
   async updateFromSessionEvent(sessionId, event) {
     await this.#ensurePostgresStore();
     if (!sessionId || !event) return null;
+    let verification = null;
+
     if (this.store.pool) {
       const client = await this.store.pool.connect();
       try {
@@ -121,39 +130,46 @@ export class CapabilityVerificationRepository {
           "SELECT record FROM agent_work_os_capability_verification_runs_v1 WHERE session_id = $1 FOR UPDATE",
           [sessionId]
         );
-        if (!selected.rows[0]) {
-          await client.query("COMMIT");
-          return null;
+        if (selected.rows[0]) {
+          const updated = applySessionEvent(selected.rows[0].record, event);
+          if (!updated) verification = selected.rows[0].record;
+          else {
+            const result = await client.query(
+              `UPDATE agent_work_os_capability_verification_runs_v1
+               SET status = $1, record = $2::jsonb, updated_at = $3
+               WHERE session_id = $4 RETURNING record`,
+              [updated.status, JSON.stringify(updated), updated.updatedAt, sessionId]
+            );
+            verification = result.rows[0].record;
+          }
         }
-        const updated = applySessionEvent(selected.rows[0].record, event);
-        if (!updated) {
-          await client.query("COMMIT");
-          return selected.rows[0].record;
-        }
-        const result = await client.query(
-          `UPDATE agent_work_os_capability_verification_runs_v1
-           SET status = $1, record = $2::jsonb, updated_at = $3
-           WHERE session_id = $4 RETURNING record`,
-          [updated.status, JSON.stringify(updated), updated.updatedAt, sessionId]
-        );
         await client.query("COMMIT");
-        return result.rows[0].record;
       } catch (error) {
         try { await client.query("ROLLBACK"); } catch {}
         throw error;
       } finally {
         client.release();
       }
+    } else {
+      const state = await this.#readLocalState();
+      const entry = Object.values(state.runs).find((run) => run.sessionId === sessionId);
+      if (entry) {
+        const updated = applySessionEvent(entry, event);
+        if (!updated) verification = structuredClone(entry);
+        else {
+          state.runs[entry.id] = updated;
+          await this.#writeLocalState(state);
+          verification = structuredClone(updated);
+        }
+      }
     }
 
-    const state = await this.#readLocalState();
-    const entry = Object.values(state.runs).find((run) => run.sessionId === sessionId);
-    if (!entry) return null;
-    const updated = applySessionEvent(entry, event);
-    if (!updated) return structuredClone(entry);
-    state.runs[entry.id] = updated;
-    await this.#writeLocalState(state);
-    return structuredClone(updated);
+    await this.#notifySessionEventConsumers(sessionId, event);
+    return verification;
+  }
+
+  async #notifySessionEventConsumers(sessionId, event) {
+    for (const consumer of this.sessionEventConsumers) await consumer({ sessionId, event });
   }
 
   async #ensurePostgresStore() {
@@ -220,20 +236,21 @@ function applySessionEvent(runInput, event) {
   } else if (event.kind === "status") {
     if (event.status === "running" && run.status === "queued") {
       run.status = "running";
-      run.startedAt ??= at;
+      run.startedAt = at;
+      changed = true;
+    } else if (event.status === "completed" && run.status !== "complete" && run.status !== "failed") {
+      // A capability is not verified until the normalized receipt arrives.
+      run.status = "verifying";
       changed = true;
     } else if (event.status === "failed" || event.status === "interrupted") {
       run.status = event.status;
+      run.error = event.message ?? event.error ?? null;
       run.completedAt = at;
-      if (event.message) run.error = String(event.message).slice(0, 2_000);
-      changed = true;
-    } else if (event.status === "completed" && !run.receipt) {
-      run.status = "verifying";
       changed = true;
     }
   } else if (event.kind === "error") {
     run.status = "failed";
-    run.error = String(event.message ?? "capability_verification_failed").slice(0, 2_000);
+    run.error = event.message ?? "capability verification failed";
     run.completedAt = at;
     changed = true;
   }

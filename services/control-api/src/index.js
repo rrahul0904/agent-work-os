@@ -16,6 +16,8 @@ import { handleCapabilityRegistryRequest, resolveVerificationCapabilitySpec } fr
 import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
+import { createTenantSourceIntakeSupervisor } from "./tenant-source-intake-supervisor.js";
+import { handleSourceIntakeRequest } from "./source-intake-routes.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -50,6 +52,11 @@ export async function createControlPlane() {
   if (identities) await identities.initialize();
   const capabilityRegistry = new TenantCapabilityRegistryRepository(store);
   await capabilityRegistry.initialize();
+  const sourceIntakeSupervisor = createTenantSourceIntakeSupervisor({
+    workItems,
+    capabilityRegistryRepository: capabilityRegistry,
+    capabilityVerificationRepository: capabilityVerifications
+  });
   const staleMachinesAtStartup = await store.initializeMachineSessionStore(machineStaleAfterMs);
   await store.initializeShippingRunStore();
   await store.initializeRealtimeEventStore();
@@ -431,6 +438,18 @@ export async function createControlPlane() {
         const run = await capabilityVerifications.get(decodeURIComponent(capabilityVerificationMatch[1]), organizationId);
         return run ? json(res, 200, run) : json(res, 404, { error: "capability_verification_not_found" });
       }
+      if (await handleSourceIntakeRequest({
+        req,
+        res,
+        url,
+        principal,
+        identities,
+        workItems,
+        sourceIntakeSupervisor,
+        readJson,
+        json,
+        broadcast
+      })) return;
       if (req.method === "GET" && url.pathname === "/api/work-items") {
         const organizationId = url.searchParams.get("organizationId");
         if (!organizationId) return json(res, 400, { error: "organization_id_required" });
@@ -876,7 +895,8 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/capabilities" || /^\/api\/capabilities\/[^/]+$/.test(pathname)
     || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
-    || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
+    || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname)
+    || /^\/api\/work-items\/[^/]+\/source-intake(?:\/(?:block|resume))?$/.test(pathname);
 }
 function isMachineScopedRoute(method, pathname) {
   return method === "GET" && /^\/api\/sessions\/[^/]+$/.test(pathname);

@@ -1,6 +1,45 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createOpaqueCursorCodec, PostgresEventFanout } from "../src/realtime-events.js";
+import { createOpaqueCursorCodec, persistRealtimeEvent, PostgresEventFanout } from "../src/realtime-events.js";
+
+test("idempotent realtime persistence notifies only on the first deterministic event key", async () => {
+  const rows = new Map();
+  const notifications = [];
+  let eventId = 0;
+  const pool = {
+    async connect() {
+      return {
+        async query(sql, values = []) {
+          if (sql.includes("INSERT INTO agent_work_os_realtime_events_v1")) {
+            const [eventKey, originId, eventJson] = values;
+            if (rows.has(eventKey)) return { rows: [] };
+            eventId += 1;
+            rows.set(eventKey, { event_id: eventId, origin_id: originId, event: JSON.parse(eventJson) });
+            return { rows: [{ event_id: eventId }] };
+          }
+          if (sql.includes("SELECT event_id FROM agent_work_os_realtime_events_v1 WHERE event_key")) {
+            const row = rows.get(values[0]);
+            return { rows: row ? [{ event_id: row.event_id }] : [] };
+          }
+          if (sql.includes("pg_notify")) {
+            notifications.push(values);
+            return { rows: [] };
+          }
+          return { rows: [] };
+        },
+        release() {}
+      };
+    }
+  };
+  const event = { type: "work.item.updated", workItem: { id: "work-1", status: "ready", version: 6 } };
+  const first = await persistRealtimeEvent(pool, event, { eventKey: "source-intake:resume-1:work-item-v6", originId: "source-intake-browser-observer" });
+  const replay = await persistRealtimeEvent(pool, event, { eventKey: "source-intake:resume-1:work-item-v6", originId: "source-intake-browser-observer" });
+  assert.deepEqual(first, { eventId: 1, eventKey: "source-intake:resume-1:work-item-v6", inserted: true });
+  assert.deepEqual(replay, { eventId: 1, eventKey: "source-intake:resume-1:work-item-v6", inserted: false });
+  assert.equal(rows.size, 1);
+  assert.deepEqual(rows.get("source-intake:resume-1:work-item-v6").event, event);
+  assert.equal(notifications.length, 1, "reconciliation replay does not notify clients twice");
+});
 
 test("fan-out shutdown waits for in-flight event persistence and rejects later broadcasts", async () => {
   let eventId = 0;

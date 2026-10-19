@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/source-intake-transition-v1.schema.json",
+  "title": "Agent Work OS Source Intake Transition v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "sourceId", "requestedUrl", "resolutionReceiptSha256", "transitionedAt", "gate", "target", "requiredCapability", "accessRequestSha256", "accessObservationSha256", "nextAction", "transitionSha256"],
+  "properties": {
+    "contractVersion": { "const": "source-intake-transition/v1" },
+    "sourceId": { "type": "string", "minLength": 1 },
+    "requestedUrl": { "type": "string", "format": "uri" },
+    "resolutionReceiptSha256": { "$ref": "#/$defs/sha256" },
+    "transitionedAt": { "type": "string", "format": "date-time" },
+    "gate": {
+      "enum": ["TARGET_IDENTITY_RESOLVED", "ACCESS_CONTEXT_REQUIRED", "TARGET_IDENTITY_UNRESOLVED"]
+    },
+    "target": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/target" }
+      ]
+    },
+    "requiredCapability": { "type": ["string", "null"] },
+    "accessRequestSha256": {
+      "oneOf": [
+        { "$ref": "#/$defs/sha256" },
+        { "type": "null" }
+      ]
+    },
+    "accessObservationSha256": {
+      "oneOf": [
+        { "$ref": "#/$defs/sha256" },
+        { "type": "null" }
+      ]
+    },
+    "nextAction": {
+      "enum": ["REA_EVIDENCE_DISCOVERY", "ACQUIRE_SOURCE_ACCESS_CONTEXT", "STOP_AND_PRESERVE_EVIDENCE"]
+    },
+    "transitionSha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "postId", "subreddit", "canonicalUrl"],
+      "properties": {
+        "kind": { "const": "reddit-post" },
+        "postId": { "type": "string", "minLength": 1 },
+        "subreddit": { "type": ["string", "null"] },
+        "canonicalUrl": { "type": "string", "format": "uri", "pattern": "^https://(www\\.)?reddit\\.com/" }
+      }
+    }
+  }
+}
