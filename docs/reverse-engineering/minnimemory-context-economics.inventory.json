@@ -1,0 +1,182 @@
+{
+  "schema": "rea-donor-intake/v1",
+  "date_local": "2026-10-18",
+  "supplied_url": "https://www.reddit.com/r/SideProject/s/QF4vjgofNh",
+  "resolved_url": "https://www.reddit.com/r/SideProject/comments/1x9ljnh/we_made_a_tool_that_cuts_claude_code_session/",
+  "product": "MinniMemoryMCP",
+  "vendor": "MinniAI",
+  "category": "coding-agent context and cost optimization",
+  "classification": "DONOR_REFERENCE_EXTEND_EXISTING",
+  "owned_repo": "rrahul0904/agent-work-os",
+  "new_repo_required": false,
+  "issue_url": "https://github.com/rrahul0904/agent-work-os/issues/301",
+  "evidence": [
+    {
+      "kind": "vendor_claim",
+      "url": "https://minniai.com/minnimemorymcp"
+    },
+    {
+      "kind": "docs",
+      "url": "https://minniai.com/minnimemorymcp/docs"
+    },
+    {
+      "kind": "benchmark_vendor_claim",
+      "url": "https://minniai.com/"
+    },
+    {
+      "kind": "reddit_post",
+      "url": "https://www.reddit.com/r/SideProject/comments/1x9ljnh/we_made_a_tool_that_cuts_claude_code_session/"
+    },
+    {
+      "kind": "public_readme_metadata_only",
+      "url": "https://github.com/MinniAI-com/minnimemory-plugin/blob/main/README.md",
+      "observed_head": "788529a43a73b1cfe6464eb5ff7d2e3a4c533d34"
+    },
+    {
+      "kind": "proprietary_license",
+      "url": "https://github.com/MinniAI-com/minnimemory-plugin/blob/main/LICENSE"
+    }
+  ],
+  "ownership_overlap": [
+    {
+      "issue": 9,
+      "capability": "decisions and handoffs"
+    },
+    {
+      "issue": 115,
+      "capability": "bounded verified context packs"
+    },
+    {
+      "issue": 166,
+      "capability": "canonical governed memory plane"
+    },
+    {
+      "issue": 21,
+      "capability": "provider-neutral shared brain"
+    }
+  ],
+  "feature_matrix": [
+    {
+      "feature": "persistent versus on-demand memory",
+      "observed": "vendor-described",
+      "owned": "extend #115 projection, no new store"
+    },
+    {
+      "feature": "prompt-directed recall",
+      "observed": "vendor-described",
+      "owned": "independent relevance resolver; strong trust/scope gate"
+    },
+    {
+      "feature": "local safety and restore",
+      "observed": "vendor-described",
+      "owned": "original hash-checked approval and bytewise rollback"
+    },
+    {
+      "feature": "session cost optimization",
+      "observed": "vendor benchmark claim",
+      "owned": "per-provider cache-aware cost/quality evaluator"
+    },
+    {
+      "feature": "multi-harness support",
+      "observed": "Claude Code only in vendor descriptions",
+      "owned": "independent adapter certification; no parity assumption"
+    }
+  ],
+  "benchmark_claim": {
+    "source": "vendor official web",
+    "measured_on": "2026-10-06",
+    "product_version": "1.1.0",
+    "answers_per_arm": 81,
+    "original_cost_usd": 2.31,
+    "reported_after_cost_usd": 1.68,
+    "cost_reduction_percent": 27.4,
+    "before_total_tokens": 3574009,
+    "after_total_tokens": 3019536,
+    "before_correct": 74,
+    "after_correct": 72,
+    "independently_verified": false
+  },
+  "licensing": {
+    "classification": "PROPRIETARY_RESTRICTED",
+    "source_copy_allowed": false,
+    "competitor_reverse_engineering_allowed_by_vendor_terms": false,
+    "approach": "public feature descriptions plus independently specified clean-room contracts only",
+    "source_inspected": false,
+    "runtime_executed": false
+  },
+  "architecture": {
+    "responsible_subsystems": [
+      "Memory Plane",
+      "Verified Context Pack",
+      "Capability Fabric",
+      "Shipping OS"
+    ],
+    "owned_new_slice": "Context Economics",
+    "planned_contracts": [
+      "context-cost-profile/v1",
+      "context-layout-proposal/v1",
+      "context-selection-trace/v1",
+      "memory-recovery-manifest/v1",
+      "context-economics-receipt/v1"
+    ],
+    "security_invariants": [
+      "local-context-by-default",
+      "no-source-code-writes",
+      "no-private-blob-to-host-by-default",
+      "preview-hash-before-mutation",
+      "explicit-approval",
+      "atomic-bytewise-undo",
+      "cross-worktree-isolation",
+      "secret-exclusion",
+      "no-instruction-elevation",
+      "unknown-telemetry-means-unknown",
+      "no-deploy-authority"
+    ]
+  },
+  "validation": {
+    "fixture_arms": [
+      "unmodified",
+      "bounded_static",
+      "bounded_task_retrieval"
+    ],
+    "test_ids": [
+      "T01",
+      "T02",
+      "T03",
+      "T04",
+      "T05",
+      "T06",
+      "T07",
+      "T08",
+      "T09",
+      "T10",
+      "T11",
+      "T12",
+      "T13",
+      "T14",
+      "T15",
+      "T16",
+      "T17",
+      "T18",
+      "T19",
+      "T20",
+      "T21"
+    ],
+    "phase_state": {
+      "R0": "RESEARCH_COMPLETE",
+      "R1": "BLOCKED_WIP",
+      "R2": "NOT_STARTED",
+      "R3": "NOT_STARTED",
+      "R4": "NOT_STARTED",
+      "R5": "NOT_STARTED",
+      "R6": "NOT_STARTED",
+      "R7": "NOT_STARTED"
+    },
+    "shipped": false
+  },
+  "tracker": {
+    "canonical_id": null,
+    "reason": "Do not fabricate concurrent RE tracker IDs; reconcile later against authoritative tracker.",
+    "status": "GOVERNANCE_ISSUE_LINKED"
+  }
+}
