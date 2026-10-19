@@ -10,6 +10,7 @@ import { CursorAdapter } from "./cursor-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
+import { createPersistentWorkSupervisor } from "./work-supervisor-store.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const machineCredential = process.env.AGENT_WORK_OS_MACHINE_TOKEN ?? "";
@@ -17,11 +18,14 @@ const token = process.env.AGENT_WORK_OS_TOKEN ?? (process.env.NODE_ENV === "prod
 const machineName = process.env.AGENT_WORK_OS_MACHINE_NAME || os.hostname();
 const heartbeatMs = Number(process.env.AGENT_WORK_OS_HEARTBEAT_MS ?? 15000);
 const shippingStateRoot = path.resolve(process.env.AGENT_WORK_OS_SHIPPING_STATE ?? ".agent-work-os/shipping-state");
+const runtimeSupervisorPath = path.resolve(process.env.AGENT_WORK_OS_RUNTIME_SUPERVISOR_STATE ?? ".agent-work-os/runtime-supervisor.json");
 const machineId = await loadMachineId();
 const adapters = new Map();
 const nativeSessions = new Map();
 const shippingRuns = new Set();
+const activeWorkBySession = new Map();
 const commandReceipts = createCommandReceiptCache();
+const workSupervisor = await createPersistentWorkSupervisor({ filePath: runtimeSupervisorPath });
 if (process.env.AGENT_WORK_OS_ENABLE_ECHO !== "false") adapters.set("echo", new EchoAdapter());
 const codex = new CodexAdapter();
 if (codex.capability()) adapters.set("codex", codex);
@@ -56,6 +60,15 @@ function connect() {
       const command = decodeMessage(String(event.data));
       if (command.type === "server.machine.authenticated") {
         console.log(`[daemon] authenticated as ${machineName} (${machineId}) org=${command.organizationId ?? "local"} agents=${[...adapters.keys()].join(",")} shipping=enabled`);
+        for (const recovered of workSupervisor.drainRecoveredWork()) {
+          if (ws.readyState !== WebSocket.OPEN) break;
+          ws.send(encodeMessage({
+            type: "daemon.session.event",
+            machineId,
+            sessionId: recovered.work.sessionId,
+            event: supervisorEvent(recovered.work, recovered.receipt, "lost")
+          }));
+        }
         return;
       }
       if (command.type !== "server.command") return;
@@ -81,14 +94,40 @@ function connect() {
         return;
       }
       if (command.action === "session.start") {
-        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`); ack(true);
-        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
+        const prepared = await prepareTrackedWork(command, p.agent, "session_start", emit);
+        ack(true);
+        void runPreparedWork({ prepared, command, adapter, cwd: p.cwd, prompt: p.prompt, model: p.model, emit });
+        return;
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
       if (command.action === "session.message") {
-        ack(true); void adapter.run({ sessionId: command.sessionId, cwd: state.cwd, prompt: command.payload?.prompt, model: state.model, nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        const prepared = await prepareTrackedWork(command, state.agent, "session_message", emit);
+        ack(true);
+        void runPreparedWork({
+          prepared,
+          command,
+          adapter,
+          cwd: state.cwd,
+          prompt: command.payload?.prompt,
+          model: state.model,
+          nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId,
+          emit
+        });
+        return;
       }
-      if (command.action === "session.interrupt") { await adapter.interrupt(command.sessionId); emit({ kind: "status", status: "interrupted", at: new Date().toISOString() }); ack(true); }
+      if (command.action === "session.interrupt") {
+        await adapter.interrupt(command.sessionId);
+        const workId = activeWorkBySession.get(command.sessionId);
+        if (workId) {
+          const current = workSupervisor.getWork(workId);
+          if (current && !["complete", "failed", "interrupted"].includes(current.state)) {
+            const settled = await workSupervisor.transitionWork(workId, { expectedSequence: current.sequence, to: "interrupted", reason: "session_interrupt" });
+            emit(supervisorEvent(settled.work, settled.receipt, "interrupted"));
+          }
+        }
+        emit({ kind: "status", status: "interrupted", at: new Date().toISOString() }); ack(true);
+      }
       else throw new Error(`Unsupported server command action ${command.action}`);
     } catch (error) {
       console.warn(`[daemon] command handling error: ${error.message}`);
@@ -110,6 +149,74 @@ function connect() {
     reconnectTimer = setTimeout(connect, delay);
   });
   ws.addEventListener("error", () => {});
+}
+
+async function prepareTrackedWork(command, adapterId, reason, emit) {
+  if (activeWorkBySession.has(command.sessionId)) throw new Error("session_work_already_active");
+  const workId = `run:${command.commandId}`;
+  const existing = workSupervisor.getWork(workId);
+  if (existing) {
+    throw new Error(existing.state === "lost" || existing.state === "unknown"
+      ? "work_command_reconciliation_required"
+      : "work_command_already_recorded");
+  }
+  await workSupervisor.createWork({
+    id: workId,
+    sessionId: command.sessionId,
+    kind: adapterId === "capability-verify" ? "verification" : "process",
+    adapterId,
+    backendId: "local"
+  });
+  const started = await workSupervisor.transitionWork(workId, { expectedSequence: 0, to: "running", reason });
+  activeWorkBySession.set(command.sessionId, workId);
+  emit(supervisorEvent(started.work, started.receipt, "started"));
+  return started.work;
+}
+
+async function runPreparedWork({ prepared, command, adapter, cwd, prompt, model, nativeSessionId, emit }) {
+  try {
+    const response = await adapter.run({ sessionId: command.sessionId, cwd, prompt, model, nativeSessionId }, emit);
+    if (response.nativeSessionId) nativeSessions.set(command.sessionId, response.nativeSessionId);
+    const current = workSupervisor.getWork(prepared.id);
+    if (current && !["complete", "failed", "interrupted"].includes(current.state)) {
+      const completed = await workSupervisor.transitionWork(prepared.id, { expectedSequence: current.sequence, to: "complete", reason: "adapter_completed" });
+      emit(supervisorEvent(completed.work, completed.receipt, "completed"));
+    }
+  } catch (error) {
+    const current = workSupervisor.getWork(prepared.id);
+    if (current && !["complete", "failed", "interrupted"].includes(current.state)) {
+      try {
+        const failedWork = await workSupervisor.transitionWork(prepared.id, {
+          expectedSequence: current.sequence,
+          to: "failed",
+          reason: "adapter_failed",
+          error: error.message
+        });
+        emit(supervisorEvent(failedWork.work, failedWork.receipt, "failed"));
+      } catch (transitionError) {
+        console.warn(`[daemon] unable to settle work ${prepared.id}: ${transitionError.message}`);
+      }
+    }
+    fail(emit, error);
+  } finally {
+    if (activeWorkBySession.get(command.sessionId) === prepared.id) activeWorkBySession.delete(command.sessionId);
+  }
+}
+
+function supervisorEvent(work, receipt, phase) {
+  return {
+    kind: "work",
+    phase,
+    workId: work.id,
+    workKind: work.kind,
+    state: work.state,
+    sequence: work.sequence,
+    adapterId: work.adapterId,
+    backendId: work.backendId,
+    receiptDigest: receipt?.digest ?? null,
+    receipt: receipt ?? null,
+    at: new Date(work.updatedAt).toISOString()
+  };
 }
 
 async function runShipping(runId, contract) {
@@ -144,7 +251,8 @@ async function shutdown() {
   shuttingDown = true;
   if (heartbeat) clearInterval(heartbeat);
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  try { await workSupervisor.flush(); } catch (error) { console.warn(`[daemon] supervisor flush failed: ${error.message}`); }
   ws?.close();
   setTimeout(() => process.exit(0), 30).unref();
 }
-process.on("SIGINT", shutdown); process.on("SIGTERM", shutdown); connect();
+process.on("SIGINT", () => void shutdown()); process.on("SIGTERM", () => void shutdown()); connect();
