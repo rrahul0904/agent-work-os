@@ -36,6 +36,10 @@ try {
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { ok: true, service: 'research-ledger', version: '0.3.0' });
 
+  const notebookModule = await fetch(`${base}/notebook-contract.js`);
+  assert.equal(notebookModule.status, 200);
+  assert.match(await notebookModule.text(), /replaceNotebookStores/);
+
   const home = await fetch(`${base}/`);
   assert.equal(home.status, 200);
   const homeText = await home.text();
