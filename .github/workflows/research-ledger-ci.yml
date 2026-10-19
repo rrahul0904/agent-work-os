@@ -1,0 +1,28 @@
+name: research-ledger-ci
+
+on:
+  push:
+    paths:
+      - 'labs/research-ledger/**'
+      - '.github/workflows/research-ledger-ci.yml'
+  pull_request:
+    paths:
+      - 'labs/research-ledger/**'
+      - '.github/workflows/research-ledger-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: labs/research-ledger
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Research Ledger
+        run: npm run check

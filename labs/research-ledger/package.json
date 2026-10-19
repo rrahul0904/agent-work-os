@@ -1,0 +1,22 @@
+{
+  "name": "research-ledger",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "npx vercel dev",
+    "test:api": "node tests.mjs",
+    "test:schema": "node schema-contract.mjs",
+    "test:semantic": "node semantic-contract.mjs",
+    "test:hybrid": "node hybrid-contract.mjs",
+    "test:benchmark": "node benchmark-contract.mjs",
+    "test:runtime": "node runtime-smoke.mjs",
+    "test": "npm run test:api && npm run test:notebook && npm run test:schema && npm run test:semantic && npm run test:hybrid && npm run test:benchmark && npm run test:runtime",
+    "check": "node --check db-schema.js && node --check app.js && node --check completion.js && node --check notebook-contract.js && node --check notebook-contract.test.mjs && node --check semantic-core.js && node --check semantic-worker.js && node --check semantic-search.js && node --check hybrid-brief.js && node --check retrieval-benchmark-core.js && node --check retrieval-benchmark.js && node --check api/research.js && node --check api/source-status.js && node --check railway-server.mjs && node --check schema-contract.mjs && node --check semantic-contract.mjs && node --check hybrid-contract.mjs && node --check benchmark-contract.mjs && node --check runtime-smoke.mjs && npm test",
+    "start": "node railway-server.mjs",
+    "test:notebook": "node notebook-contract.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

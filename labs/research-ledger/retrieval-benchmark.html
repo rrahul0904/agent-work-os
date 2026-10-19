@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Research Ledger Retrieval Benchmark</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    body{margin:0;background:#f4f1ea;color:#20251f;font-family:DM Sans,system-ui,sans-serif}.benchmark-shell{max-width:1180px;margin:0 auto;padding:36px 24px 64px}.benchmark-head{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:24px}.benchmark-head h1{margin:6px 0 8px;font-size:38px}.benchmark-head p{max-width:760px;color:#687066;line-height:1.55}.benchmark-actions{display:flex;gap:8px}.benchmark-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:18px 0}.benchmark-summary article{border:1px solid rgba(32,37,31,.12);border-radius:14px;background:rgba(255,255,255,.65);padding:16px}.benchmark-summary span,.benchmark-summary em{display:block;color:#687066;font-size:12px}.benchmark-summary strong{display:block;margin:8px 0;font-size:18px}.benchmark-table{width:100%;border-collapse:collapse;background:rgba(255,255,255,.62);border-radius:14px;overflow:hidden}.benchmark-table th,.benchmark-table td{padding:12px 10px;text-align:left;border-bottom:1px solid rgba(32,37,31,.09);vertical-align:top}.benchmark-table th{font-size:12px;color:#687066}.benchmark-table td small{display:block;color:#687066;margin-top:4px}.benchmark-note{padding:14px 16px;border:1px solid rgba(32,37,31,.12);border-radius:12px;background:rgba(255,255,255,.5);margin:16px 0;color:#687066;line-height:1.5}.benchmark-note strong{color:#20251f}.benchmark-status{margin:12px 0;min-height:22px;font-size:13px;color:#687066}.benchmark-status[data-state="error"]{color:#8a3427}@media(max-width:800px){.benchmark-head{display:block}.benchmark-actions{margin-top:14px}.benchmark-summary{grid-template-columns:1fr}.table-wrap{overflow-x:auto}}
+  </style>
+</head>
+<body>
+  <main class="benchmark-shell">
+    <header class="benchmark-head">
+      <div>
+        <span class="eyebrow">RETRIEVAL QUALITY GATE</span>
+        <h1>Lexical vs semantic vs hybrid RRF</h1>
+        <p>This page runs the pinned local multilingual embedding model against a fixed Research Ledger corpus containing exact matches, paraphrases, multilingual questions, noise and distractors. It calculates Recall@5 and mean reciprocal rank without sending benchmark passages to the application backend.</p>
+      </div>
+      <div class="benchmark-actions">
+        <button id="runBenchmark" class="primary">Run browser benchmark</button>
+        <button id="downloadBenchmark" disabled>Download JSON receipt</button>
+      </div>
+    </header>
+
+    <section class="benchmark-note">
+      <strong>Quality claims require an executed receipt.</strong> CI validates the corpus, metric math and integration contracts, but it does not download the ~browser model or manufacture semantic accuracy results. Run this page in a real browser before changing the default retrieval mode.
+    </section>
+
+    <div id="benchmarkStatus" class="benchmark-status" data-state="idle">Not run. First execution downloads/caches the same pinned model used by semantic search.</div>
+    <section id="benchmarkSummary" class="benchmark-summary"></section>
+
+    <div class="table-wrap">
+      <table class="benchmark-table">
+        <thead><tr><th>Case</th><th>Query</th><th>Expected</th><th>Lexical rank</th><th>Semantic rank</th><th>Hybrid rank</th></tr></thead>
+        <tbody id="benchmarkRows"></tbody>
+      </table>
+    </div>
+  </main>
+  <script type="module" src="/retrieval-benchmark.js"></script>
+</body>
+</html>
