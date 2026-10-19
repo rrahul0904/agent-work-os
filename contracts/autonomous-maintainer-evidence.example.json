@@ -1,0 +1,18 @@
+{
+  "headSha": "abcdef1234567890",
+  "baseSha": "1234567890abcdef",
+  "authorAgentId": "codex-builder-1",
+  "sourceTrust": "maintainer",
+  "changedFiles": ["services/control-api/src/autonomy-policy.js"],
+  "actions": [],
+  "ciChecks": [
+    { "name": "test", "sha": "abcdef1234567890", "status": "success" },
+    { "name": "acceptance", "sha": "abcdef1234567890", "status": "success" }
+  ],
+  "reviews": [
+    { "reviewerId": "reviewer-correctness", "lens": "correctness", "headSha": "abcdef1234567890", "baseSha": "1234567890abcdef", "verdict": "READY", "sequence": 1 },
+    { "reviewerId": "reviewer-runtime", "lens": "does-it-work", "headSha": "abcdef1234567890", "baseSha": "1234567890abcdef", "verdict": "READY", "sequence": 1 },
+    { "reviewerId": "reviewer-security", "lens": "security", "headSha": "abcdef1234567890", "baseSha": "1234567890abcdef", "verdict": "READY", "sequence": 1 }
+  ],
+  "humanApprovals": []
+}
