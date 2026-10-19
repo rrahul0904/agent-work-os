@@ -82,6 +82,7 @@ test("provider responses become contextual REA observations, not self-certified 
   assert.equal(results[0].evidence.classification, "derived");
   assert.equal(results[0].sourceQuality, "unknown");
   assert.equal(results[0].provenance.providerDigest, provider.metadata.digest);
+  assert.match(results[0].provenance.authorizationDigest, /^sha256:[0-9a-f]{64}$/);
   assert.equal(results[0].sourceSpan.end, sample().excerpt.length);
 });
 
