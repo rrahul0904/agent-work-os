@@ -7,6 +7,7 @@ import {
   assertResearchBrief,
   assertResearchPlan
 } from "./index.js";
+import { isGuardedReadOnlyProvider } from "./provider-boundary.js";
 
 export const REA_EVIDENCE_CLASSES = Object.freeze(["OBSERVED", "DERIVED", "HYPOTHESIS", "UNKNOWN"]);
 export const SOURCE_QUALITY_LEVELS = Object.freeze(["primary", "high", "medium", "low", "unknown"]);
@@ -73,7 +74,9 @@ export async function collectResearchEvidence({ brief: briefInput, plan: planInp
   const brief = assertResearchBrief(briefInput);
   const plan = assertResearchPlan(planInput, brief.digest);
   const adapter = assertSearchAdapter(searchAdapter);
-  if (adapter.metadata.networkAccess !== false) throw new ResearchValidationError("search_adapter_network_forbidden_phase_a");
+  if (adapter.metadata.networkAccess !== false && !isGuardedReadOnlyProvider(adapter)) {
+    throw new ResearchValidationError("search_adapter_network_forbidden_phase_a");
+  }
 
   const observations = [];
   let queryCount = 0;
