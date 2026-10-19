@@ -45,7 +45,7 @@ export function createReadOnlySearchProvider({ id, revision, endpoint, authorize
         queryDigest,
         requestedResults: limit
       }));
-      checkPermission(permission, metadata, queryDigest, limit);
+      const authorizationDigest = checkPermission(permission, metadata, queryDigest, limit);
 
       // The injected executor is the only place where real provider I/O may occur.
       // This module intentionally has no fetch(), HTTP client, credentials or network access.
@@ -85,6 +85,7 @@ export function createReadOnlySearchProvider({ id, revision, endpoint, authorize
             provider: metadata.id,
             providerRevision: metadata.revision,
             providerDigest: metadata.digest,
+            authorizationDigest,
             sourceRevision: item.sourceRevision ?? null
           }
         });
@@ -109,6 +110,16 @@ function checkPermission(value, metadata, queryDigest, limit) {
     || Date.parse(value.expiresAt) <= Date.now()) {
     throw new ResearchValidationError("read_only_provider_grant_expired");
   }
+  // Bind the narrow approved effect to evidence receipts without persisting a credential.
+  return canonicalDigest({
+    schema: "research-network-read-authorization/v1",
+    effect: value.effect,
+    adapterDigest: value.adapterDigest,
+    endpointOrigin: value.endpointOrigin,
+    queryDigest: value.queryDigest,
+    maxResults: value.maxResults,
+    expiresAt: value.expiresAt
+  });
 }
 
 function httpsUrl(value, code) {
