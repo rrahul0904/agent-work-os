@@ -1,0 +1,53 @@
+{
+  "name": "Production-Safe Webhook Intake + Idempotency + DLQ Starter",
+  "nodes": [
+    {
+      "parameters": {"httpMethod":"POST","path":"safe-webhook-intake","responseMode":"responseNode","options":{}},
+      "id": "f1-webhook",
+      "name": "Webhook Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0,0]
+    },
+    {
+      "parameters": {"jsCode":"const body=$json.body??$json;\nconst payload=body.payload??body;\nconst explicit=String(body.idempotencyKey??'').trim();\nconst canonical=JSON.stringify(payload,Object.keys(payload).sort());\nlet hash=0; for(let i=0;i<canonical.length;i++){hash=((hash<<5)-hash)+canonical.charCodeAt(i);hash|=0;}\nconst idempotencyKey=explicit||`demo-${Math.abs(hash)}`;\nconst valid=payload&&typeof payload==='object'&&!Array.isArray(payload)&&Object.keys(payload).length>0;\nreturn [{json:{valid,idempotencyKey,payload,receivedAt:new Date().toISOString(),route:valid?'ACCEPT':'DLQ',reason:valid?null:'empty-or-invalid-payload'}}];"},
+      "id": "f1-normalize",
+      "name": "Validate + Create Idempotency Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [260,0]
+    },
+    {
+      "parameters": {"conditions":{"options":{"caseSensitive":true,"leftValue":"","typeValidation":"strict"},"conditions":[{"id":"valid","leftValue":"={{ $json.valid }}","rightValue":true,"operator":{"type":"boolean","operation":"true","singleValue":true}}],"combinator":"and"},"options":{}},
+      "id": "f1-if",
+      "name": "Valid Payload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [520,0]
+    },
+    {
+      "parameters": {"respondWith":"json","responseBody":"={{ { accepted: true, idempotencyKey: $json.idempotencyKey, route: 'ACCEPT', note: 'Attach your approved side-effecting workflow after this gate.' } }}","options":{"responseCode":200}},
+      "id": "f1-accept",
+      "name": "Return Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [790,-100]
+    },
+    {
+      "parameters": {"respondWith":"json","responseBody":"={{ { accepted: false, route: 'DLQ', idempotencyKey: $json.idempotencyKey, reason: $json.reason, payload: $json.payload } }}","options":{"responseCode":202}},
+      "id": "f1-dlq",
+      "name": "Return DLQ Record",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [790,120]
+    }
+  ],
+  "connections": {
+    "Webhook Intake":{"main":[[{"node":"Validate + Create Idempotency Key","type":"main","index":0}]]},
+    "Validate + Create Idempotency Key":{"main":[[{"node":"Valid Payload?","type":"main","index":0}]]},
+    "Valid Payload?":{"main":[[{"node":"Return Accepted","type":"main","index":0}],[{"node":"Return DLQ Record","type":"main","index":0}]]}
+  },
+  "pinData":{},
+  "settings":{"executionOrder":"v1"},
+  "active":false
+}
