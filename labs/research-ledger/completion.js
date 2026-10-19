@@ -1,3 +1,4 @@
+import { validateNotebook, replaceNotebookStores, MAX_IMPORT_BYTES } from './notebook-contract.js';
 const DB_NAME='research-ledger';
 const DB_VERSION=3;
 const SNAPSHOT_STORE='snapshots';
@@ -100,15 +101,17 @@ async function exportContract(){
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='research-ledger-notebook.v1.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 async function importContract(file){
-  const parsed=JSON.parse(await file.text());if(parsed?.schema!==CONTRACT_VERSION)throw new Error(`Unsupported notebook schema: ${parsed?.schema||'missing'}`);
-  if(!Array.isArray(parsed.documents)||parsed.documents.length>100)throw new Error('Invalid or oversized document set');
-  await storeClear('documents');await storeClear(CAPTURE_STORE);await storeClear(SNAPSHOT_STORE);
-  for(const d of parsed.documents){if(!d?.id||typeof d.text!=='string'||d.text.length>25_000_000)throw new Error('Invalid document entry');await storePut('documents',d)}
-  for(const c of (parsed.captures||[]).slice(0,100))await storePut(CAPTURE_STORE,c);
-  for(const s of (parsed.snapshots||[]).slice(0,50))await storePut(SNAPSHOT_STORE,s);
-  localStorage.setItem('research-ledger:notebook-name',parsed.notebook?.name||'Imported notebook');
-  if(parsed.activeBrief)localStorage.setItem('research-ledger:last-brief',JSON.stringify(parsed.activeBrief));
-  if(parsed.evidenceHash)localStorage.setItem('research-ledger:evidence-hash',parsed.evidenceHash);
+  if (file.size > MAX_IMPORT_BYTES) throw new Error('Notebook exceeds 50 MB import limit');
+  const parsed = JSON.parse(await file.text());
+  const validated = validateNotebook(parsed); // no persistent state touched before full validation
+  const db = await completionOpenDb();
+  try { await replaceNotebookStores(db, validated); }
+  finally { db.close(); }
+  localStorage.setItem('research-ledger:notebook-name',validated.notebook.name||'Imported notebook');
+  if(validated.activeBrief)localStorage.setItem('research-ledger:last-brief',JSON.stringify(validated.activeBrief));
+  else localStorage.removeItem('research-ledger:last-brief');
+  if(validated.evidenceHash)localStorage.setItem('research-ledger:evidence-hash',validated.evidenceHash);
+  else localStorage.removeItem('research-ledger:evidence-hash');
   location.reload();
 }
 
