@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-map-v1.schema.json",
+  "title": "Agent Work OS RepoMapSpec v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "root", "metrics", "languages", "files", "tree", "exclusions", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-map/v1" },
+    "root": { "type": "object", "additionalProperties": false, "required": ["name", "path"], "properties": { "name": { "type": "string", "minLength": 1 }, "path": { "const": "." } } },
+    "metrics": { "type": "object", "additionalProperties": false, "required": ["lines", "files", "directories", "estimatedTokens"], "properties": { "lines": { "type": "integer", "minimum": 0 }, "files": { "type": "integer", "minimum": 0 }, "directories": { "type": "integer", "minimum": 1 }, "estimatedTokens": { "type": "integer", "minimum": 0 } } },
+    "languages": { "$ref": "#/$defs/languageMap" },
+    "files": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "tree": { "$ref": "#/$defs/directory" },
+    "exclusions": { "type": "object", "additionalProperties": false, "required": ["defaultDirectory", "ignoreRule", "symlink", "unrecognized", "binary"], "properties": { "defaultDirectory": { "type": "integer", "minimum": 0 }, "ignoreRule": { "type": "integer", "minimum": 0 }, "symlink": { "type": "integer", "minimum": 0 }, "unrecognized": { "type": "integer", "minimum": 0 }, "binary": { "type": "integer", "minimum": 0 } } },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "languageStats": { "type": "object", "additionalProperties": false, "required": ["lines", "files"], "properties": { "lines": { "type": "integer", "minimum": 0 }, "files": { "type": "integer", "minimum": 0 } } },
+    "languageMap": { "type": "object", "additionalProperties": { "$ref": "#/$defs/languageStats" } },
+    "file": { "type": "object", "additionalProperties": false, "required": ["path", "language", "lines", "bytes", "estimatedTokens"], "properties": { "path": { "type": "string", "minLength": 1 }, "language": { "type": "string", "minLength": 1 }, "lines": { "type": "integer", "minimum": 0 }, "bytes": { "type": "integer", "minimum": 0 }, "estimatedTokens": { "type": "integer", "minimum": 1 } } },
+    "topFile": { "type": "object", "additionalProperties": false, "required": ["name", "path", "lines"], "properties": { "name": { "type": "string", "minLength": 1 }, "path": { "type": "string", "minLength": 1 }, "lines": { "type": "integer", "minimum": 0 } } },
+    "directory": { "type": "object", "additionalProperties": false, "required": ["name", "path", "lines", "files", "directLines", "directFiles", "languages", "directLanguages", "topFiles", "children"], "properties": { "name": { "type": "string", "minLength": 1 }, "path": { "type": "string", "minLength": 1 }, "lines": { "type": "integer", "minimum": 0 }, "files": { "type": "integer", "minimum": 0 }, "directLines": { "type": "integer", "minimum": 0 }, "directFiles": { "type": "integer", "minimum": 0 }, "languages": { "$ref": "#/$defs/languageMap" }, "directLanguages": { "$ref": "#/$defs/languageMap" }, "topFiles": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/topFile" } }, "children": { "type": "array", "items": { "$ref": "#/$defs/directory" } } } }
+  }
+}

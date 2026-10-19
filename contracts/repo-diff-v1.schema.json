@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-diff-v1.schema.json",
+  "title": "Agent Work OS Repository Diff v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "previousDigest", "currentDigest", "changed", "files", "metricsDelta", "languageDelta", "summary", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-diff/v1" },
+    "previousDigest": { "$ref": "#/$defs/digest" },
+    "currentDigest": { "$ref": "#/$defs/digest" },
+    "changed": { "type": "boolean" },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["added", "removed", "changed"],
+      "properties": {
+        "added": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+        "removed": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+        "changed": { "type": "array", "items": { "$ref": "#/$defs/changedFile" } }
+      }
+    },
+    "metricsDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lines", "files", "directories", "estimatedTokens"],
+      "properties": {
+        "lines": { "type": "integer" },
+        "files": { "type": "integer" },
+        "directories": { "type": "integer" },
+        "estimatedTokens": { "type": "integer" }
+      }
+    },
+    "languageDelta": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["language", "lines", "files"],
+        "properties": {
+          "language": { "type": "string", "minLength": 1 },
+          "lines": { "type": "integer" },
+          "files": { "type": "integer" }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["addedFiles", "removedFiles", "changedFiles", "affectedFiles"],
+      "properties": {
+        "addedFiles": { "type": "integer", "minimum": 0 },
+        "removedFiles": { "type": "integer", "minimum": 0 },
+        "changedFiles": { "type": "integer", "minimum": 0 },
+        "affectedFiles": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "language", "lines", "bytes", "estimatedTokens"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "language": { "type": "string", "minLength": 1 },
+        "lines": { "type": "integer", "minimum": 0 },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "estimatedTokens": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "changedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "before", "after", "changes"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "before": { "$ref": "#/$defs/file" },
+        "after": { "$ref": "#/$defs/file" },
+        "changes": { "type": "array", "items": { "enum": ["language", "lines", "bytes", "estimatedTokens"] }, "minItems": 1 }
+      }
+    }
+  }
+}

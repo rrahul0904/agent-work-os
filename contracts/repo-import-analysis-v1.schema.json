@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-import-analysis-v1.schema.json",
+  "title": "Agent Work OS Repository Import Analysis v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "parser", "files", "edges", "metrics", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-import-analysis/v1" },
+    "repositoryDigest": { "$ref": "#/$defs/digest" },
+    "parser": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["engine", "package", "version"],
+      "properties": {
+        "engine": { "const": "typescript-compiler-api" },
+        "package": { "const": "@typescript/typescript6" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "parseMode", "diagnosticCount", "importCount", "nonLiteralDynamicImports"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "parseMode": { "enum": ["parser", "lexical-fallback"] },
+          "diagnosticCount": { "type": "integer", "minimum": 0 },
+          "importCount": { "type": "integer", "minimum": 0 },
+          "nonLiteralDynamicImports": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "specifier", "importKind", "typeOnly", "targetKind", "to"],
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "specifier": { "type": "string", "minLength": 1 },
+          "importKind": { "enum": ["static-import", "type-import", "export-from", "type-export-from", "dynamic-import", "require", "import-equals"] },
+          "typeOnly": { "type": "boolean" },
+          "targetKind": { "enum": ["file", "package", "unresolved-relative"] },
+          "to": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceFiles", "parserFiles", "fallbackFiles", "parseDiagnostics", "edges", "resolvedFiles", "packageReferences", "unresolvedRelative", "typeOnlyImports", "nonLiteralDynamicImports", "importsByKind"],
+      "properties": {
+        "sourceFiles": { "type": "integer", "minimum": 0 },
+        "parserFiles": { "type": "integer", "minimum": 0 },
+        "fallbackFiles": { "type": "integer", "minimum": 0 },
+        "parseDiagnostics": { "type": "integer", "minimum": 0 },
+        "edges": { "type": "integer", "minimum": 0 },
+        "resolvedFiles": { "type": "integer", "minimum": 0 },
+        "packageReferences": { "type": "integer", "minimum": 0 },
+        "unresolvedRelative": { "type": "integer", "minimum": 0 },
+        "typeOnlyImports": { "type": "integer", "minimum": 0 },
+        "nonLiteralDynamicImports": { "type": "integer", "minimum": 0 },
+        "importsByKind": {
+          "type": "object",
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

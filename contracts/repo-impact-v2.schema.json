@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agent-work-os.local/contracts/repo-impact-v2.schema.json",
+  "title": "Agent Work OS Repository Change Impact v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repositoryDigest", "importAnalysisDigest", "moduleResolutionDigest", "diffDigest", "topologyDigest", "gitSignalsDigest", "maxDepth", "files", "removedFiles", "impactedFiles", "impactedModules", "metrics", "methodology", "digest"],
+  "properties": {
+    "schemaVersion": { "const": "repo-impact/v2" },
+    "repositoryDigest": { "$ref": "#/$defs/digest" },
+    "importAnalysisDigest": { "$ref": "#/$defs/digest" },
+    "moduleResolutionDigest": { "$ref": "#/$defs/digest" },
+    "diffDigest": { "$ref": "#/$defs/digest" },
+    "topologyDigest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+    "gitSignalsDigest": { "anyOf": [{ "$ref": "#/$defs/digest" }, { "type": "null" }] },
+    "maxDepth": { "type": "integer", "minimum": 1, "maximum": 20 },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "changeType", "directDependents", "transitiveDependents", "impactedModules", "maxDepthReached", "churn", "score", "level", "reasons"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "changeType": { "enum": ["added", "changed"] },
+          "directDependents": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "transitiveDependents": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "impactedModules": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+          "maxDepthReached": { "type": "integer", "minimum": 0, "maximum": 20 },
+          "churn": { "type": ["integer", "null"], "minimum": 0 },
+          "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+          "level": { "enum": ["low", "medium", "high"] },
+          "reasons": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        }
+      }
+    },
+    "removedFiles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "impactedFiles": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "impactedModules": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["changedCurrentFiles", "removedFiles", "impactedFiles", "impactedModules", "highImpactChanges", "mediumImpactChanges", "lowImpactChanges", "semanticallyResolvedFileEdges", "aliasResolvedEdges"],
+      "properties": {
+        "changedCurrentFiles": { "type": "integer", "minimum": 0 },
+        "removedFiles": { "type": "integer", "minimum": 0 },
+        "impactedFiles": { "type": "integer", "minimum": 0 },
+        "impactedModules": { "type": "integer", "minimum": 0 },
+        "highImpactChanges": { "type": "integer", "minimum": 0 },
+        "mediumImpactChanges": { "type": "integer", "minimum": 0 },
+        "lowImpactChanges": { "type": "integer", "minimum": 0 },
+        "semanticallyResolvedFileEdges": { "type": "integer", "minimum": 0 },
+        "aliasResolvedEdges": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "note", "typeOnlyEdgesIncluded", "semanticResolution", "removedFilePropagation"],
+      "properties": {
+        "label": { "const": "semantic-bounded-change-impact-heuristic" },
+        "note": { "type": "string", "minLength": 1 },
+        "typeOnlyEdgesIncluded": { "const": true },
+        "semanticResolution": { "const": true },
+        "removedFilePropagation": { "const": "not-inferred-without-previous-semantic-resolution-artifact" }
+      }
+    },
+    "digest": { "$ref": "#/$defs/digest" }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}
