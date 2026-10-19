@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "intake_date": "2026-10-19",
+  "target": "OpenFilm",
+  "source": {
+    "user_url": "https://www.reddit.com/r/BuildWithClaude/s/rCz9p1kUA5",
+    "reddit_url": "https://www.reddit.com/r/BuildWithClaude/comments/1x9h0kx/",
+    "website": "https://openfilm.dev/",
+    "repository": "https://github.com/openfilm/openfilm",
+    "inspected_sha": "120193c63329c61ae2863dd681f6c5ed31b5a9bf",
+    "upstream_license": "MIT",
+    "license_notes": "MIT © 2026 OpenFilm contributors; trademark reserved"
+  },
+  "routing": {
+    "classification": "DONOR_EXTENSION",
+    "product_repo": "rrahul0904/faceless-content-creator",
+    "governance_repo": "rrahul0904/agent-work-os",
+    "new_repo": false,
+    "implementation_branch": "rea/openfilm-agent-video-20261019",
+    "implementation_pr": "https://github.com/rrahul0904/faceless-content-creator/pull/36",
+    "governance_issue": "https://github.com/rrahul0904/agent-work-os/issues/303"
+  },
+  "capabilities": [
+    "agent film plan",
+    "timed editable scenes",
+    "local TTS",
+    "MP4 FFmpeg",
+    "template studio",
+    "source inspection",
+    "timeline editing",
+    "direct manipulation",
+    "frame determinism",
+    "safe sandboxing"
+  ],
+  "implemented_slice": [
+    "declarative FilmPlan v1",
+    "workspace API",
+    "studio plan draft",
+    "local narration",
+    "unit and HTTP smoke definitions"
+  ],
+  "verification": {
+    "product_pr_state": "draft",
+    "ci_state": "pending_or_blocked",
+    "production_state": "not_shipped",
+    "security_gate": "blocked: npm audit reports critical Next.js and high sharp/source-map-js as of 2026-10-19"
+  },
+  "next_gates": [
+    "CI unit+lint+typecheck+build",
+    "FilmPlan real MP4 UAT",
+    "dependency upgrades",
+    "workspace-owned media clips",
+    "timeline direct manipulation",
+    "exact-SHA hosted runtime proof"
+  ]
+}
