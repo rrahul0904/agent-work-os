@@ -23,6 +23,7 @@
     "ship": "node scripts/ship.mjs run",
     "ship:validate": "node scripts/ship.mjs validate",
     "test:evaluation": "node --test packages/evaluation-harness/test/*.test.js",
-    "test:research": "node --test packages/research-os/test/*.test.js"
+    "test:research": "node --test packages/research-os/test/*.test.js",
+    "demo:research": "node scripts/research-demo.mjs"
   }
 }
