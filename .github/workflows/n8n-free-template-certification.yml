@@ -58,6 +58,9 @@ jobs:
           }
           NODE
 
+      - name: Test starter behavior and workflow graph
+        run: node --test commercialization/n8n/free-templates/free-templates.test.mjs
+
       - name: Install pinned n8n
         run: npm install --global --no-audit --no-fund n8n@2.43.5
 
