@@ -224,6 +224,7 @@ function normalizeProvenance(value) {
     provider: value.provider == null ? null : stringValue(value.provider, "rea_provider_invalid", 200),
     providerRevision: value.providerRevision == null ? null : stringValue(value.providerRevision, "rea_provider_revision_invalid", 200),
     providerDigest: value.providerDigest == null ? null : stringValue(value.providerDigest, "rea_provider_digest_invalid", 200),
+    authorizationDigest: value.authorizationDigest == null ? null : stringValue(value.authorizationDigest, "rea_authorization_digest_invalid", 200),
     sourceRevision: value.sourceRevision == null ? null : stringValue(value.sourceRevision, "rea_source_revision_invalid", 500)
   };
 }
