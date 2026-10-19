@@ -1,0 +1,91 @@
+name: context-continuity-release
+on:
+  push:
+    paths:
+      - 'apps/context-workbench/**'
+      - '.github/workflows/context-continuity-release.yml'
+  pull_request:
+    paths:
+      - 'apps/context-workbench/**'
+      - '.github/workflows/context-continuity-release.yml'
+permissions:
+  contents: read
+jobs:
+  tests-and-http-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/context-workbench
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+      - name: Unit and syntax tests
+        run: |
+          npm test
+          node --check server.mjs
+          node --check api/brief.js
+          node --check api/session.js
+          node --check app.js
+      - name: HTTP smoke and static-source isolation
+        run: |
+          set -euo pipefail
+          PORT=38887 node server.mjs > /tmp/context-continuity-server.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:38887/api/health > /tmp/context-health.json; then break; fi
+            sleep 1
+          done
+          node -e 'const h=require("/tmp/context-health.json");if(h.ok!==true)process.exit(1)'
+          curl -fsS http://127.0.0.1:38887/ | grep -q 'Context Continuity'
+          curl -fsS http://127.0.0.1:38887/app.js > /dev/null
+          curl -fsS -X POST -H 'content-type: application/json' \
+            -d '{"action":"detect-limit","text":"rate limit reached"}' \
+            http://127.0.0.1:38887/api/session > /tmp/context-session.json
+          node -e 'const h=require("/tmp/context-session.json");if(typeof h.limited!=="boolean")process.exit(1)'
+          for blocked in server.mjs package.json lib/safe-url.js api/session.js desktop/macos/Package.swift; do
+            code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:38887/$blocked")"
+            test "$code" = 404
+          done
+
+      - name: Validate and package browser extension
+        run: |
+          python3 -m json.tool extension/manifest.json > /dev/null
+          python3 -m json.tool extension/manifest.json | grep -q '"manifest_version": 3'
+          cd extension
+          zip -qr /tmp/context-continuity-chrome.zip .
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: context-continuity-chrome
+          path: /tmp/context-continuity-chrome.zip
+      - name: Public production health and API smoke
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --retry 3 -sSL https://context-continuity.vercel.app/api/health > /tmp/context-prod-health.json
+          node -e 'const h=require("/tmp/context-prod-health.json");if(h.ok!==true)process.exit(1)'
+          curl --fail-with-body --retry 3 -sSL https://context-continuity.vercel.app/ | grep -q "Context Continuity"
+          curl --fail-with-body --retry 3 -sSL \
+            -X POST -H 'content-type: application/json' \
+            -d '{"action":"detect-limit","text":"rate limit reached"}' \
+            https://context-continuity.vercel.app/api/session > /tmp/context-prod-session.json
+          node -e 'const h=require("/tmp/context-prod-session.json");if(typeof h.limited!=="boolean")process.exit(1)'
+
+  macos-companion-build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: apps/context-workbench/desktop/macos
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build and bundle Apple Speech companion
+        run: |
+          bash build-app.sh
+          plutil -lint "dist/Context Continuity.app/Contents/Info.plist"
+          /usr/bin/codesign --verify --deep --strict "dist/Context Continuity.app"
+          ditto -c -k --sequesterRsrc --keepParent "dist/Context Continuity.app" /tmp/context-continuity-macos.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: context-continuity-macos-unnotarized
+          path: /tmp/context-continuity-macos.zip

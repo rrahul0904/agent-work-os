@@ -57,7 +57,7 @@ The runtime slice also provides a durable local JSON registry for development an
 
 ## Guarded installation and rollback
 
-Capability Fabric can now turn a compilation result into an install plan and apply it to an explicitly selected harness root. Runtime writes require explicit approval. The installer:
+Capability Fabric can turn a compilation result into an install plan and apply it to an explicitly selected harness root. Runtime writes require explicit approval. The installer:
 
 - normalizes and bounds every generated path beneath the target root,
 - refuses symbolic-link traversal,
@@ -71,9 +71,130 @@ Rollback is drift-safe by default: if a generated file changed after installatio
 
 The CLI exposes these flows through `npm run capability -- install ... --approve-write`, `rollback`, `registry-add`, `registry-list`, and `registry-resolve`.
 
-## Verification boundary
+## Runtime verification receipts
 
-The current implementation verifies schema behavior, deterministic compilation, durable local registry behavior, guarded install/rollback, symlink refusal, and drift-safe rollback. Real-harness execution remains a separate gate: generated artifacts should be executed against harness-specific smoke tasks and promoted only after a runtime execution receipt passes policy.
+### Artifact-context verification
+
+`artifact-context` verifies semantic preservation of the exact generated and installed artifact without depending on a harness marketplace implementation:
+
+1. validate the `CapabilitySpec`,
+2. compile it for the requested harness,
+3. install the generated files through the guarded installer,
+4. read the installed artifact bytes back from disk,
+5. execute each declared evaluation case through the existing Agent Work OS adapter,
+6. score normalized harness events against the declared expected result,
+7. compare the aggregate score with `qualityThreshold`,
+8. persist a runtime verification receipt, and
+9. roll the capability back unless the caller explicitly retains a passing installation.
+
+The receipt records the capability/source identity, compilation receipt digest, installation receipt digest, harness executable/version, installed artifact digests, per-case event-trace/output digests, score, threshold, pass/fail state, rollback evidence, and final receipt digest.
+
+Codex is the first wired real adapter because Agent Work OS already executes it through `codex exec --json` and normalizes text, tool, status, usage, log, and error events. Run the gate on a machine with Codex installed and authenticated:
+
+```bash
+npm run capability -- verify capability.json codex /tmp/capability-stage /path/to/workspace --approve-write
+```
+
+A failed threshold exits non-zero and rolls back automatically. Passing verification also rolls back by default so smoke tests do not silently mutate the harness environment. Use `--retain-installation` only when promotion is intentional. `--receipt=/path/to/receipt.json` selects an explicit receipt path.
+
+### Codex native-discovery verification
+
+`native-discovery` adds a stricter Codex-specific proof that the harness discovered and invoked the installed skill through its own plugin lookup path. The verification bundle follows the current portable OpenAI plugin layout:
+
+```text
+<workspace>/
+├── .agents/plugins/marketplace.json
+├── .codex/config.toml
+└── plugins/<capability-slug>/
+    ├── plugin.json
+    └── skills/<capability-slug>/SKILL.md
+```
+
+The smoke package is intentionally instrumented with a one-run discovery marker that is appended to the installed `SKILL.md` but never included in the user prompt. The Codex request explicitly invokes `$<capability-slug>` and asks the discovered skill to return its marker before performing the declared test input. A case passes only when both the hidden marker and the expected semantic result appear in a completed, error-free harness execution.
+
+This separates two proofs:
+
+- `artifact-context` proves the exact production artifact preserves the intended behavior when executed by the harness.
+- `native-discovery` proves Codex can discover and invoke the skill using the real plugin/marketplace mechanism.
+
+The native-discovery package is always rolled back because it contains temporary verification instrumentation. It also fails closed when `.agents/plugins/marketplace.json`, `.codex/config.toml`, or the target plugin directory already exist; use a clean verification worktree or scratch workspace instead of overwriting project plugin configuration.
+
+Run it with:
+
+```bash
+npm run capability -- verify-native capability.json codex /path/to/clean-workspace --approve-write
+```
+
+The command returns non-zero when the discovery marker is missing or the quality threshold fails and persists a verification receipt unless an explicit `--receipt=` path is supplied.
+
+## Remote verification through Agent Work OS
+
+A daemon that can execute Codex advertises a built-in `capability-verify` agent alongside `codex`. The verifier deliberately reuses the existing Agent Work OS session path instead of introducing a parallel execution protocol. The session lifecycle already provides organization membership checks, machine ownership, online/capability checks, transactional daemon delivery in PostgreSQL, durable session events, interruption, and realtime updates.
+
+Remote verification has stricter mutation rules than the local CLI:
+
+- `approveWrite` must be explicitly true,
+- artifact-context `targetRoot` must remain at or beneath the session `cwd`,
+- native-discovery operates exactly at the session `cwd`,
+- remote verification never retains or promotes an installation,
+- verification receipts are not written to arbitrary local paths, and
+- interruption propagates to nested Codex verification execution.
+
+The daemon emits the full receipt as a structured session event:
+
+```json
+{
+  "kind": "tool",
+  "name": "capability.verification.receipt",
+  "phase": "completed",
+  "payload": { "verificationMode": "artifact-context", "passed": true, "receiptDigest": "sha256:..." }
+}
+```
+
+The backing session remains the append-only execution trace. A short text summary is also emitted so current session surfaces remain useful.
+
+## First-class CapabilityVerificationRun API
+
+The control plane now normalizes remote verification into a tenant-owned `CapabilityVerificationRun` resource while retaining the session as its execution evidence. In production, creation is transactional: the verification run, backing session, and durable daemon outbox command are inserted in one PostgreSQL transaction. An outbox failure therefore cannot leave a visible verification run without an execution command.
+
+Create a run:
+
+```http
+POST /api/capability-verifications
+```
+
+```json
+{
+  "organizationId": "org_...",
+  "machineId": "machine_...",
+  "cwd": "/path/to/verification-workspace",
+  "harnessId": "codex",
+  "mode": "artifact-context",
+  "approveWrite": true,
+  "spec": { "...": "CapabilitySpec" }
+}
+```
+
+The API validates tenant membership, viewer restrictions, machine ownership/online state, the advertised `capability-verify` daemon capability, the `CapabilitySpec`, harness, mode, and explicit filesystem approval before creating the run.
+
+Read/list runs with:
+
+```text
+GET /api/capability-verifications?organizationId=<org>
+GET /api/capability-verifications/<run-id>?organizationId=<org>
+```
+
+Interrupt an active run with:
+
+```http
+POST /api/capability-verifications/<run-id>/interrupt
+```
+
+using `{ "organizationId": "org_..." }` as the body. The command is routed to the backing session and then to the verifier's nested Codex execution.
+
+The normalized lifecycle is `queued → running → verifying → complete|failed|interrupted`. Session status/error events update the run, and the structured verification receipt finalizes it as `complete` or `failed`. The full receipt is retained on the run while the complete raw event trace remains on the backing session. Realtime clients receive `capability.verification.updated` events and authenticated state snapshots include `capabilityVerificationRuns` for the user's organizations.
+
+Local development persists these records in a separate atomic sidecar rather than expanding the legacy global JSON snapshot. Production stores them in `agent_work_os_capability_verification_runs_v1` with organization, machine, session, and creator ownership boundaries.
 
 ## Clean-room rule
 

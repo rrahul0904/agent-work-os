@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{font:14px system-ui;margin:0;padding:14px;width:360px;background:#0b1020;color:#e9ecf4}
+    h1{font-size:16px;margin:0 0 8px}.muted{color:#9ba6bf;font-size:12px}.tabs{max-height:310px;overflow:auto;margin:12px 0}
+    label.tab{display:flex;gap:8px;padding:8px;border:1px solid #27304a;border-radius:9px;margin:7px 0;background:#111831}
+    .title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.url{font-size:11px;color:#8791aa;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    input[type=text]{width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid #33405f;background:#0e152b;color:#fff}
+    button{width:100%;padding:10px;border:0;border-radius:9px;background:#7c9cff;color:#071022;font-weight:700;cursor:pointer}
+    #status{margin-top:8px;font-size:12px;color:#aab4cc}
+  </style>
+</head>
+<body>
+  <h1>Context Continuity Capture</h1>
+  <div class="muted">Only the tabs you check are read.</div>
+  <div class="tabs" id="tabs"></div>
+  <input id="appUrl" type="text" value="https://raw.githack.com/rrahul0904/agent-work-os/main/apps/context-workbench/index.html" aria-label="Workbench URL">
+  <button id="capture">Open in Context Continuity</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

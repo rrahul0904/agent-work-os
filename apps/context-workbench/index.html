@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Cross-agent handoff and source-grounded research memory for Agent Work OS.">
+  <title>Context Continuity — Agent Work OS</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">CC</span>
+      <span><strong>Context Continuity</strong><small>Agent Work OS</small></span>
+    </div>
+    <div class="status"><span class="dot"></span> clean-room build</div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">One context plane across agents and research</p>
+      <h1>Move the work, not just the prompt.</h1>
+      <p>Carry coding-agent history forward, preserve tool traces, capture browser research, and turn scattered evidence into inspectable briefs.</p>
+      <div class="hero-pills">
+        <span>Claude ⇄ Codex</span><span>Fork & slice</span><span>Source citations</span><span>Conflict-aware briefs</span><span>Tab capture</span><span>Voice input</span>
+      </div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="handoff">Agent handoff</button>
+      <button class="tab" data-tab="research">Research frame</button>
+      <button class="tab" data-tab="voice">Voice capture</button>
+      <button class="tab" data-tab="library">Saved work</button>
+    </nav>
+
+    <section id="handoff" class="panel active">
+      <div class="grid two">
+        <article class="card">
+          <div class="card-head"><div><p class="kicker">Input session</p><h2>Convert or continue</h2></div><span class="badge">agent-session/v1</span></div>
+          <div class="row">
+            <label>Source agent<select id="sourceAgent"><option value="claude">Claude</option><option value="codex">Codex</option><option value="generic">Generic JSON</option></select></label>
+            <label>Target agent<select id="targetAgent"><option value="codex">Codex</option><option value="claude">Claude</option><option value="generic">Canonical JSON</option></select></label>
+          </div>
+          <label>Session JSONL / JSON<textarea id="sessionInput" spellcheck="false" placeholder='Paste Claude or Codex session JSONL here…'></textarea></label>
+          <div class="controls">
+            <button id="sampleSession" class="ghost">Load sample</button>
+            <button id="detectLimit" class="ghost">Check limit</button>
+            <button id="handoffButton" class="primary">Continue in target</button>
+          </div>
+          <div class="mini-grid">
+            <label><input id="forkToggle" type="checkbox"> Fork a copy</label>
+            <label>Continue from message ID<input id="fromMessageId" placeholder="optional"></label>
+          </div>
+          <div id="handoffNotice" class="notice hidden"></div>
+        </article>
+
+        <article class="card">
+          <div class="card-head"><div><p class="kicker">Converted session</p><h2>Portable history</h2></div><div class="row-actions"><button id="exportSession" class="icon-btn" title="Export bundle">Export</button><button id="saveSession" class="icon-btn">Save</button></div></div>
+          <div id="sessionStats" class="stats"></div>
+          <pre id="sessionOutput" class="output">No session converted yet.</pre>
+        </article>
+      </div>
+    </section>
+
+    <section id="research" class="panel">
+      <div class="grid research-grid">
+        <article class="card">
+          <div class="card-head"><div><p class="kicker">Question + evidence</p><h2>Build a source-backed brief</h2></div><span class="badge">6 brief types</span></div>
+          <label>Research question<input id="researchQuery" value="Should a 20-person product team choose Linear or Jira?"></label>
+          <div class="row">
+            <label>Brief type<select id="briefType">
+              <option value="source">Source Brief</option>
+              <option value="source-summary">Source Summary Brief</option>
+              <option value="research">Research Brief</option>
+              <option value="source-comparison">Source Comparison Brief</option>
+              <option value="comparison">Comparison Brief</option>
+              <option value="recommendation">Recommendation Brief</option>
+            </select></label>
+            <label class="toggle-label"><input id="discoverWeb" type="checkbox"> Discover web sources</label>
+          </div>
+          <div class="source-list" id="sourceList"></div>
+          <div class="controls">
+            <button id="addSource" class="ghost">+ Add source</button>
+            <button id="sampleResearch" class="ghost">Conflict sample</button>
+            <button id="buildBrief" class="primary">Create brief</button>
+          </div>
+          <div id="researchNotice" class="notice hidden"></div>
+        </article>
+
+        <article class="card brief-card">
+          <div class="card-head"><div><p class="kicker">Inspect before acting</p><h2 id="briefTitle">Brief preview</h2></div><div class="row-actions"><button id="copyBrief" class="icon-btn">Copy MD</button><button id="saveBrief" class="icon-btn">Save</button></div></div>
+          <div id="briefMeta" class="stats"></div>
+          <div id="briefView" class="brief-view empty">Add sources and create a brief.</div>
+          <div class="followup-box">
+            <p class="kicker">Continue from the brief</p>
+            <label>Ask about this brief<input id="briefQuestion" placeholder="What evidence supports that? What's still uncertain?"></label>
+            <div class="controls">
+              <button id="askBrief" class="ghost">Ask</button>
+              <select id="draftFormat" aria-label="Draft format"><option value="memo">Memo</option><option value="decision-note">Decision note</option><option value="email">Email</option></select>
+              <button id="draftBrief" class="ghost">Create draft</button>
+            </div>
+            <div id="followupView" class="followup-view muted">Follow-up answers stay constrained to the brief's captured evidence.</div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="voice" class="panel">
+      <div class="grid two">
+        <article class="card">
+          <div class="card-head"><div><p class="kicker">Push-to-talk</p><h2>Speak into the workflow</h2></div><span id="voiceEngine" class="badge">browser speech</span></div>
+          <p class="muted">This web surface uses the browser speech engine when available. The repository also includes a macOS companion source that requests on-device Apple Speech recognition.</p>
+          <button id="voiceButton" class="voice-button"><span class="mic">●</span><span id="voiceButtonText">Start dictation</span></button>
+          <label>Transcript<textarea id="voiceTranscript" placeholder="Your transcript appears here…"></textarea></label>
+          <div class="controls">
+            <button id="cleanVoice" class="ghost">Clean text</button>
+            <button id="sendVoiceResearch" class="ghost">Use as research question</button>
+            <button id="sendVoiceSession" class="primary">Use as session note</button>
+          </div>
+        </article>
+        <article class="card">
+          <div class="card-head"><div><p class="kicker">Local personalization</p><h2>Dictionary & snippets</h2></div><span class="badge">saved in browser</span></div>
+          <label>Dictionary replacements<textarea id="dictionary" placeholder="claude code = Claude Code&#10;snow flake = Snowflake"></textarea></label>
+          <label>Snippets<textarea id="snippets" placeholder="sig = Thanks, Rahul&#10;ship = Please implement, test, verify, and deploy."></textarea></label>
+          <button id="saveVoicePrefs" class="ghost wide">Save local preferences</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="library" class="panel">
+      <article class="card">
+        <div class="card-head"><div><p class="kicker">Browser-local memory</p><h2>Saved work</h2></div><button id="clearLibrary" class="icon-btn danger">Clear</button></div>
+        <div id="libraryList" class="library-list"></div>
+      </article>
+    </section>
+  </main>
+
+  <footer>Agent Work OS · Context Continuity · clean-room implementation</footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

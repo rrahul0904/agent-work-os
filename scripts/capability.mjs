@@ -9,6 +9,7 @@ import {
   createDriftRecord,
   importReaCapability
 } from "../packages/capability-fabric/src/index.js";
+import { assessCapabilityDrift, createReverificationPlan } from "../packages/capability-fabric/src/drift.js";
 import {
   addCapabilityToFileRegistry,
   applyInstallPlan,
@@ -17,6 +18,10 @@ import {
   resolveCapabilityFromFileRegistry,
   rollbackInstall
 } from "../packages/capability-fabric/src/runtime.js";
+import { ClaudeCodeAdapter, CodexAdapter } from "../runtime/daemon/src/adapters.js";
+import { verifyCapabilityWithAdapter } from "../runtime/daemon/src/capability-verifier.js";
+import { verifyCodexNativeDiscovery } from "../runtime/daemon/src/codex-native-verifier.js";
+import { verifyClaudeNativeDiscovery } from "../runtime/daemon/src/claude-native-verifier.js";
 
 const [command, ...args] = process.argv.slice(2);
 
@@ -52,6 +57,70 @@ try {
     const plan = createInstallPlan(compilation, targetRoot);
     const installed = await applyInstallPlan(plan, { approveWrite: flags.includes("--approve-write") });
     print({ ok: true, action: "install", harnessId, capabilityId: spec.id, targetRoot: path.resolve(targetRoot), receiptPath: installed.receiptPath, receiptDigest: installed.receipt.receiptDigest });
+  } else if (command === "verify") {
+    const [specPath, harnessId, targetRoot, cwd, ...flags] = args;
+    requireArgs(command, [specPath, harnessId, targetRoot, cwd]);
+    const adapter = adapterForHarness(harnessId);
+    const spec = assertCapabilitySpec(await readJson(specPath));
+    const receiptFlag = flagValue(flags, "--receipt=");
+    const receiptPath = receiptFlag
+      ? path.resolve(receiptFlag)
+      : path.join(path.resolve(targetRoot), ".agent-work-os", "verification-receipts", `${spec.metadata.slug}-${Date.now()}.json`);
+    const result = await verifyCapabilityWithAdapter({
+      spec,
+      harnessId,
+      adapter,
+      cwd,
+      targetRoot,
+      approveWrite: flags.includes("--approve-write"),
+      allowDegraded: flags.includes("--allow-degraded"),
+      retainInstallation: flags.includes("--retain-installation"),
+      receiptPath
+    });
+    print({
+      ok: result.receipt.passed,
+      action: "verify",
+      harnessId,
+      capabilityId: spec.id,
+      score: result.receipt.score,
+      qualityThreshold: result.receipt.qualityThreshold,
+      verificationMode: result.receipt.verificationMode,
+      receiptPath: result.receiptPath,
+      receiptDigest: result.receipt.receiptDigest,
+      retainedInstallation: !result.receipt.rollback.attempted
+    });
+    if (!result.receipt.passed) process.exitCode = 1;
+  } else if (command === "verify-native") {
+    const [specPath, harnessId, workspaceRoot, ...flags] = args;
+    requireArgs(command, [specPath, harnessId, workspaceRoot]);
+    const adapter = adapterForHarness(harnessId);
+    const spec = assertCapabilitySpec(await readJson(specPath));
+    const receiptFlag = flagValue(flags, "--receipt=");
+    const receiptPath = receiptFlag
+      ? path.resolve(receiptFlag)
+      : path.join(path.resolve(workspaceRoot), ".agent-work-os", "verification-receipts", `${spec.metadata.slug}-native-${Date.now()}.json`);
+    let result;
+    if (harnessId === "codex") {
+      result = await verifyCodexNativeDiscovery({ spec, adapter, workspaceRoot, approveWrite: flags.includes("--approve-write"), receiptPath });
+    } else if (harnessId === "claude-code") {
+      result = await verifyClaudeNativeDiscovery({ spec, adapter, workspaceRoot, approveWrite: flags.includes("--approve-write"), receiptPath });
+    } else {
+      throw new Error("capability_native_verification_harness_not_implemented");
+    }
+    print({
+      ok: result.receipt.passed,
+      action: "verify-native",
+      harnessId,
+      capabilityId: spec.id,
+      score: result.receipt.score,
+      qualityThreshold: result.receipt.qualityThreshold,
+      verificationMode: result.receipt.verificationMode,
+      receiptPath: result.receiptPath,
+      receiptDigest: result.receipt.receiptDigest,
+      discoveryMarkerMatched: result.receipt.cases.every((entry) => entry.discoveryMarkerMatched),
+      rolledBack: result.receipt.rollback.ok
+    });
+    if (!result.receipt.passed) process.exitCode = 1;
   } else if (command === "rollback") {
     const [receiptPath, ...flags] = args;
     requireArgs(command, [receiptPath]);
@@ -75,8 +144,25 @@ try {
     const [previousPath, currentPath] = args;
     requireArgs(command, [previousPath, currentPath]);
     print(createDriftRecord({ previous: assertCapabilitySpec(await readJson(previousPath)), current: assertCapabilitySpec(await readJson(currentPath)) }));
+  } else if (command === "drift-plan") {
+    const [previousPath, currentPath, ...flags] = args;
+    requireArgs(command, [previousPath, currentPath]);
+    const previous = assertCapabilitySpec(await readJson(previousPath));
+    const current = assertCapabilitySpec(await readJson(currentPath));
+    const receiptPath = flagValue(flags, "--receipts=");
+    const receiptsValue = receiptPath ? await readJson(receiptPath) : [];
+    const previousCompilationReceipts = Array.isArray(receiptsValue) ? receiptsValue : [receiptsValue];
+    const explicitHarnesses = flagValues(flags, "--harness=");
+    const harnessIds = explicitHarnesses.length
+      ? explicitHarnesses
+      : [...new Set(previousCompilationReceipts.map((receipt) => receipt?.harnessId).filter(Boolean))];
+    if (!harnessIds.length) harnessIds.push("codex");
+    const assessment = assessCapabilityDrift({ previous, current, harnessIds, previousCompilationReceipts });
+    const plan = createReverificationPlan(assessment);
+    print({ ok: assessment.decision !== "blocked", action: "drift-plan", assessment, plan });
+    if (assessment.decision === "blocked") process.exitCode = 3;
   } else {
-    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n");
+    process.stderr.write("Usage:\n  npm run capability -- profiles\n  npm run capability -- import <rea-evidence.json> <capability.json>\n  npm run capability -- compile <capability.json> <harness> <output-dir> [--allow-degraded]\n  npm run capability -- install <capability.json> <harness> <target-root> --approve-write [--allow-degraded]\n  npm run capability -- verify <capability.json> <codex|claude-code> <target-root> <cwd> --approve-write [--receipt=path] [--retain-installation] [--allow-degraded]\n  npm run capability -- verify-native <capability.json> <codex|claude-code> <clean-workspace-root> --approve-write [--receipt=path]\n  npm run capability -- rollback <install-receipt.json> [--force]\n  npm run capability -- registry-add <registry.json> <capability.json>\n  npm run capability -- registry-list <registry.json> [--kind=x] [--tag=x] [--source-url=x]\n  npm run capability -- registry-resolve <registry.json> <slug> [version]\n  npm run capability -- drift <previous.json> <current.json>\n  npm run capability -- drift-plan <previous.json> <current.json> [--harness=codex] [--receipts=receipts.json]\n");
     process.exitCode = 2;
   }
 } catch (error) {
@@ -84,6 +170,11 @@ try {
   process.exitCode = 1;
 }
 
+function adapterForHarness(harnessId) {
+  if (harnessId === "codex") return new CodexAdapter();
+  if (harnessId === "claude-code") return new ClaudeCodeAdapter();
+  throw new Error("capability_verification_harness_not_implemented");
+}
 async function readJson(filename) { return JSON.parse(await readFile(path.resolve(filename), "utf8")); }
 async function writeJson(filename, value) {
   const target = path.resolve(filename);
@@ -97,6 +188,13 @@ function safeJoin(root, relative) {
 }
 function requireArgs(commandName, values) { if (values.some((value) => !value)) throw new Error(`${commandName}_arguments_required`); }
 function print(value) { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`); }
+function flagValue(flags, prefix) {
+  const flag = flags.find((entry) => entry.startsWith(prefix));
+  return flag ? flag.slice(prefix.length) : null;
+}
+function flagValues(flags, prefix) {
+  return flags.filter((entry) => entry.startsWith(prefix)).map((entry) => entry.slice(prefix.length)).filter(Boolean);
+}
 function parseFilters(flags) {
   const result = {};
   for (const flag of flags) {
