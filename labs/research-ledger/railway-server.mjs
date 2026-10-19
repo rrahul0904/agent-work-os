@@ -15,6 +15,7 @@ const staticFiles = new Set([
   'db-schema.js',
   'app.js',
   'completion.js',
+  'notebook-contract.js',
   'semantic-core.js',
   'semantic-worker.js',
   'semantic-search.js',
