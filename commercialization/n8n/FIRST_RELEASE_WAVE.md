@@ -1,6 +1,6 @@
 # n8n First Release Wave
 
-_Last updated: 2026-10-16_
+_Last updated: 2026-10-19_
 
 Goal: reach the first three honest `SELLABLE` products before expanding the catalog further.
 
@@ -8,7 +8,7 @@ Goal: reach the first three honest `SELLABLE` products before expanding the cata
 
 **Current state:** `PACKAGE_REQUIRED`  
 **Certification milestone:** `READY_FOR_PRIVATE_RUNTIME_CERT`  
-**Candidate:** `4fb00550deabe0e76d0a5cf79aa05aea2a62f71b`  
+**Candidate:** `b6910fc0d89638678502f7f06ee11958819f3107`  
 **Repo/branch:** `rrahul0904/n8n-email-scraper-pro-custom-n8n-node-workflow` / `commercialize/clean-room-release`
 
 Completed:
@@ -26,7 +26,7 @@ Remaining before `SELLABLE`:
 - final secret scan/package audit;
 - exact-candidate `GO` receipt.
 
-Private GitHub Actions currently fails before runner allocation; tracked in issue #207.
+Private GitHub Actions runner allocation is unresolved; tracked in issue #207. Node.js 24 and isolated n8n 2.43.5 import certification are now included in the private release workflow. A queued or failed run is not a passing import.
 
 Target offer: $29 Workflow Kit / $99 Team or Lead Ops Pack / direct implementation from $750.
 
@@ -36,7 +36,7 @@ Target offer: $29 Workflow Kit / $99 Team or Lead Ops Pack / direct implementati
 
 **Current state:** `PACKAGE_REQUIRED`  
 **Certification milestone:** `READY_FOR_PRIVATE_RUNTIME_CERT`  
-**Candidate:** `af1f615e35b3907acb572d2f3852cb4092889892`  
+**Candidate:** `6c4d594607bc0ff03d402e3e47866874e08f0390`  
 **Repo/branch:** `rrahul0904/n8n-automated-linkedin-engagement-oppurtunities-finder` / `commercialize/clean-room-release`
 
 Completed:
@@ -56,7 +56,7 @@ Remaining before `SELLABLE`:
 - final secret scan/package audit;
 - exact-candidate `GO` receipt.
 
-Private GitHub Actions currently fails before runner allocation; tracked in issue #207.
+Private GitHub Actions runner allocation is unresolved; tracked in issue #207. Node.js 24 and isolated n8n 2.43.5 import certification are now included in the private release workflow. A queued or failed run is not a passing import.
 
 Target offer: $49 Workflow Kit / $149 Intent Radar Pack / direct implementation from $1,000.
 
