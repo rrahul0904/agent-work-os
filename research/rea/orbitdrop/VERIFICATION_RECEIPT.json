@@ -1,0 +1,65 @@
+{
+  "schema_version": "rea-proof-receipt-1.0",
+  "date_utc": "2026-10-20",
+  "experiment": "OrbitDrop clean-room safe file output research slice",
+  "governance": {
+    "issue": "https://github.com/rrahul0904/agent-work-os/issues/332",
+    "draft_pr": "https://github.com/rrahul0904/agent-work-os/pull/336"
+  },
+  "upstream_observation": {
+    "repository": "i3sam/OrbitDrop",
+    "sha": "e545904098a4afeb42d4ffde8ee566a88e06a959"
+  },
+  "test_subject": {
+    "repository": "rrahul0904/agent-work-os",
+    "branch": "research/rea-orbitdrop-file-utility-20261020",
+    "files": [
+      {
+        "path": "research/rea/orbitdrop/safe-output.mjs",
+        "git_blob_sha1": "e87cc304a83024a95172e3da29ff7f50d1b70673",
+        "sha256": "4eef848918f6464f7dc8b9468f5e42a85b924e7020d79fd00d8418d3b8368b05"
+      },
+      {
+        "path": "research/rea/orbitdrop/safe-output.test.mjs",
+        "git_blob_sha1": "3f2a20a15919ca007084d223bfce872b87d3a06d",
+        "sha256": "9c4b7b6b791fd4189c5c15af64c3d5e99df14368e852dae7db0d550f434bd15f"
+      }
+    ],
+    "blob_integrity_note": "Local git hash-object SHA-1 values equal fetched GitHub file blob SHAs at research-branch commit e4c1737266de9b378fcec80cf1891945d7185461."
+  },
+  "environment": {
+    "node": "v22.16.0",
+    "platform": "Linux",
+    "dotnet_sdk_available": false,
+    "windows_uat_machine_available": false
+  },
+  "execution": {
+    "command": "node --test research/rea/orbitdrop/safe-output.test.mjs",
+    "syntax_check": [
+      "node --check research/rea/orbitdrop/safe-output.mjs",
+      "node --check research/rea/orbitdrop/safe-output.test.mjs"
+    ],
+    "tests_total": 9,
+    "tests_passed": 9,
+    "tests_failed": 0,
+    "result": "PASS"
+  },
+  "evidence_level": "LOCAL_EXECUTION_WITH_BLOB_MATCH_ONLY",
+  "prohibited_inferences": [
+    "Not a Windows GUI/OLE proof",
+    "Not codec or media conversion test",
+    "Not cross-platform packaging",
+    "Not security certified",
+    "Not GitHub CI or production-ready",
+    "Not signed release",
+    "Not deployment confirmation"
+  ],
+  "follow_up_gates": [
+    "independent review",
+    "GitHub exact-head tests",
+    "physical Windows DPI/multi-monitor UAT",
+    "trusted codec golden corpus",
+    "signing/privacy/provenance/security audit",
+    "Shipping OS approval"
+  ]
+}

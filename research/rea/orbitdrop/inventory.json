@@ -1,0 +1,68 @@
+{
+  "schema_version": "rea-intake-1.0",
+  "date": "2026-10-20",
+  "source_signal": {
+    "kind": "reddit",
+    "url": "https://www.reddit.com/r/ProductivityApps/comments/1xan6wn/",
+    "subreddit": "ProductivityApps",
+    "author": "u/Street-Tax4341"
+  },
+  "target": {
+    "name": "OrbitDrop",
+    "category": "desktop local-first file utility",
+    "site": "https://orbitdrop.essam.biz/",
+    "repo": "i3sam/OrbitDrop",
+    "inspected_sha": "e545904098a4afeb42d4ffde8ee566a88e06a959",
+    "release": "v0.3.4-alpha",
+    "license": "MIT (separate third party review)"
+  },
+  "owner_repo": "pending product repository after dedup",
+  "governance_repo": "rrahul0904/agent-work-os",
+  "governance_issue": 332,
+  "classification": "STANDALONE_PRODUCT_CANDIDATE",
+  "canonical_tracker_id": null,
+  "platforms": {
+    "upstream_verified_hardware": "Windows 11 single monitor 100% DPI, upstream preliminary only",
+    "upstream_target": [
+      "Windows 10",
+      "Windows 11"
+    ],
+    "proposed_feasibility": [
+      "macOS",
+      "Linux",
+      "iOS share sheet",
+      "Android file picker"
+    ]
+  },
+  "roadmap": [
+    "discover",
+    "observe",
+    "provenance",
+    "understand",
+    "route",
+    "specify",
+    "prototype",
+    "verify",
+    "compare",
+    "certify",
+    "deploy",
+    "monitor"
+  ],
+  "status": {
+    "researched": true,
+    "source_reviewed": true,
+    "prototype_local_tested": true,
+    "prototype_tests_passed": 9,
+    "feature_implemented_in_product": false,
+    "windows_runtime_tested_by_us": false,
+    "deployed": false,
+    "production_verified": false
+  },
+  "boundaries": {
+    "no_duplicate_repo": true,
+    "no_main_merge_without_approval": true,
+    "no_live_deployment_without_approval": true
+  },
+  "evidence_doc": "research/rea/orbitdrop/INTAKE.md",
+  "tests": "research/rea/orbitdrop/safe-output.test.mjs"
+}
