@@ -1,0 +1,778 @@
+{
+  "schema": "rea-product-triage/v1",
+  "observedOn": "2026-10-20",
+  "source": "https://profullstack.com/docs/directory",
+  "directoryCount": 73,
+  "capturedCount": 73,
+  "counts": {
+    "STANDALONE_CANDIDATE": 26,
+    "DONOR_MODULE": 40,
+    "DONOR_REFERENCE": 7
+  },
+  "classificationNote": "First-pass product-level routing from published directory. Not a source-code audit. Standalone candidates are not authorized repository creations. Full license/source/functional verification is required per target.",
+  "products": [
+    {
+      "name": "advis0r",
+      "category": "AI & Agents",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "AI or Not",
+      "category": "AI & Agents",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "Chovy",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS Solution Factory",
+      "priority": "P1",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "REPO_IDENTITY_MISMATCH",
+        "sourceRepo": "https://github.com/profullstack/chovy.com",
+        "sha": "5e0d4d2a4d7686c81534295796ee54d79ccc0c50",
+        "license": "UNKNOWN",
+        "identity": "readme is 240-character microblog, not currently advertised app builder"
+      }
+    },
+    {
+      "name": "MediaAnalyzer",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Creator Console media analysis",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "moshcode",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS Workbench",
+      "priority": "P1",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "PUBLIC_SOURCE_LICENSE_PINNED",
+        "sourceRepo": "https://github.com/moshcoder/moshcode",
+        "sha": "9529c0a5c6ff83b3493505ace9f1b3a8a4f7fde3",
+        "license": "MIT",
+        "identity": "README matches marketed terminal/wrapper"
+      }
+    },
+    {
+      "name": "Profullstack MCP",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS Capability Fabric",
+      "priority": "P1",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "GENERIC_MCP_REPO_NOT_CONFIRMED_AS_FLEET_BACKEND",
+        "sourceRepo": "https://github.com/profullstack/mcp-server",
+        "sha": "b5dcfdb889f5b16c0c3c6cb0075bf369fa41e464",
+        "license": "ISC",
+        "identity": "generic model/MCP server; current live fleet endpoint mapping unverified"
+      }
+    },
+    {
+      "name": "QAaaS",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS QA/evaluation harness",
+      "priority": "P1",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "POSSIBLE_ARCHIVED_PREDECESSOR_ONLY",
+        "sourceRepo": "https://github.com/profullstack/qaai",
+        "sha": "be99dd57637c4331dd556ce46227d8720705b916",
+        "license": "UNKNOWN",
+        "identity": "archived; mapping to qaaas.dev unproven; root LICENSE absent"
+      }
+    },
+    {
+      "name": "Stack builder",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS Solution Factory",
+      "priority": "P1",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "TronBrowser",
+      "category": "AI & Agents",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS browser lane",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "AgentBBS",
+      "category": "Identity & Collaboration",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "LogicSRC",
+      "category": "Identity & Collaboration",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS identity / remote collaboration",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "PairUX",
+      "category": "Identity & Collaboration",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS identity / remote collaboration",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "phonenumbers.bot",
+      "category": "Identity & Collaboration",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Agent Work OS identity / remote collaboration",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "qrypt.chat",
+      "category": "Identity & Collaboration",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "SMSHub",
+      "category": "Identity & Collaboration",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "AgenticJobs",
+      "category": "Marketplaces & Work",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "ApplyAI",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "d0rz",
+      "category": "Marketplaces & Work",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "tleehealth",
+      "category": "Marketplaces & Work",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "ugig",
+      "category": "Marketplaces & Work",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "ApplyAI",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "b1dz",
+      "category": "Payments & Commerce",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "c0upons",
+      "category": "Payments & Commerce",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "CoinPay",
+      "category": "Payments & Commerce",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "PWAmart",
+      "category": "Payments & Commerce",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "RecipePDFs",
+      "category": "Payments & Commerce",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "x402",
+      "category": "Payments & Commerce",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Commerce product intake",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "bg0ne",
+      "category": "Media & Streaming",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Local-first photo editor",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "bittorrented",
+      "category": "Media & Streaming",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "c0ncerts",
+      "category": "Media & Streaming",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "demo.movie",
+      "category": "Media & Streaming",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Creator Console / local-first media tools",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "nixamp",
+      "category": "Media & Streaming",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "reeleel",
+      "category": "Media & Streaming",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "TypeHeard",
+      "category": "Media & Streaming",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Creator Console transcription",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/billing",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Shared capability/library registry",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/emailer",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Shared capability/library registry",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/form-guard",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Shared capability/library registry",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/notifications",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Shared capability/library registry",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/orgs",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Shared capability/library registry",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/proxy",
+      "category": "Packages",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Shared capability/library registry",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/scraper-daemon",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "REA ingestion",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "@profullstack/stack",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS capability registry",
+      "priority": "P1",
+      "evidence": "REPO_README_LICENSE_PINNED",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED",
+      "pinnedSha": "89d4c5a7e74d677395841557776bec5dbc730be6",
+      "license": "MIT"
+    },
+    {
+      "name": "@profullstack/watchdog",
+      "category": "Packages",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS runtime supervision",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "bl0ggers",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Creator Console",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "brisk.news",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Creator Console",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "genrewatch",
+      "category": "Publishing & Growth",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "OutreachGraph",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "ApplyAI / Creator Console",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "p0dcasters",
+      "category": "Publishing & Growth",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "PostAmmo",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Creator Console",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "RSS Amplifier",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Launchgrid",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "SaaSRow",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Launchgrid",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "tipoffwatch",
+      "category": "Publishing & Growth",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "w3bs.org",
+      "category": "Publishing & Growth",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Launchgrid",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "watchnews.now",
+      "category": "Publishing & Growth",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "BufferOverride",
+      "category": "Games",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "nightcell7",
+      "category": "Games",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "c0mpute",
+      "category": "Compute & Servers",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS infrastructure / Shipping OS",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "Infernet Protocol",
+      "category": "Compute & Servers",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Agent Work OS infrastructure / Shipping OS",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "r4ck.dev",
+      "category": "Compute & Servers",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS infrastructure discovery",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "sh1pt",
+      "category": "Compute & Servers",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS Shipping OS",
+      "priority": "P1",
+      "evidence": "REPO_README_LICENSE_PINNED",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED",
+      "pinnedSha": "e6b90a07da881986a34a69283f4cea645e428d46",
+      "license": "MIT"
+    },
+    {
+      "name": "VPS & Dedicated",
+      "category": "Compute & Servers",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Agent Work OS infrastructure / Shipping OS",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "crawlproof",
+      "category": "Security",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "icemap",
+      "category": "Security",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "ThreatCrush",
+      "category": "Security",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS security QA",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "vu1nz",
+      "category": "Security",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS security QA",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "cli-tools",
+      "category": "Developer Tools",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS workbench",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "d3vices",
+      "category": "Developer Tools",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS workbench",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "Fleet SysOps",
+      "category": "Developer Tools",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Agent Work OS runtime operations",
+      "priority": "P1",
+      "evidence": "DOC_PAGE_READ",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "hqtui",
+      "category": "Developer Tools",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Agent Work OS terminal workbench",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "moshcoding",
+      "category": "Developer Tools",
+      "routing": "DONOR_REFERENCE",
+      "proposedOwner": "Agent Work OS workbench",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "d1sks",
+      "category": "Storage & Data",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "diskpush",
+      "category": "Storage & Data",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Research OS / data product",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "MarkSyncr",
+      "category": "Storage & Data",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Research OS / data product",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "NicheDB",
+      "category": "Storage & Data",
+      "routing": "STANDALONE_CANDIDATE",
+      "proposedOwner": "Separate product review (no repo authorized yet)",
+      "priority": "P3",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    },
+    {
+      "name": "readm3",
+      "category": "Storage & Data",
+      "routing": "DONOR_MODULE",
+      "proposedOwner": "Research OS / data product",
+      "priority": "P2",
+      "evidence": "DIRECTORY_ONLY",
+      "source": "https://profullstack.com/docs/directory",
+      "implementation": "NOT_STARTED"
+    }
+  ],
+  "audit": "research/rea/profullstack-source-audit-p1-2026-10-20.md"
+}
