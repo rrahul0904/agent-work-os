@@ -1,0 +1,123 @@
+{
+  "schema": "rea-donor-inventory/v1",
+  "intakeDate": "2026-10-20",
+  "target": {
+    "url": "https://profullstack.com/",
+    "name": "Profullstack engineering ecosystem",
+    "type": "agency-product-portfolio"
+  },
+  "classification": "DONOR_REFERENCE",
+  "canonicalRepo": "rrahul0904/agent-work-os",
+  "governanceIssue": "https://github.com/rrahul0904/agent-work-os/issues/318",
+  "evidence": [
+    {
+      "name": "Site",
+      "url": "https://profullstack.com/",
+      "kind": "public-site",
+      "verified": "page-observed"
+    },
+    {
+      "name": "Stack",
+      "url": "https://profullstack.com/stack",
+      "kind": "architecture-documentation",
+      "verified": "page-observed"
+    },
+    {
+      "name": "Stack builder",
+      "url": "https://profullstack.com/stack/build",
+      "kind": "product-ui",
+      "verified": "page-observed"
+    },
+    {
+      "name": "Products directory",
+      "url": "https://profullstack.com/docs/directory",
+      "kind": "catalog",
+      "verified": "page-observed"
+    },
+    {
+      "name": "Stack package",
+      "url": "https://github.com/profullstack/stack",
+      "kind": "public-repository",
+      "inspectedRef": "89d4c5a7e74d677395841557776bec5dbc730be6",
+      "license": "MIT",
+      "licenseFileVerified": true,
+      "runVerified": false
+    },
+    {
+      "name": "sh1pt",
+      "url": "https://github.com/profullstack/sh1pt",
+      "kind": "public-repository",
+      "inspectedRef": "e6b90a07da881986a34a69283f4cea645e428d46",
+      "license": "MIT",
+      "licenseFileVerified": true,
+      "declaredStatus": "alpha",
+      "runVerified": false
+    }
+  ],
+  "capabilities": [
+    {
+      "slug": "supervised-agent-fleet",
+      "owner": "Agent Work OS",
+      "priority": "P1",
+      "verification": "research-only",
+      "dependsOn": [
+        "Agent Execution Fabric"
+      ]
+    },
+    {
+      "slug": "multi-harness-skill-distribution",
+      "owner": "Capability Fabric",
+      "priority": "P1",
+      "verification": "research-only",
+      "dependsOn": [
+        "#259"
+      ]
+    },
+    {
+      "slug": "stack-recipe-generator",
+      "owner": "Solution Factory",
+      "priority": "P1",
+      "verification": "research-only",
+      "dependsOn": [
+        "WorkItem",
+        "Shipping OS"
+      ]
+    },
+    {
+      "slug": "cross-product-library-catalog",
+      "owner": "Capability Registry",
+      "priority": "P2",
+      "verification": "research-only"
+    },
+    {
+      "slug": "shipping-manifest-and-target-adapters",
+      "owner": "Shipping OS",
+      "priority": "P2",
+      "verification": "research-only",
+      "dependsOn": [
+        "release-policy"
+      ]
+    },
+    {
+      "slug": "service-catalog-discovery",
+      "owner": "REA",
+      "priority": "P2",
+      "verification": "research-only"
+    }
+  ],
+  "nextAcceptance": {
+    "firstSlice": "recipe-to-verified-app",
+    "goal": "safe local deterministic skeleton plus exact receipts",
+    "required": [
+      "diff-reviewed",
+      "no-secrets",
+      "no-direct-provider-writes",
+      "deterministic-replay",
+      "test-pass",
+      "dry-run-release-receipt"
+    ],
+    "shippingStatus": "NOT_IMPLEMENTED",
+    "deployed": false,
+    "testsRun": false
+  }
+}
