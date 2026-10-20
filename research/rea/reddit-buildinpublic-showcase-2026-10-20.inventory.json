@@ -86,7 +86,7 @@
       "name": "Photolisa",
       "url": "https://github.com/photolisa/photolisa",
       "description": "Browser photo editor (Vue/TypeScript)",
-      "classification": "DUPLICATE_DONOR",
+      "classification": "DONOR",
       "proposed_owner": "Photo editor candidate in REA #224; check source/license",
       "priority": "P0",
       "evidence_level": "author_claim_from_public_thread",
@@ -364,7 +364,7 @@
     {
       "id": "REA-BIP-026",
       "name": "Daskly",
-      "url": "https://apps.apple.com",
+      "url": "https://apps.apple.com/it/app/daskly/id6746480354?l=en-GB",
       "description": "iOS events + reminders digests",
       "classification": "REFERENCE",
       "proposed_owner": "Consumer planning candidate; link needs exact verification",
