@@ -1,0 +1,111 @@
+{
+  "schema_version": "rea-intake-v1",
+  "captured_at": "2026-10-20",
+  "record_id": "airbnb-agentic-coding-dpe-2025",
+  "input_url": "https://lnkd.in/p/gJf5S5Hc",
+  "normalized_title": "Agentic coding at Airbnb",
+  "source_event": "Developer Productivity Engineering Summit 2025",
+  "source_video_published_at": "2025-10-15",
+  "speakers": [
+    "Szczepan Faber",
+    "Mike Nakhimovich"
+  ],
+  "classification": "DONOR_REFERENCE",
+  "canonical_repo": "rrahul0904/agent-work-os",
+  "standalone_repo": false,
+  "rights": {
+    "public_talk_only": true,
+    "source_code_available": false,
+    "internal_product_reproduction_authorized": false
+  },
+  "sources": [
+    {
+      "type": "linked_in_repost",
+      "url": "https://lnkd.in/p/gJf5S5Hc",
+      "verified": true
+    },
+    {
+      "type": "official_talk",
+      "url": "https://dpe.org/sessions/szczepan-faber-mike-nakhimovich/agentic-coding-at-airbnb/",
+      "verified": true
+    },
+    {
+      "type": "video",
+      "url": "https://www.youtube.com/watch?v=o6oYc9-X9Iw",
+      "verified": true
+    },
+    {
+      "type": "third_party_transcript",
+      "url": "https://www.usetranscribe.io/yt/o6oYc9-X9Iw/agentic-coding-airbnb",
+      "verified": true,
+      "confidence": "secondary_auto_transcript"
+    },
+    {
+      "type": "referenced_architecture",
+      "url": "https://www.anthropic.com/engineering/building-effective-agents",
+      "verified": true
+    }
+  ],
+  "capabilities": [
+    {
+      "key": "thin_multi_engine_agent_wrapper",
+      "named_example": "Airchat",
+      "owner": "Capability Fabric / harness",
+      "status": "reference_only"
+    },
+    {
+      "key": "remote_isolated_workspaces",
+      "named_example": "AirDev",
+      "owner": "Work OS execution fabric",
+      "status": "reference_only"
+    },
+    {
+      "key": "mcp_auth_knowledge_registry",
+      "named_example": "MCP internal tools",
+      "owner": "Capability Fabric / context",
+      "status": "reference_only"
+    },
+    {
+      "key": "session_continuity_cross_client",
+      "named_example": "CLI/IDE",
+      "owner": "Agent Workbench",
+      "status": "reference_only"
+    },
+    {
+      "key": "human_review_test_gates",
+      "named_example": "Code review process",
+      "owner": "Work OS proof and shipping",
+      "status": "reference_only"
+    },
+    {
+      "key": "evidence_based_metrics",
+      "named_example": "Sentiment/adoption/PR velocity",
+      "owner": "Work OS observability",
+      "status": "reference_only"
+    }
+  ],
+  "claim_cautions": [
+    "2025 talk, not an original 2026 engineering update",
+    "approximately 60-64% figure is agentic adoption/PR-author usage, not a percentage of source lines generated",
+    "PR velocity correlation is not proof of causation",
+    "session counts and CLI/local/remote percentages are at-talk anecdotes with unclear present-day denominators",
+    "full internal systems, APIs and licenses not disclosed",
+    "LinkedIn comment capture was partial"
+  ],
+  "decision": {
+    "mode": "research_capture",
+    "feature_implementation": "not_started",
+    "deployment": "not_started",
+    "requires_gap_audit_before_scope": true
+  },
+  "acceptance_gates": [
+    "existing-capability inventory",
+    "one bounded real task",
+    "per-task isolated sandbox",
+    "context authorization",
+    "real tests and UAT",
+    "reviewed diff and exact SHA",
+    "approved PR/release gate",
+    "failure recovery and cost budget"
+  ]
+}
