@@ -1,0 +1,63 @@
+{
+  "id": "rea.archify.2026-10-20",
+  "date": "2026-10-20",
+  "status": "DONOR_REFERENCE",
+  "governance_issue": 341,
+  "source": {
+    "reddit": "https://www.reddit.com/r/BestGitHubRepos/comments/1xb048k/",
+    "upstream": "https://github.com/tt-a1i/archify",
+    "commit": "25cf37080fc8b1dbe758a4efc3935b55f3327083",
+    "release": "v3.2.0",
+    "released_at": "2026-10-19"
+  },
+  "rights": {
+    "root_license": "MIT",
+    "attribution": [
+      "tt-a1i 2026",
+      "Cocoon AI 2025"
+    ],
+    "exclusions": [
+      "third-party brand marks and trademark rights",
+      "individually licensed logos/icons",
+      "JetBrains Mono OFL font subsets",
+      "Pele separately licensed component"
+    ],
+    "reuse_decision": "Original implementation; no upstream code/assets copied"
+  },
+  "ownership": {
+    "primary": "Visual Intelligence #206",
+    "semantic_ir": "Traceframe/DiagramSpec (RE-356)",
+    "verification": "VisualBench",
+    "governance": "Agent Work OS",
+    "workspace": "Engineering Artifact Workspace #327"
+  },
+  "observed": [
+    "typed architecture and workflow diagram schemas",
+    "multi-family renderers and CLI",
+    "diagnostics and staged deliver mechanism",
+    "repo pinned references described in repository-authoring",
+    "v3.2 one-page explainer documented in release"
+  ],
+  "inferred": [
+    "integration with our governed DiagramSpec can be through a converter",
+    "published HTML needs independent semantic and XSS tests"
+  ],
+  "unknown": [
+    "upstream current main regression pass in own environment",
+    "fully independent source-range evidence validation",
+    "cross-platform browser UAT in our environment",
+    "commercial rights for each packaged third-party asset"
+  ],
+  "phaseA": {
+    "branch": "research/rea-archify-visualbench-20261020",
+    "scope": "Read-only in-memory proof-shape validator and original negative tests",
+    "prohibited_claims": [
+      "source bytes verified",
+      "visual quality checked",
+      "browser UAT",
+      "Traceframe integrated",
+      "deployed",
+      "shipped"
+    ]
+  }
+}
