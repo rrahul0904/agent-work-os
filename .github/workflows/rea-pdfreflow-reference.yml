@@ -1,0 +1,23 @@
+name: REA PDFreflow geometry reference
+on:
+  pull_request:
+    paths:
+      - 'research/pdfreflow-layout-probe/**'
+      - '.github/workflows/rea-pdfreflow-reference.yml'
+  push:
+    branches:
+      - 'research/rea-pdfreflow-layout-aware-reader-20261020'
+    paths:
+      - 'research/pdfreflow-layout-probe/**'
+      - '.github/workflows/rea-pdfreflow-reference.yml'
+jobs:
+  synthetic-geometry:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test research/pdfreflow-layout-probe/reading-order.test.mjs
