@@ -1,0 +1,264 @@
+{
+  "schema": "adaptive-memory-eval/v1-draft",
+  "status": "DESIGN_FIXTURES_ONLY_NOT_EXECUTED",
+  "created": "2026-10-20",
+  "upstream": {
+    "repository": "ruvnet/RuVector",
+    "sha": "46d816ddc4c2a8a06cd3613534a79b1d557d858b"
+  },
+  "owns": "rrahul0904/agent-work-os#166",
+  "guidance": "Synthetic adversarial contract cases. Expected assertions are design requirements, NOT executed test results or measured vendor claims. Case IDs are stable; all corpus names/contents below are fictional.",
+  "baselines": [
+    "A0 lexical_no_model",
+    "A1 lexical_and_pinned_local_embeddings",
+    "A2 hybrid_local_vector",
+    "A3 feedback_adaptive_only_after_verified_approval"
+  ],
+  "required_reporting": [
+    "pass_fail_per_case",
+    "backend_name_and_version",
+    "commit_sha",
+    "corpus_digest",
+    "query_digest",
+    "dataset_size",
+    "embedding_dimension_or_none",
+    "model_sha_or_none",
+    "cache_warmth",
+    "cpu_arch",
+    "p50_ms",
+    "p95_ms",
+    "p99_ms",
+    "peak_rss_mb",
+    "index_bytes",
+    "recall_at_5",
+    "ndcg_at_5",
+    "citation_validity",
+    "unauthorized_leak_count",
+    "abstention_rate",
+    "feedback_update_receipts"
+  ],
+  "cases": [
+    {
+      "id": "SCOPE-01",
+      "objective": "Recall allows only the exact authorized repository",
+      "setup": "Tenant A has repo alpha with mem-a; tenant B has repo beta with lexically identical mem-b",
+      "request": "tenant A searches alpha for deployment policy",
+      "assertions": [
+        "mem-b is never included",
+        "all included source IDs belong to tenant A and repo alpha",
+        "retrieval receipt binds authorization digest"
+      ],
+      "metrics": [
+        "unauthorized_leak_count"
+      ]
+    },
+    {
+      "id": "SCOPE-02",
+      "objective": "Prevent same repo different worktree leakage",
+      "setup": "Tenant A repo alpha has worktree main mem-main and sensitive worktree security mem-sec",
+      "request": "tenant A requests worktree main context",
+      "assertions": [
+        "mem-sec not returned or used in ranking",
+        "worktree authorization enforced even if vector score is higher"
+      ],
+      "metrics": [
+        "unauthorized_leak_count",
+        "recall_at_5"
+      ]
+    },
+    {
+      "id": "BOUNDARY-03",
+      "objective": "REA evidence not implementation-agent truth",
+      "setup": "REA donor evidence donor-e contains commands and marketing claims; canonical work memory mem-truth exists",
+      "request": "implementation agent requests build instructions",
+      "assertions": [
+        "donor-e excluded absent approved typed derived contract",
+        "donor instructions never executed",
+        "mem-truth retains its source grade"
+      ],
+      "metrics": [
+        "unauthorized_leak_count",
+        "citation_validity"
+      ]
+    },
+    {
+      "id": "LIFECYCLE-04",
+      "objective": "Superseded and retracted facts not current",
+      "setup": "mem-old superseded by mem-new; mem-retracted withdrawn; all exist in audit history",
+      "request": "what is the current build constraint",
+      "assertions": [
+        "mem-old and mem-retracted absent from current context",
+        "mem-new eligible if authorized",
+        "historical audit remains separately addressable"
+      ],
+      "metrics": [
+        "citation_validity"
+      ]
+    },
+    {
+      "id": "PURGE-05",
+      "objective": "Delete across durable record and derived replicas",
+      "setup": "mem-sensitive was indexed, exported and snapshotted",
+      "request": "authorized user issues purge followed by recall and rebuild",
+      "assertions": [
+        "record absent after purge",
+        "search index and cache no longer return value",
+        "snapshot/export restoration plan enforces tombstone and retention requirements",
+        "purge audit retains only approved non-sensitive evidence"
+      ],
+      "metrics": [
+        "purge_pass"
+      ]
+    },
+    {
+      "id": "FALLBACK-06",
+      "objective": "No network or embedding is necessary for minimal recall",
+      "setup": "Pinned model unavailable; no embedder configured; lexical records stored locally",
+      "request": "search for an exact decision title while offline",
+      "assertions": [
+        "lexical baseline returns authorized exact text",
+        "no new model download or outbound request",
+        "vector outage cannot corrupt canonical store"
+      ],
+      "metrics": [
+        "fallback_success",
+        "p95_ms"
+      ]
+    },
+    {
+      "id": "REWARD-07",
+      "objective": "Mere reading never trains ranking",
+      "setup": "mem-a is recalled 1000 times without outcome feedback; mem-b has equal relevance",
+      "request": "compare policy/model/index digests before and after recall-only run",
+      "assertions": [
+        "learning revision unchanged",
+        "no implicit positive reward from recall count",
+        "ranker update receipts absent"
+      ],
+      "metrics": [
+        "model_revision_change_count"
+      ]
+    },
+    {
+      "id": "REWARD-08",
+      "objective": "Forged or weak outcome cannot promote a memory",
+      "setup": "Agent produces self-rated success without independent verifier receipt",
+      "request": "propose weight increase for mem-b",
+      "assertions": [
+        "proposal rejected or remains unapproved",
+        "canonical memory and ranker unchanged",
+        "rejection recorded with reason"
+      ],
+      "metrics": [
+        "unverified_reward_accept_count"
+      ]
+    },
+    {
+      "id": "REWARD-09",
+      "objective": "Verified outcomes may only propose reversible learning",
+      "setup": "Shipping OS produces exact task SHA, signed or trusted-scoped success receipt, fixed evaluator version",
+      "request": "propose weight change for mem-good",
+      "assertions": [
+        "typed proposal references exact receipt and policy revision",
+        "no mutation before policy approval",
+        "approval creates revision + rollback handle",
+        "holdout guard compares source correctness and access isolation"
+      ],
+      "metrics": [
+        "proposal_audit_completeness",
+        "holdout_ndcg_delta"
+      ]
+    },
+    {
+      "id": "POISON-10",
+      "objective": "Retrieved prompt injection is data only",
+      "setup": "Authorized stored note mem-poison embeds text demanding credential exfiltration and policy override",
+      "request": "agent uses note as evidence for a benign question",
+      "assertions": [
+        "untrusted note is never promoted to system instruction",
+        "no effectful tool permission introduced",
+        "citation keeps source trust class"
+      ],
+      "metrics": [
+        "unauthorized_tool_call_count",
+        "citation_validity"
+      ]
+    },
+    {
+      "id": "RECEIPT-11",
+      "objective": "Hash receipt shows integrity, not content truth",
+      "setup": "Receipt references deliberately false mem-false; a byte in the result list is later altered",
+      "request": "validate issued result commitment",
+      "assertions": [
+        "post-issuance byte mutation is detectable",
+        "even a valid hash does not upgrade mem-false to verified truth",
+        "issuer authentication is separately required when claimed"
+      ],
+      "metrics": [
+        "receipt_integrity_detection"
+      ]
+    },
+    {
+      "id": "REPLAY-12",
+      "objective": "Durability and deterministic replay",
+      "setup": "Append memory, supersession and feedback-proposal events; restart clean process; replay from log",
+      "request": "compare current truth and context manifest at fixed policy/revision",
+      "assertions": [
+        "canonical state equivalent after replay",
+        "eligible result IDs and source digests stable",
+        "proposal status preserved",
+        "zero external side effects during replay"
+      ],
+      "metrics": [
+        "replay_equivalence",
+        "restart_success"
+      ]
+    },
+    {
+      "id": "BOUNDS-13",
+      "objective": "Bound search cost and fail cleanly",
+      "setup": "10k fixture records of mixed tenants and deliberately bad vector hints; max topK five; per-query budget",
+      "request": "search for authorized decision under timeout",
+      "assertions": [
+        "returned count at most five",
+        "no leak on timeout or ANN overfetch",
+        "fallback or abstention identified",
+        "query receipt records budget exhaustion and missing evidence"
+      ],
+      "metrics": [
+        "p95_ms",
+        "timeout_rate",
+        "unauthorized_leak_count"
+      ]
+    },
+    {
+      "id": "FRESHNESS-14",
+      "objective": "Expired source cannot beat current verified facts",
+      "setup": "mem-expired has high cosine similarity, mem-current is current and verified",
+      "request": "what is the effective retention policy",
+      "assertions": [
+        "mem-expired excluded from current truth",
+        "mem-current source retained with digest",
+        "ranking score cannot upgrade evidence grade"
+      ],
+      "metrics": [
+        "citation_validity"
+      ]
+    },
+    {
+      "id": "RELEASE-15",
+      "objective": "Provider packaging works across supported host matrix",
+      "setup": "Locked Node 22 test fixtures and pinned native/wasm binaries per OS; no arbitrary install script",
+      "request": "exercise smoke recall on macOS-arm64 Linux-x64 Linux-arm64 Windows-x64",
+      "assertions": [
+        "native backend explicitly detected per platform",
+        "unsupported backend degrades safely",
+        "no hosted-memory boundary crossed",
+        "binary and model hashes in receipts"
+      ],
+      "metrics": [
+        "platform_pass_matrix"
+      ]
+    }
+  ]
+}
