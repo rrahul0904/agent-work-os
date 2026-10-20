@@ -1,0 +1,199 @@
+{
+  "schema_version": "rea-intake-v1",
+  "captured_at": "2026-10-20",
+  "record_id": "myrmidon-agent-harness-2026-10-20",
+  "input_url": "https://www.reddit.com/r/WebAfterAI/s/azlwOHHGzU",
+  "resolved_post_url": "https://www.reddit.com/r/WebAfterAI/comments/1x5etvd/your_ai_tools_can_do_the_work_myrmidon_brings/",
+  "normalized_title": "Myrmidon — local-first multi-agent harness",
+  "upstream": {
+    "repo": "Robinbinu/myrmidon",
+    "ref": "main",
+    "sha": "e6ea366b15b36ad760bf4bd87fbd2513c0c93c9e",
+    "sha_committed_at": "2026-10-11T12:09:20Z",
+    "license": "Apache-2.0",
+    "notices": [
+      "NOTICE",
+      "THIRD_PARTY_NOTICES.md"
+    ],
+    "runtime": "Bun >=1.3.14 / TypeScript",
+    "platform_status": "macOS beta; Linux and Windows CI manual; not validated here"
+  },
+  "classification": "DONOR_REFERENCE",
+  "canonical_repo": "rrahul0904/agent-work-os",
+  "governance_issue": 328,
+  "standalone_repo": false,
+  "source_inspection": "static_source_review_only",
+  "sources": [
+    {
+      "kind": "post",
+      "url": "https://www.reddit.com/r/WebAfterAI/comments/1x5etvd/your_ai_tools_can_do_the_work_myrmidon_brings/",
+      "checked": true
+    },
+    {
+      "kind": "upstream",
+      "url": "https://github.com/Robinbinu/myrmidon",
+      "checked": true,
+      "pinned_sha": "e6ea366b15b36ad760bf4bd87fbd2513c0c93c9e"
+    },
+    {
+      "kind": "license",
+      "url": "https://github.com/Robinbinu/myrmidon/blob/e6ea366b15b36ad760bf4bd87fbd2513c0c93c9e/LICENSE",
+      "checked": true
+    },
+    {
+      "kind": "third_party_notices",
+      "url": "https://github.com/Robinbinu/myrmidon/blob/e6ea366b15b36ad760bf4bd87fbd2513c0c93c9e/THIRD_PARTY_NOTICES.md",
+      "checked": true
+    },
+    {
+      "kind": "roadmap",
+      "url": "https://github.com/Robinbinu/myrmidon/blob/e6ea366b15b36ad760bf4bd87fbd2513c0c93c9e/ROADMAP.md",
+      "checked": true
+    },
+    {
+      "kind": "ci",
+      "url": "https://github.com/Robinbinu/myrmidon/blob/e6ea366b15b36ad760bf4bd87fbd2513c0c93c9e/docs/ci.md",
+      "checked": true
+    }
+  ],
+  "capabilities": [
+    {
+      "id": "multi_agent_planning_and_worker_isolation",
+      "files": [
+        "packages/runtime/src/colony.ts",
+        "packages/runtime/src/worktrees.ts"
+      ],
+      "owner": "Agent Execution Fabric #267",
+      "priority": "P1",
+      "status": "donor_static_inspected"
+    },
+    {
+      "id": "independent_verification_contract",
+      "files": [
+        "packages/runtime/src/verifier.ts",
+        "packages/protocol/src/event.ts"
+      ],
+      "owner": "Work OS shipping + evaluation #111",
+      "priority": "P0",
+      "status": "gap_validation_required"
+    },
+    {
+      "id": "local_permissions_and_sandbox",
+      "files": [
+        "packages/runtime/src/permissions.ts",
+        "packages/runtime/src/sandbox.ts",
+        "packages/runtime/src/computer/grants.ts"
+      ],
+      "owner": "Work OS local daemon and policy #251",
+      "priority": "P0",
+      "status": "gap_validation_required"
+    },
+    {
+      "id": "durable_events_and_replay",
+      "files": [
+        "packages/core/src/log.ts",
+        "packages/protocol/src/run-diff.ts"
+      ],
+      "owner": "Work OS receipts/recovery #177 #291",
+      "priority": "P1",
+      "status": "gap_validation_required"
+    },
+    {
+      "id": "controlled_browser_and_computer",
+      "files": [
+        "packages/runtime/src/browser.ts",
+        "packages/runtime/src/computer/driver.ts"
+      ],
+      "owner": "Agent Workbench #99",
+      "priority": "P1",
+      "status": "reference_only"
+    },
+    {
+      "id": "skills_plugins_memory",
+      "files": [
+        "packages/runtime/src/skill-scan.ts",
+        "packages/runtime/src/memory.ts"
+      ],
+      "owner": "Capability Fabric #259 #288",
+      "priority": "P2",
+      "status": "reference_only"
+    },
+    {
+      "id": "eval_cost_and_quality",
+      "files": [
+        "apps/eval/src/main.ts",
+        "apps/eval/src/report.ts"
+      ],
+      "owner": "Evaluation harness #111",
+      "priority": "P1",
+      "status": "reference_only"
+    },
+    {
+      "id": "multi_channel_voice",
+      "files": [
+        "packages/runtime/src/channels",
+        "packages/runtime/src/voice"
+      ],
+      "owner": "Deferred client integrations",
+      "priority": "P2",
+      "status": "reference_only"
+    }
+  ],
+  "verification_nuances": [
+    "verifier.verifyColony fails when no declared acceptance checks",
+    "verifier.verifyTask may initially treat no-output/no-artifact tasks as complete subject to optional taskJudge",
+    "readme/demos are claims rather than observed runtime proof",
+    "event log append-only semantics are not evidence of cryptographic immutability",
+    "root Apache-2.0 includes third-party notices that require independent rights review",
+    "CI defaults to macOS; Linux/Windows require manual workflows and are not proven supported"
+  ],
+  "decision": {
+    "mode": "research_capture_and_acceptance_design",
+    "implementation": "not_started",
+    "test_runs": "not_run",
+    "deployment": "not_started",
+    "needs_gap_audit": true
+  },
+  "priority_slice": "independent proof-bound reviewer authority and artifact/sha receipts, conditional on existing-code gap audit",
+  "roadmap_checkpoints": [
+    {
+      "id": "resolve_target",
+      "status": "done"
+    },
+    {
+      "id": "pin_and_inspect_source",
+      "status": "done_static"
+    },
+    {
+      "id": "deduplicate_owners",
+      "status": "done_initial"
+    },
+    {
+      "id": "threat_model_acceptance",
+      "status": "draft"
+    },
+    {
+      "id": "implementation",
+      "status": "not_started"
+    },
+    {
+      "id": "hermetic_tests",
+      "status": "not_run"
+    },
+    {
+      "id": "independent_evidence",
+      "status": "not_verified"
+    },
+    {
+      "id": "merge_or_ship",
+      "status": "blocked"
+    }
+  ],
+  "approval_boundaries": [
+    "no unapproved credentials",
+    "no live provider writes",
+    "no unapproved network",
+    "no push merge or deployment",
+    "no secret extraction"
+  ]
+}
