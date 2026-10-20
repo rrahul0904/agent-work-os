@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, readdir, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, readdir, symlink, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createSafeOutput } from './safe-output.mjs';
@@ -51,4 +51,5 @@ test('symlinks are rejected as inputs', () => fixture(async ({ dir, source }) =>
 test('published output uses restrictive scratch permissions', () => fixture(async ({ source }) => {
   const r = await createSafeOutput({ source, extension: 'jpg', convert: textConvert('ok') });
   assert.equal((await readFile(r.output, 'utf8')), 'ok');
+  if (process.platform !== 'win32') assert.equal((await stat(r.output)).mode & 0o777, 0o600);
 }));
