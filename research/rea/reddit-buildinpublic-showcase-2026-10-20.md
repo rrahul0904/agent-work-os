@@ -22,7 +22,7 @@ Canonical intake: https://github.com/rrahul0904/agent-work-os/issues/313
 | REA-BIP-003 | Animin | [link](https://animin.ilzam.dev) | App screenshot-to-motion launch mockups | EXTENSION | Creator Console + LaunchGrid assets | P1 |
 | REA-BIP-004 | Rentria | [link](https://rentria.app) | LATAM landlord property management | STANDALONE_CANDIDATE | Property management; no owned product confirmed | P2 |
 | REA-BIP-005 | Techbase | [link](https://techbase.page) | Solo-maker project showcase | DONOR | LaunchGrid discovery/showcase | P2 |
-| REA-BIP-006 | Photolisa | [link](https://github.com/photolisa/photolisa) | Browser photo editor (Vue/TypeScript) | DUPLICATE_DONOR | Photo editor candidate in REA #224; check source/license | P0 |
+| REA-BIP-006 | Photolisa | [link](https://github.com/photolisa/photolisa) | Browser photo editor (Vue/TypeScript) | DONOR | Photo editor candidate in REA #224; check source/license | P0 |
 | REA-BIP-007 | Coralhub / Coral | [link](https://coralhub.dev/hub.html) | Coding-agent multi-provider/machine control plane | DONOR | agent-work-os orchestration/fleet | P0 |
 | REA-BIP-008 | On The Mirror | [link](https://onthemirror.com) | Future public anonymous messages | EXTENSION | ThreadTales message/memory-sharing concepts | P2 |
 | REA-BIP-009 | Microlaunch Premium | [link](https://microlaunch.net/premium) | Founder launch distribution and premium listings | DUPLICATE_DONOR | Existing REA #109; LaunchGrid | P1 |
@@ -42,7 +42,7 @@ Canonical intake: https://github.com/rrahul0904/agent-work-os/issues/313
 | REA-BIP-023 | Dyscendi | [link](https://www.dyscendi.com) | Course PDF/photo → flashcards + spaced repetition | EXTENSION | Existing learning/training product track | P1 |
 | REA-BIP-024 | Unnamed personal to-do app | not supplied | Low-friction personal task/notes manager | REFERENCE | Consumer productivity comparator; no repo until differentiated | P2 |
 | REA-BIP-025 | Subredds | [link](https://www.subredds.com) | Subreddit searchable directory/grid | DONOR | LaunchGrid/Growth research discovery | P2 |
-| REA-BIP-026 | Daskly | [link](https://apps.apple.com) | iOS events + reminders digests | REFERENCE | Consumer planning candidate; link needs exact verification | P2 |
+| REA-BIP-026 | Daskly | [link](https://apps.apple.com/it/app/daskly/id6746480354?l=en-GB) | iOS events + reminders digests | REFERENCE | Consumer planning candidate; link needs exact verification | P2 |
 | REA-BIP-027 | YAPT | [link](https://play-yapt.com) | Party/conversation games | STANDALONE_CANDIDATE | Games / social-play product | P2 |
 | REA-BIP-028 | AgentDock (AndreyBegma) | [link](https://agentdock.luna-realm.com) | Idea → plan → worktree agent → CI → approval/PR | DONOR | agent-work-os execution orchestration | P0 |
 | REA-BIP-029 | PromoDrops | not supplied | Indie software short-term free/promo-code discovery | EXTENSION | LaunchGrid promotions | P2 |
