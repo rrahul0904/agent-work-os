@@ -1,0 +1,108 @@
+{
+  "schema_version": "rea-acceptance-plan-v1",
+  "record_id": "myrmidon-agent-harness-2026-10-20",
+  "issue": 328,
+  "run_status": "not_executed",
+  "scope": "owned Work OS proof-bound independent reviewer; do not install upstream runtime or authenticate external accounts",
+  "gating_contract": {
+    "require_distinct_reviewer": true,
+    "require_declared_acceptance_for_code": true,
+    "require_exact_tested_sha": true,
+    "require_artifact_hashes": true,
+    "default_action": "BLOCKED",
+    "allow_automatic_deploy": false
+  },
+  "fixtures": [
+    {
+      "id": "A01_happy_path",
+      "fixture": "two workers produce isolated code changes, independent reviewer executes approved tests after merge",
+      "expected": "REVIEW_PASS",
+      "evidence": [
+        "reviewer actor",
+        "test exit",
+        "exact tested SHA",
+        "artifact hashes",
+        "event range"
+      ]
+    },
+    {
+      "id": "A02_self_review",
+      "fixture": "writer and reviewer actor IDs match",
+      "expected": "BLOCKED",
+      "reason": "reviewer_not_independent"
+    },
+    {
+      "id": "A03_no_acceptance",
+      "fixture": "code task has no test/acceptance declaration",
+      "expected": "BLOCKED",
+      "reason": "acceptance_missing"
+    },
+    {
+      "id": "A04_mutation_after_test",
+      "fixture": "artifact changed between verified command and promotion",
+      "expected": "BLOCKED",
+      "reason": "sha_or_artifact_mismatch"
+    },
+    {
+      "id": "A05_missing_artifact",
+      "fixture": "declared output is absent",
+      "expected": "REVIEW_FAIL",
+      "reason": "output_missing"
+    },
+    {
+      "id": "A06_conflicting_worker_changes",
+      "fixture": "workers edit same lines and unresolved conflict remains",
+      "expected": "REVIEW_FAIL",
+      "reason": "merge_unresolved"
+    },
+    {
+      "id": "A07_illegal_tool_call",
+      "fixture": "worker/browser content requests network or scope expansion",
+      "expected": "BLOCKED",
+      "reason": "policy_denied"
+    },
+    {
+      "id": "A08_symlink_escape",
+      "fixture": "tool destination is a symlink outside allowed root",
+      "expected": "BLOCKED",
+      "reason": "path_out_of_bounds"
+    },
+    {
+      "id": "A09_replay_tamper",
+      "fixture": "stored event or artifact hash altered before replay",
+      "expected": "BLOCKED",
+      "reason": "receipt_digest_mismatch"
+    },
+    {
+      "id": "A10_budget_exhaustion",
+      "fixture": "review/retry limit exceeded",
+      "expected": "BLOCKED",
+      "reason": "budget_exhausted"
+    },
+    {
+      "id": "A11_cross_client_permission_bleed",
+      "fixture": "unpaired channel resumes a more privileged session",
+      "expected": "BLOCKED",
+      "reason": "session_identity_or_permission_invalid"
+    }
+  ],
+  "proof_required": [
+    "fixture output and assertion results",
+    "git commit SHA",
+    "reviewer identity",
+    "accepted tool policy version",
+    "normalized events/digests",
+    "artifact file hashes",
+    "timestamp and finite cost budget",
+    "explicit gate approval for any downstream shipping"
+  ],
+  "test_protocol": "Hermetic fixtures first. Execute only in an authorized environment with approved budget. All scenarios and exact tool behavior must be adapted to the actual owned architecture; outcomes above are acceptance expectations, NOT reported execution results.",
+  "dependencies": [
+    "#111",
+    "#177",
+    "#259",
+    "#267",
+    "#291",
+    "#328"
+  ]
+}
