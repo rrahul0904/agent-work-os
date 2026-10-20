@@ -1,0 +1,19 @@
+{
+  "schema": "stack-recipe/v1",
+  "id": "demo-product",
+  "name": "Demo Product",
+  "surfaces": [
+    "api",
+    "web",
+    "cli"
+  ],
+  "modules": [
+    "status"
+  ],
+  "sourceEvidence": [
+    {
+      "url": "https://profullstack.com/stack/build"
+    }
+  ],
+  "releasePolicy": "dry-run-only"
+}
