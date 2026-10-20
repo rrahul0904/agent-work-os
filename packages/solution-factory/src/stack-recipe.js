@@ -47,7 +47,7 @@ export function compileRecipe(input) {
   const files = {};
   files['package.json'] = JSON.stringify({
     name:recipe.id,private:true,version:'0.1.0',type:'module',engines:{node:'>=22'},
-    scripts:{start:'node src/server.mjs',test:'node --test test/*.test.mjs',status:'node src/cli.mjs status'}
+    scripts:{...(recipe.surfaces.includes('api')?{start:'node src/server.mjs'}:{}),test:'node --test test/*.test.mjs',...(recipe.surfaces.includes('cli')?{status:'node src/cli.mjs status'}:{})}
   },null,2) + '\n';
   files['src/core.mjs'] = text([
     'export const productName = ' + name + ';',
