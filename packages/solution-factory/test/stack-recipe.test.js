@@ -66,3 +66,20 @@ test('html injection is escaped',()=>{
  assert.equal(rendered.includes('<script>alert'),false);
  assert.equal(rendered.includes('&lt;script&gt;'),true);
 });
+
+
+test('surface-specific entrypoints exist only when supported',async()=>{
+ const onlyCli={...recipe(),surfaces:['cli']};
+ const cliFiles=compileRecipe(onlyCli).files;
+ assert.equal(JSON.parse(cliFiles['package.json']).scripts.start,undefined);
+ assert.equal(typeof JSON.parse(cliFiles['package.json']).scripts.status,'string');
+ assert.equal('src/server.mjs' in cliFiles,false);
+ const root=await mkdtemp(join(tmpdir(),'recipe-'));
+ const output=await writeRecipeFiles(root,onlyCli);
+ const run=spawnSync(process.execPath,['--test','test/core.test.mjs'],{cwd:output.destination,encoding:'utf8',timeout:10000});
+ assert.equal(run.status,0,run.stderr);
+ const onlyApi=compileRecipe({...recipe(),surfaces:['api']});
+ assert.equal(JSON.parse(onlyApi.files['package.json']).scripts.status,undefined);
+ assert.equal('src/cli.mjs' in onlyApi.files,false);
+ assert.equal('public/index.html' in onlyApi.files,false);
+});
