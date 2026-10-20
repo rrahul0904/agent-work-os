@@ -39,7 +39,14 @@
       "priority": "P1",
       "evidence": "DOC_PAGE_READ",
       "source": "https://profullstack.com/docs/directory",
-      "implementation": "NOT_STARTED"
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "REPO_IDENTITY_MISMATCH",
+        "sourceRepo": "https://github.com/profullstack/chovy.com",
+        "sha": "5e0d4d2a4d7686c81534295796ee54d79ccc0c50",
+        "license": "UNKNOWN",
+        "identity": "readme is 240-character microblog, not currently advertised app builder"
+      }
     },
     {
       "name": "MediaAnalyzer",
@@ -59,7 +66,14 @@
       "priority": "P1",
       "evidence": "DOC_PAGE_READ",
       "source": "https://profullstack.com/docs/directory",
-      "implementation": "NOT_STARTED"
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "PUBLIC_SOURCE_LICENSE_PINNED",
+        "sourceRepo": "https://github.com/moshcoder/moshcode",
+        "sha": "9529c0a5c6ff83b3493505ace9f1b3a8a4f7fde3",
+        "license": "MIT",
+        "identity": "README matches marketed terminal/wrapper"
+      }
     },
     {
       "name": "Profullstack MCP",
@@ -69,7 +83,14 @@
       "priority": "P1",
       "evidence": "DOC_PAGE_READ",
       "source": "https://profullstack.com/docs/directory",
-      "implementation": "NOT_STARTED"
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "GENERIC_MCP_REPO_NOT_CONFIRMED_AS_FLEET_BACKEND",
+        "sourceRepo": "https://github.com/profullstack/mcp-server",
+        "sha": "b5dcfdb889f5b16c0c3c6cb0075bf369fa41e464",
+        "license": "ISC",
+        "identity": "generic model/MCP server; current live fleet endpoint mapping unverified"
+      }
     },
     {
       "name": "QAaaS",
@@ -79,7 +100,14 @@
       "priority": "P1",
       "evidence": "DOC_PAGE_READ",
       "source": "https://profullstack.com/docs/directory",
-      "implementation": "NOT_STARTED"
+      "implementation": "NOT_STARTED",
+      "sourceAudit": {
+        "evidence": "POSSIBLE_ARCHIVED_PREDECESSOR_ONLY",
+        "sourceRepo": "https://github.com/profullstack/qaai",
+        "sha": "be99dd57637c4331dd556ce46227d8720705b916",
+        "license": "UNKNOWN",
+        "identity": "archived; mapping to qaaas.dev unproven; root LICENSE absent"
+      }
     },
     {
       "name": "Stack builder",
@@ -745,5 +773,6 @@
       "source": "https://profullstack.com/docs/directory",
       "implementation": "NOT_STARTED"
     }
-  ]
+  ],
+  "audit": "research/rea/profullstack-source-audit-p1-2026-10-20.md"
 }
