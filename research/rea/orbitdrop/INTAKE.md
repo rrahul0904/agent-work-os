@@ -3,9 +3,9 @@
 ## Identity and status
 - Intake authority: [issue #332](https://github.com/rrahul0904/agent-work-os/issues/332)
 - Reddit: https://www.reddit.com/r/ProductivityApps/comments/1xan6wn/ — u/Street-Tax4341
-- Source: https://github.com/i3sam/OrbitDrop — inspected exact SHA \`e545904098a4afeb42d4ffde8ee566a88e06a959\`
-- Release verified: \`v0.3.4-alpha\`, published 2026-10-20 12:15:54 UTC.
-- Routing: \`STANDALONE_PRODUCT_CANDIDATE\`; **do not create a duplicate product repository until dedup/approval**. Agent Work OS tracks and supervises, REA observes/specifies; eventual application code belongs in an owned product repo.
+- Source: https://github.com/i3sam/OrbitDrop — inspected exact SHA `e545904098a4afeb42d4ffde8ee566a88e06a959`
+- Release verified: `v0.3.4-alpha`, published 2026-10-20 12:15:54 UTC.
+- Routing: `STANDALONE_PRODUCT_CANDIDATE`; **do not create a duplicate product repository until dedup/approval**. Agent Work OS tracks and supervises, REA observes/specifies; eventual application code belongs in an owned product repo.
 - Master tracker ID: **pending canonical reconciliation** (no invented RE-* identifier).
 
 ## Evidence levels and actual source observations
@@ -43,9 +43,9 @@ Explorer/Finder/file-picker -> OS-specific adapter -> input snapshot and policy 
 8. Mobile: optional separate share-sheet/picker workflow. Do not treat platform constraints as bugs that an agent may bypass.
 
 ## Prototype scope
-\`safe-output.mjs\` and \`safe-output.test.mjs\` are an **independently written Node standard-library research harness**, not upstream-derived application code. They show a bounded proof of output collision handling, source preservation, validation and cleanup; do not count as a Windows product, format codec, hosted service, or release. The model uses hard links on local filesystems and is NOT a cross-device/cloud/network-filesystem-ready transaction protocol.
+`safe-output.mjs` and `safe-output.test.mjs` are an **independently written Node standard-library research harness**, not upstream-derived application code. They show a bounded proof of output collision handling, source preservation, validation and cleanup; do not count as a Windows product, format codec, hosted service, or release. The model uses hard links on local filesystems and is NOT a cross-device/cloud/network-filesystem-ready transaction protocol.
 
-Run: \`node --test research/rea/orbitdrop/safe-output.test.mjs\` (Node >= 22).
+Run: `node --test research/rea/orbitdrop/safe-output.test.mjs` (Node >= 22).
 Local proof (2026-10-20): 9/9 tests pass in the isolated research runtime. **GitHub exact-head CI / real Windows/UAT / app-store approval: NOT VERIFIED.**
 
 ## Security and clean-room boundary
