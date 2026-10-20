@@ -1,0 +1,91 @@
+{
+  "schema": "rea.source-intake.v1",
+  "intake_id": "REA-DEVSRIBE-20261020-1Xaqv70",
+  "date": "2026-10-20",
+  "source": {
+    "url": "https://www.reddit.com/r/coolgithubprojects/comments/1xaqv70/",
+    "reddit_post_id": "1xaqv70",
+    "author": "u/Limp_Celery_5220",
+    "subject": "DevScribe AI agent produces round-robin notes plus architecture diagram",
+    "vendor_url": "https://devscribe.app/",
+    "evidence_grade": "AUTHOR_DEMO_PLUS_VENDOR_DOCS_NOT_RUNTIME_VERIFIED",
+    "app_source_repository": null,
+    "source_license": "UNKNOWN_RESTRICT_COPY",
+    "public_release_reference": {
+      "repo": "avinashiitb/Devscribe-releases",
+      "sha": "b7f1d8ffe4f995a549f21892681239df7cdfe068",
+      "classification": "RELEASE_METADATA_NOT_MAIN_APP_SOURCE"
+    },
+    "potential_component": {
+      "repo": "avinashiitb/document-editor",
+      "sha": "2ce777bd45c104551d5cd0e52d8abd3125d8d928",
+      "clearance": "PENDING_RIGHTS_AND_PROVENANCE_NO_CODE_IMPORTED"
+    },
+    "avoid_name_collision": "https://www.devscribeai.com/"
+  },
+  "relationship": "DONOR_REFERENCE",
+  "no_new_repo": true,
+  "owned_repo": "rrahul0904/agent-work-os",
+  "parent_epic": 206,
+  "issue": 327,
+  "base_sha": "d11d67353911404bea1dca880e7c2320d024b9b8",
+  "branch": "research/rea-devscribe-engineering-workspace-20261020",
+  "owners": [
+    "agent-work-os/REA",
+    "Traceframe-DiagramSpec",
+    "Technical-Visual-Studio",
+    "Engineering-Artifact-Workspace"
+  ],
+  "capability_routes": {
+    "match": [
+      "prompt-to-notes",
+      "prompt-to-editable-diagram",
+      "linked-engineering-files"
+    ],
+    "improve": [
+      "typed-inert-artifact-bundle",
+      "reference-integrity",
+      "hashes",
+      "health-aware-diagram-fixture",
+      "dry-run-security"
+    ],
+    "new": [
+      "provenance-aware-regeneration",
+      "repo-diff-refresh",
+      "governed-execution",
+      "VisualBench-certification"
+    ],
+    "omit": [
+      "proprietary-source",
+      "branding",
+      "implicit-execution",
+      "unauthorized-deploy"
+    ]
+  },
+  "status": {
+    "source": "RESEARCHED",
+    "rights": "UNVERIFIED",
+    "reconstruction": "SPECIFIED",
+    "implementation": "ISOLATED_P0_CONTRACT_COMMITTED",
+    "tests": "PENDING_EXACT_HEAD_CI",
+    "integration": "NOT_STARTED",
+    "uat": "NOT_STARTED",
+    "deployment": "NOT_DEPLOYED",
+    "shipping": "NOT_SHIPPED"
+  },
+  "safety": {
+    "side_effects_in_p0": false,
+    "live_provider_calls": false,
+    "private_credentials_needed": false,
+    "repo_writes": "RESEARCH_BRANCH_ONLY",
+    "merge_deploy": "REQUIRES_APPROVAL"
+  },
+  "proof_required": [
+    "exact-head-npm-test",
+    "npm-run-acceptance",
+    "independent-inspector",
+    "semantic-diagram-round-trip",
+    "browser-uat",
+    "shipping-receipt"
+  ]
+}
