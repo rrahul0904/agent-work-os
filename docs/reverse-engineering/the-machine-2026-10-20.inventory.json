@@ -1,0 +1,54 @@
+{
+  "id": "rea-the-machine-2026-10-20",
+  "status": "research-and-bounded-synthetic-implementation",
+  "source": {
+    "reddit_share": "https://www.reddit.com/r/SideProject/s/ujrphx2FHW",
+    "reddit_canonical": "https://www.reddit.com/r/SideProject/comments/1xahurs/the_machine_i_rebuilt_the_surveillance_ais/",
+    "repository": "https://github.com/rosehahah/the-machine",
+    "upstream_sha": "f867925bcafc0f1657b57165154739d3217283db",
+    "upstream_commit_utc": "2026-10-19T09:48:47Z",
+    "code_license": "MIT",
+    "third_party_assets_license_recheck_required": true
+  },
+  "disposition": "DONOR_REFERENCE_EXISTING_PRODUCT_EXTENSION",
+  "owned_repository": "rrahul0904/agent-work-os",
+  "coordination_issue": 311,
+  "related_vision_issue": 117,
+  "owned_capabilities": [
+    "synthetic-observation-contract",
+    "deterministic-timeline-replay",
+    "synthetic-co-presence-evidence"
+  ],
+  "upstream_capabilities": [
+    "six-panel-console",
+    "mock-world",
+    "mac-webcam-mpov",
+    "object-detection",
+    "face-detection",
+    "face-matching",
+    "tracking",
+    "heuristic-threats",
+    "notifications"
+  ],
+  "phase_status": {
+    "P0": "LOCALLY_TESTED_NOT_CI_CERTIFIED",
+    "P1": "NOT_STARTED",
+    "P2": "NOT_STARTED",
+    "P3": "NOT_STARTED",
+    "P4": "GATED_NOT_STARTED",
+    "P5": "NOT_STARTED"
+  },
+  "verification": {
+    "local_command": "node --test packages/vision-observation/test/vision-observation.test.js",
+    "passed": 8,
+    "failed": 0
+  },
+  "boundaries": [
+    "synthetic-only",
+    "no-camera",
+    "no-biometric-identification",
+    "no-model-download",
+    "no-unapproved-remote-effects",
+    "no-third-party-media-assets"
+  ]
+}
