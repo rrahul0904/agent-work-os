@@ -1,0 +1,64 @@
+{
+  "id": "rea-reddit-bestgithubrepos-codexbar-20261020",
+  "capturedAt": "2026-10-20",
+  "sources": {
+    "redditShort": "https://www.reddit.com/r/BestGitHubRepos/s/5EU4SAQPj8",
+    "redditCanonical": "https://www.reddit.com/r/BestGitHubRepos/comments/1x9a3uf/",
+    "upstreamRepo": "https://github.com/steipete/CodexBar",
+    "upstreamInspectedSha": "92acf2eac671ef172b1509abaa0487786aa1c3a7",
+    "license": "MIT",
+    "dashboardContract": "https://github.com/steipete/CodexBar/blob/92acf2eac671ef172b1509abaa0487786aa1c3a7/docs/dashboard-api.md"
+  },
+  "routing": {
+    "classification": "DONOR_MODULE",
+    "ownedRepository": "rrahul0904/agent-work-os",
+    "newStandaloneRepo": false,
+    "intakeIssue": 316,
+    "relatedProvenanceIssue": 69,
+    "branch": "research/rea-codexbar-capacity-20261020"
+  },
+  "evidence": {
+    "providerIDsInDocumentationAtCapture": 106,
+    "productPlatformEvidence": [
+      "macOS app",
+      "Linux desktop",
+      "macOS/Linux CLI"
+    ],
+    "communityWindowsComparators": "not certified as upstream parity",
+    "nativeMobileAppEvidence": "none",
+    "sources": [
+      "OAuth",
+      "CLI",
+      "API token",
+      "browser cookies",
+      "local probe",
+      "status pages"
+    ],
+    "unknowns": [
+      "actual live account availability",
+      "all-provider terms and behavior",
+      "Windows or mobile parity",
+      "real production adapter"
+    ]
+  },
+  "implementation": {
+    "state": "PURE_PROJECTION_LOCAL_TESTS_PASS",
+    "sourcePath": "runtime/daemon/src/codexbar-capacity.js",
+    "testPath": "runtime/daemon/test/codexbar-capacity.test.js",
+    "localTests": 6,
+    "localTestStatus": "PASS",
+    "fullRepoCI": "UNVERIFIED",
+    "actualCLIInvocation": false,
+    "cloudCredentialRead": false,
+    "userDeviceInstallation": false,
+    "productionDeploy": false,
+    "automaticScheduling": false
+  },
+  "nextGates": [
+    "full repository CI",
+    "schema fixtures and replay review",
+    "explicit opt-in local CLI adapter",
+    "canonical #69 reconciliation",
+    "advisory gated policy"
+  ]
+}
