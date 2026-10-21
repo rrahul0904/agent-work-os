@@ -1,0 +1,33 @@
+{
+  "schema": "visual-intelligence-platform/manifest/v1alpha1",
+  "name": "Visual Intelligence Platform",
+  "artifactFamilies": [
+    "architecture-diagram",
+    "technical-diagram",
+    "technical-presentation",
+    "creative-presentation",
+    "creative-ad"
+  ],
+  "interfaces": ["web", "api", "mcp", "skills", "plugins"],
+  "agentHosts": ["codex", "claude", "cursor", "antigravity", "gemini", "compatible-agents"],
+  "editions": ["community", "pro", "enterprise"],
+  "ownedDependencies": {
+    "controlPlane": "agent-work-os",
+    "diagramCore": "RE-356 Traceframe / DiagramSpec",
+    "diagramWorkspace": "technical-visual-studio",
+    "presentationCore": "Presentation OS / DeckPlan",
+    "architecturePlanning": "RE-213 Zalcro",
+    "codeVisualization": "PR Lens"
+  },
+  "qualityGates": [
+    "prompt-spec-valid",
+    "evidence-policy-valid",
+    "domain-critic-pass",
+    "semantic-spec-valid",
+    "mechanical-qa-pass",
+    "fresh-eyes-review-pass",
+    "render-receipt-present"
+  ],
+  "phase": "A",
+  "releaseState": "BUILDING"
+}

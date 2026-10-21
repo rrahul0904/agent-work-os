@@ -1,0 +1,105 @@
+{
+  "contractVersion": "visual-intelligence-platform/v1alpha1",
+  "status": "BUILDING_PHASE_A",
+  "product": "Visual Intelligence Platform",
+  "artifactFamilies": [
+    "architecture-diagram",
+    "technical-diagram",
+    "technical-presentation",
+    "creative-presentation",
+    "creative-ad"
+  ],
+  "promptSpec": {
+    "required": [
+      "artifactType",
+      "objective",
+      "audience",
+      "inputs",
+      "constraints",
+      "editability",
+      "brand",
+      "reviewPolicy",
+      "exports"
+    ],
+    "failClosed": [
+      "missing-objective",
+      "missing-artifact-type",
+      "unbounded-secret-bearing-input",
+      "unsupported-export"
+    ]
+  },
+  "agentChain": [
+    "intent-router",
+    "requirements-planner",
+    "research-grounding",
+    "domain-critic",
+    "semantic-spec-compiler",
+    "layout-designer",
+    "artifact-renderer",
+    "mechanical-qa",
+    "fresh-eyes-reviewer"
+  ],
+  "ownedSubsystems": {
+    "controlPlane": "Agent Work OS",
+    "diagramEngine": "RE-356 Traceframe / DiagramSpec",
+    "diagramWorkspace": "technical-visual-studio",
+    "presentationEngine": "Presentation OS / DeckPlan",
+    "planningUpstream": "RE-213 Zalcro",
+    "codeVisualization": "PR Lens"
+  },
+  "editions": {
+    "community": {
+      "publicProjects": true,
+      "privateProjects": false,
+      "promptStudio": true,
+      "diagramGeneration": true,
+      "presentationGeneration": "bounded",
+      "creativeGeneration": "bounded",
+      "nativeEditablePptx": false,
+      "brandKits": 0,
+      "apiMcp": false,
+      "communityGallery": true
+    },
+    "pro": {
+      "publicProjects": true,
+      "privateProjects": true,
+      "promptStudio": true,
+      "diagramGeneration": true,
+      "presentationGeneration": true,
+      "creativeGeneration": true,
+      "nativeEditablePptx": true,
+      "brandKits": 3,
+      "apiMcp": "bounded",
+      "versionHistory": true,
+      "advancedReview": true
+    },
+    "enterprise": {
+      "organizations": true,
+      "rbac": true,
+      "ssoSamlScim": true,
+      "auditLogs": true,
+      "privateKnowledge": true,
+      "byokProviderRouting": true,
+      "approvalWorkflows": true,
+      "customBrandSystems": true,
+      "apiMcp": "custom",
+      "privateDeployment": "planned"
+    }
+  },
+  "phaseAAcceptance": [
+    "hosted-shell-renders",
+    "five-artifact-routes-visible",
+    "prompt-spec-generated-deterministically",
+    "agent-chain-derived-from-artifact-type",
+    "edition-matrix-visible",
+    "no-provider-credential-required",
+    "no-production-ready-claim"
+  ],
+  "nonClaims": [
+    "no-donor-parity",
+    "no-production-architecture-autonomy",
+    "no-native-pptx-compiler-in-phase-a",
+    "no-billing-in-phase-a",
+    "no-enterprise-security-certification-in-phase-a"
+  ]
+}

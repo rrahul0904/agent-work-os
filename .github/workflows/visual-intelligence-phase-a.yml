@@ -1,0 +1,96 @@
+name: Visual Intelligence Phase A
+
+on:
+  push:
+    branches:
+      - feat/visual-intelligence-platform
+  pull_request:
+    paths:
+      - 'labs/visual-intelligence-platform/**'
+      - 'contracts/visual-intelligence-platform.phase-a.json'
+      - 'docs/reverse-engineering/visual-intelligence-platform.md'
+      - 'docs/reverse-engineering/visual-intelligence-donor-register.md'
+      - '.github/workflows/visual-intelligence-phase-a.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test platform core and HTTP runtime
+        working-directory: labs/visual-intelligence-platform
+        run: npm test
+      - name: Syntax check hosted runtime
+        working-directory: labs/visual-intelligence-platform
+        run: |
+          node --check server.mjs
+          node --check http-app.mjs
+          node --check smoke-runtime.mjs
+          node --check agent-runtime.mjs
+          node --check model-providers.mjs
+          node --check agent-console.mjs
+      - name: Build hosted product
+        working-directory: labs/visual-intelligence-platform
+        run: npm run build
+      - name: Verify built artifact
+        working-directory: labs/visual-intelligence-platform
+        run: |
+          test -f dist/index.html
+          test -f dist/prompt-core.mjs
+          test -f dist/entitlements.mjs
+          test -f dist/orchestrator.mjs
+          test -f dist/agent-runtime.mjs
+          test -f dist/model-providers.mjs
+          test -f dist/visualbench.mjs
+          test -f dist/diagram-spec.mjs
+          test -f dist/diagram-renderer.mjs
+          test -f dist/diagram-critic.mjs
+          test -f dist/diagram-adapters.mjs
+          test -f dist/deck-plan.mjs
+          test -f dist/pptx-native.mjs
+          test -f dist/presentation-service.mjs
+          test -f dist/creative-spec.mjs
+          test -f dist/creative-renderer.mjs
+          test -f dist/mcp-core.mjs
+          test -f dist/studio-upgrade.mjs
+          test -f dist/agent-console.mjs
+          grep -q 'studio-upgrade.mjs' dist/index.html
+          grep -q 'agent-console.mjs' dist/index.html
+      - name: Deterministic end-to-end runtime smoke
+        working-directory: labs/visual-intelligence-platform
+        run: node smoke-runtime.mjs
+      - name: Verify native PPTX OOXML package
+        working-directory: labs/visual-intelligence-platform
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFile } from 'node:fs/promises';
+          import { generateNativePptx } from './pptx-native.mjs';
+          const pptx = generateNativePptx({
+            title: 'CI Native Deck',
+            slides: [
+              { title: 'CI Native Deck', subtitle: 'Editable OOXML', layout: 'title' },
+              { title: 'Proof', bullets: ['Native text boxes', 'Native shapes', 'Owned compiler'] }
+            ]
+          });
+          await writeFile('/tmp/visual-intelligence.pptx', pptx);
+          NODE
+          python3 - <<'PY'
+          import zipfile
+          path='/tmp/visual-intelligence.pptx'
+          with zipfile.ZipFile(path) as z:
+              names=set(z.namelist())
+              required={'[Content_Types].xml','ppt/presentation.xml','ppt/slides/slide1.xml','ppt/slides/slide2.xml','ppt/theme/theme1.xml'}
+              assert required <= names, required-names
+              slide=z.read('ppt/slides/slide2.xml').decode('utf-8')
+              assert 'Native text boxes' in slide
+              assert '<p:sp>' in slide and '<a:t>' in slide
+          PY
