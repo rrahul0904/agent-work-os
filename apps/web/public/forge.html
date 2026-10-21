@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080e1c">
+  <title>REA Forge — Live Control Room</title>
+  <link rel="stylesheet" href="/forge.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-icon">RF</span><span><strong>REA Forge</strong><small>Agent Work OS · Live Control Room</small></span></a>
+    <div class="top-actions"><span id="connection" class="connection" role="status">Connecting…</span><button type="button" id="refresh">Refresh</button><a class="back-link" href="/">Shipping OS ↗</a></div>
+  </header>
+  <main>
+    <section class="heading">
+      <div><p class="eyebrow">OPERATIONS / EXECUTION OBSERVABILITY</p><h1>See what the agents are actually doing.</h1><p class="subtitle">Read-only, source-backed machine, agent-session, shipping-run and work-item relationships. No synthetic supervisor or invented task dependencies.</p></div>
+      <div id="last-update" class="timestamp">No snapshot received</div>
+    </section>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section class="metrics" aria-label="Observed counts">
+      <article><span>Machines</span><strong id="count-machine">—</strong></article>
+      <article><span>Agent sessions</span><strong id="count-session">—</strong></article>
+      <article><span>Shipping runs</span><strong id="count-shipping">—</strong></article>
+      <article><span>Work items</span><strong id="count-work">—</strong></article>
+    </section>
+    <div class="workspace">
+      <section class="graph-panel" aria-labelledby="graph-title">
+        <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
+        <p class="graph-notice" id="graph-notice">Machine → session and machine → run edges are shown only when the backend supplies matching IDs. No task dependency contract is implied.</p>
+        <div class="graph-scroller"><svg id="graph" role="group" aria-label="Interactive runtime relationship graph" xmlns="http://www.w3.org/2000/svg"><title>Runtime relationship graph</title></svg></div>
+        <div class="legend"><span><i class="swatch active"></i> Active/queued</span><span><i class="swatch success"></i> Completed/verified</span><span><i class="swatch warning"></i> Needs attention</span><span><i class="swatch failure"></i> Failed/interrupted</span><span><i class="swatch neutral"></i> Other/unknown</span></div>
+      </section>
+      <aside class="inspector" aria-labelledby="inspector-title">
+        <p class="eyebrow">INSPECTION / EVIDENCE</p><h2 id="inspector-title">Selected node</h2>
+        <div id="inspect-content"><p class="placeholder">Click any node to inspect its recorded status, owner binding and recent event types.</p></div>
+      </aside>
+    </div>
+    <footer><strong>Truth boundary:</strong> This is an observability viewer over existing Agent Work OS records, not a multi-agent scheduler. A completed session is not proof that a product was shipped. Full REA task DAGs and automated dispatch require separately verified backend work.</footer>
+  </main>
+  <script type="module" src="/forge.js"></script>
+</body>
+</html>
