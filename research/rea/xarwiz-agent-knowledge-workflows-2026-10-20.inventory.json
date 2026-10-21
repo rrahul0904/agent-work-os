@@ -1,0 +1,318 @@
+{
+  "schema": "rea-target-inventory/v1",
+  "intake_id": "rea-xarwiz-20261020",
+  "discovered_at_date": "2026-10-20",
+  "target": {
+    "canonical_name": "Xarwiz AI",
+    "user_url": "https://www.reddit.com/r/AISaaSHunter/s/E5FRcvvaN7",
+    "reddit_post_url": "https://www.reddit.com/r/AISaaSHunter/comments/1xaw1vb/indias_allinone_ai_platform_for_agents_automation/",
+    "reddit_post_id": "1xaw1vb",
+    "subreddit": "AISaaSHunter",
+    "poster": "No_Lecture5161",
+    "product_url": "https://xarwiz.com/",
+    "legal_entity": "CONFLICTING_PUBLIC_TEXT_DO_NOT_ASSERT",
+    "source_repo": "UNKNOWN",
+    "source_commit_sha": "UNKNOWN",
+    "upstream_app_license": "NOT_VERIFIED_PROPRIETARY_TREAT_AS_NO_REUSE",
+    "runtime_authenticated": "NOT_OBSERVED",
+    "provider_invoked": false,
+    "guest_trial_consumed": false
+  },
+  "routing": {
+    "disposition": "DONOR_ARCHITECTURE_REFERENCE",
+    "canonical_repo": "rrahul0904/agent-work-os",
+    "governance_issue": "https://github.com/rrahul0904/agent-work-os/issues/348",
+    "existing_owners": [
+      "REA #88",
+      "Capability Fabric",
+      "n8n #203",
+      "n8n commercial #173",
+      "Visual Execution Graph #345"
+    ],
+    "duplicate_repo_allowed": false,
+    "owned_candidate": "BusinessAgentCompositionSpec/v1",
+    "state": "FIRST_PARTY_DOCS_OBSERVED_SPEC_DRAFTED",
+    "implementation_started": false,
+    "source_parity_verified": false,
+    "deployed": false,
+    "production_verified": false
+  },
+  "sources": [
+    {
+      "id": "XAR-01",
+      "url": "https://www.reddit.com/r/AISaaSHunter/comments/1xaw1vb/indias_allinone_ai_platform_for_agents_automation/",
+      "kind": "reddit_marketing_post",
+      "confidence": "observed_public_text"
+    },
+    {
+      "id": "XAR-02",
+      "url": "https://www.linkedin.com/posts/ashish-pratap-singh-tomar_xarwiz-aiindia-artificialintelligence-share-7518199559718604800-8LyN/",
+      "kind": "founder_post",
+      "confidence": "self_report"
+    },
+    {
+      "id": "XAR-03",
+      "url": "https://xarwiz.com/",
+      "kind": "first_party_feature_pricing",
+      "confidence": "advertised_not_runtime_verified"
+    },
+    {
+      "id": "XAR-04",
+      "url": "https://xarwiz.com/about",
+      "kind": "first_party_ux_illustration",
+      "confidence": "advertised_not_runtime_verified"
+    },
+    {
+      "id": "XAR-05",
+      "url": "https://xarwiz.com/security",
+      "kind": "first_party_security",
+      "confidence": "self_claim_not_audit"
+    },
+    {
+      "id": "XAR-06",
+      "url": "https://xarwiz.com/security-policy",
+      "kind": "first_party_security_policy",
+      "confidence": "self_claim_not_audit"
+    },
+    {
+      "id": "XAR-07",
+      "url": "https://xarwiz.com/privacy",
+      "kind": "first_party_privacy",
+      "confidence": "legal_text_not_configuration_proof"
+    },
+    {
+      "id": "XAR-08",
+      "url": "https://xarwiz.com/data-processing",
+      "kind": "first_party_dpa",
+      "confidence": "legal_text_internally_conflicting"
+    },
+    {
+      "id": "XAR-09",
+      "url": "https://xarwiz.com/terms",
+      "kind": "first_party_terms",
+      "confidence": "legal_text"
+    },
+    {
+      "id": "XAR-10",
+      "url": "https://github.com/n8n-io/n8n/blob/master/LICENSE.md",
+      "kind": "third_party_upstream_license",
+      "confidence": "official_license_text"
+    }
+  ],
+  "public_claims": [
+    {
+      "feature": "agent_builder_memory_tools_actions",
+      "status": "ADVERTISED",
+      "independent_runtime_proof": false,
+      "route": "Capability Fabric"
+    },
+    {
+      "feature": "RAG_pdf_docx_url_connectors",
+      "status": "ADVERTISED",
+      "independent_runtime_proof": false,
+      "route": "Governed Knowledge"
+    },
+    {
+      "feature": "visual_workflow_n8n",
+      "status": "ADVERTISED",
+      "independent_runtime_proof": false,
+      "route": "Visual Graph / n8n license gate"
+    },
+    {
+      "feature": "embeddable_chat",
+      "status": "ADVERTISED",
+      "independent_runtime_proof": false,
+      "route": "Scoped widget"
+    },
+    {
+      "feature": "languages_22_plus",
+      "status": "ADVERTISED",
+      "independent_runtime_proof": false,
+      "route": "Multilingual evaluation"
+    },
+    {
+      "feature": "postgres_rls_pgvector_aes_256",
+      "status": "VENDOR_ASSERTED",
+      "independent_runtime_proof": false,
+      "route": "Policy and negative security proof"
+    },
+    {
+      "feature": "india_only_residency_dpdp",
+      "status": "VENDOR_ASSERTED",
+      "independent_runtime_proof": false,
+      "route": "Jurisdiction attestation only after measured evidence"
+    },
+    {
+      "feature": "case_study_lift_and_waitlist",
+      "status": "VENDOR_ASSERTED",
+      "independent_runtime_proof": false,
+      "route": "OMIT"
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q01",
+      "topic": "LEGAL_ENTITY_CONFLICT",
+      "urls": [
+        "https://xarwiz.com/privacy",
+        "https://xarwiz.com/data-processing"
+      ],
+      "blocker": "Confirm executed contracting entity"
+    },
+    {
+      "id": "Q02",
+      "topic": "CLOUD_PROVIDERS_DISAGREE",
+      "urls": [
+        "https://xarwiz.com/security-policy",
+        "https://xarwiz.com/data-processing"
+      ],
+      "blocker": "Resolve AWS/Cloudflare vs GCP/Ollama/Resend per data type"
+    },
+    {
+      "id": "Q03",
+      "topic": "DATA_RESIDENCY_SCOPE",
+      "urls": [
+        "https://xarwiz.com/security",
+        "https://xarwiz.com/privacy"
+      ],
+      "blocker": "Distinguish stored data, inference, emails, telemetry, cross-border transfers"
+    },
+    {
+      "id": "Q04",
+      "topic": "N8N_LICENSE",
+      "urls": [
+        "https://github.com/n8n-io/n8n/blob/master/LICENSE.md"
+      ],
+      "blocker": "Commercial embedding and hosted workflows require separate legal entitlement review"
+    },
+    {
+      "id": "Q05",
+      "topic": "AUTHENTICATED_BLACK_BOX",
+      "urls": [
+        "https://xarwiz.com/"
+      ],
+      "blocker": "No permissioned test account / run and independent effect evidence"
+    },
+    {
+      "id": "Q06",
+      "topic": "PRICING_DRIFT",
+      "urls": [
+        "https://xarwiz.com/"
+      ],
+      "blocker": "Do not treat cached price/limits as stable"
+    },
+    {
+      "id": "Q07",
+      "topic": "SOURCE_PROVENANCE",
+      "urls": [
+        "https://xarwiz.com/"
+      ],
+      "blocker": "No official upstream source commit/license verified"
+    }
+  ],
+  "expected_tests": [
+    {
+      "id": "T01",
+      "name": "deterministic_readonly_plan",
+      "expected": "PASS"
+    },
+    {
+      "id": "T02",
+      "name": "deny_cross_tenant_knowledge",
+      "expected": "DENY"
+    },
+    {
+      "id": "T03",
+      "name": "ignore_untrusted_rag_tool_instructions",
+      "expected": "DENY"
+    },
+    {
+      "id": "T04",
+      "name": "deny_write_without_grant",
+      "expected": "DENY"
+    },
+    {
+      "id": "T05",
+      "name": "refuse_invalid_graph_and_unknown_effect",
+      "expected": "DENY"
+    },
+    {
+      "id": "T06",
+      "name": "refuse_stale_spec_digest",
+      "expected": "DENY"
+    },
+    {
+      "id": "T07",
+      "name": "refuse_widget_origin_mismatch",
+      "expected": "DENY"
+    },
+    {
+      "id": "T08",
+      "name": "enforce_server_side_guest_quota",
+      "expected": "DENY"
+    },
+    {
+      "id": "T09",
+      "name": "deny_disallowed_model_region",
+      "expected": "DENY"
+    },
+    {
+      "id": "T10",
+      "name": "observe_provider_cancel_and_cleanup",
+      "expected": "RECEIPT_REQUIRED"
+    },
+    {
+      "id": "T11",
+      "name": "invalidate_erased_knowledge",
+      "expected": "RECEIPT_REQUIRED"
+    },
+    {
+      "id": "T12",
+      "name": "reject_forged_verification_evidence",
+      "expected": "DENY"
+    },
+    {
+      "id": "T13",
+      "name": "block_unlicensed_n8n_embedding",
+      "expected": "BLOCKED"
+    },
+    {
+      "id": "T14",
+      "name": "verify_multilingual_tenant_boundary",
+      "expected": "PASS_NO_LEAK"
+    },
+    {
+      "id": "T15",
+      "name": "deny_cross_tenant_work_approval",
+      "expected": "DENY"
+    },
+    {
+      "id": "T16",
+      "name": "enforce_token_cost_budget",
+      "expected": "BOUNDED_STOP"
+    }
+  ],
+  "actual_test_results": [],
+  "gates": {
+    "SOURCE_IDENTITY": "DONE",
+    "FIRST_PARTY_RESEARCH": "DONE",
+    "CAPABILITY_ROUTING": "DONE",
+    "BEHAVIOR_SPEC_DRAFT": "DONE",
+    "LIVE_REA_EVIDENCE": "NOT_RUN",
+    "SPEC_FREEZE": "PENDING",
+    "AUTHORIZED_BUILD": "BLOCKED",
+    "INDEPENDENT_TEST": "NOT_RUN",
+    "REPLAY_COMPARE": "NOT_RUN",
+    "CI": "NOT_RUN",
+    "MERGE": "NOT_DONE",
+    "DEPLOY": "NOT_DONE",
+    "PRODUCTION_CERTIFICATION": "NOT_DONE"
+  },
+  "rights": {
+    "xarwiz_code_copied": false,
+    "n8n_code_copied": false,
+    "assets_copied": false,
+    "live_provider_writes": false,
+    "automated_deployment": false
+  }
+}
