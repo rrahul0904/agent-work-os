@@ -1,0 +1,23 @@
+name: Architecture Intelligence adapter (isolated)
+on:
+  pull_request:
+    paths:
+      - 'packages/architecture-intelligence/**'
+      - '.github/workflows/architecture-intelligence.yml'
+  push:
+    paths:
+      - 'packages/architecture-intelligence/**'
+      - '.github/workflows/architecture-intelligence.yml'
+permissions:
+  contents: read
+jobs:
+  preflight-adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run isolated negative-path tests (no upstream install)
+        run: node --test packages/architecture-intelligence/test/*.test.mjs
