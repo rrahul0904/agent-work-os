@@ -1,0 +1,21 @@
+title "Agent Work OS session control (illustrative)"
+
+user   "Operator Browser"  [Browser]
+api    "Control API"       [REST API]    x2
+state  "State Store"       [PostgreSQL]  x2
+daemon "Local Agent Daemon" [Node.js]
+
+user -> api    : HTTPS
+api  -> state  : SQL
+api  -> daemon : WebSocket
+
+usecase "Start session" {
+  user -> api    : POST /sessions
+  api  -> state  : INSERT session
+  api  -> daemon : START agent session
+  api  --> user  : 202 Accepted
+}
+
+traffic {
+  "Start session" 5 rps
+}
