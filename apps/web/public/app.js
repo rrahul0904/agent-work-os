@@ -89,7 +89,7 @@ function render() {
   app.innerHTML = `<div class="product-shell">
     <aside class="sidebar">
       <div class="brand"><div class="mark">SO</div><div><strong>Shipping OS</strong><small>Agent Work OS</small></div></div>
-      <nav>${navButton('overview','Overview','⌂')}${navButton('portfolio','Portfolio','◆')}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
+      <nav>${navButton('overview','Overview','⌂')}${navButton('portfolio','Portfolio','◆')}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}<a class="nav-item" href="/forge.html"><span>◇</span>REA Forge · Live Graph</a></nav>
       <div class="sidebar-foot"><div class="connection"><i class="${state.connected?'online':'offline'}"></i>${state.connected?'Realtime connected':'Reconnecting'}</div><button class="ghost small" id="logout">Lock console</button></div>
     </aside>
     <div class="workspace">
