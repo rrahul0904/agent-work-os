@@ -12,6 +12,14 @@ export function buildForgeReport(plan, sessionSummaries = {}) {
     const session = task.sessionId ? sessionSummaries[task.sessionId] ?? null : null;
     const rawDiff = Array.isArray(session?.events)
       ? session.events.findLast(event => event?.kind === "workspace.diff")?.receipt : null;
+    const rawReview = Array.isArray(session?.events)
+      ? session.events.findLast(event => event?.kind === "workspace.review")?.receipt : null;
+    const independentReview = rawReview?.schema === "rea-forge-independent-diff-review/v1"
+      && rawReview.sessionId === session?.id && rawReview.taskId === task.id
+      && rawReview.planId === plan.id
+      ? { passed: rawReview.passed, staticCheckPassed: rawReview.staticCheckPassed,
+          reportDigest: rawReview.reportDigest, testsExecuted: false,
+          scope: "git-diff-check-and-receipt-reconciliation-only" } : null;
     const diff = rawDiff?.schema === "rea-forge-diff/v1" && rawDiff.sessionId === session?.id
       ? {
           baseSha: rawDiff.baseSha, headSha: rawDiff.headSha,
@@ -31,6 +39,7 @@ export function buildForgeReport(plan, sessionSummaries = {}) {
       nativeSessionId: session?.nativeSessionId ?? null,
       eventCount: Array.isArray(session?.events) ? session.events.length : 0,
       worktreeChangeEvidence: diff,
+      independentStaticReview: independentReview,
       worktreeChangeEvidenceStatus: diff ? (diff.completeSnapshot ? "unreviewed_diff" : "incomplete_untracked_content") : "not_observed",
       attestation: task.verification
         ? { ...task.verification, kind: "human-attestation-not-automated-proof" } : null,
