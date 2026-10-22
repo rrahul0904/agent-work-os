@@ -22,7 +22,7 @@ test("observed machine bindings produce only supported edges", () => {
     ],
     workItems: [{ id: "w1", title: "Review design", state: "queued" }]
   });
-  assert.deepEqual(graph.counts, { machine: 1, session: 2, shipping: 1, work: 1 });
+  assert.deepEqual(graph.counts, { machine: 1, session: 2, activity: 0, subagent: 0, shipping: 1, work: 1 });
   assert.deepEqual(graph.edges.map(edge => [edge.from, edge.to]), [
     ["machine:m1", "session:s1"], ["machine:m1", "shipping:ship1"]
   ]);
