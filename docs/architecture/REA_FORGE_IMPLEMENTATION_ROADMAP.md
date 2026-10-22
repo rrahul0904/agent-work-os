@@ -63,3 +63,17 @@ An approved Forge Codex task must now stage an isolated DETACHED Git worktree at
 The worker emits a source-backed workspace receipt BEFORE execution and a post-run diff digest receipt afterward. These records include baseline SHA, resulting HEAD SHA, change presence, and untracked-state completeness, but do not expose patch text, file paths or secrets. This does not prove tests passed or source merged. Resuming a native Codex session requires a matching persisted workspace receipt and exactly the same isolated directory; absent or forged receipts fail closed.
 
 Caution: detached isolated changes are deliberately NOT promoted automatically into the source worktree. Downstream dependencies need human-approved integration/patch review before their code can be assumed visible. Code-writing concurrency remains maxParallel=1, pending conflict-safe promotion and independent verifier. Operate with Git worktree listing and receipts; review or remove residual worktrees manually once source changes are safely integrated and backed up.
+
+## Release readiness surface / full-feature inventory
+
+The live Control Room now calls GET /api/forge/readiness when the opt-in local supervisor is enabled. Its 14-feature catalog is a manually maintained implementation inventory with a machine-readable NOT SHIPPED verdict and links to #359. Tests confirm claimed implemented-local features have source evidence files, and they explicitly prevent a false releaseReady=true. This is not a replacement for exact-head independent QA or the canonical GitHub issue.
+
+## Independent static verifier and safe handoff preflight
+
+The daemon invokes runtime/verifier/forge-readonly-verifier.js in a separate process after each real Forge-managed Codex worker completes. It reopens the worker's pinned detached worktree, recalculates the tracked diff hash against its source SHA, compares current HEAD and Git status, rejects missing or untracked content, and checks git diff --check. This emits a workspace.review receipt when the verifier runs. The API now requires this self-consistent, content-addressed static review before human Codex-task attestation. It does NOT execute worker-created test scripts, certify source licensing or claim UAT passed.
+
+Use the authorized operator-only handoff preflight:
+
+    AGENT_WORK_OS_TOKEN=dev-token AGENT_WORK_OS_FORGE_WORKTREE_ROOT="$HOME/.local/share/rea-forge-worktrees" npm run forge:handoff -- --session ACTUAL_COMPLETED_SESSION_ID --destination /absolute/clean/receiving/repo
+
+The handoff verifier requires the receiving checkout to be clean and at the worker's exact baseline SHA, reconciles the diff content and runs git apply --check **without applying**. It returns a review-only report; automated conflict-safe patch promotion, independent application tests and downstream workspace refresh remain OPEN release blockers in #359.
