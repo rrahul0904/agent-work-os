@@ -108,7 +108,7 @@ function connect() {
             emit({ kind: "workspace", receipt, at: new Date().toISOString() });
           }
           try {
-            return await adapter.run({ sessionId: command.sessionId, cwd, prompt: p.prompt, model: p.model }, emit);
+            return await adapter.run({ sessionId: command.sessionId, cwd, prompt: p.prompt, model: p.model, sandbox: p.sandbox }, emit);
           } finally {
             if (workspaceReceipt) {
               try {
@@ -145,7 +145,7 @@ function connect() {
             ? await resumeForgeWorktree(state, process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT)
             : state.cwd;
           return adapter.run({ sessionId: command.sessionId, cwd,
-            prompt: command.payload?.prompt, model: state.model,
+            prompt: command.payload?.prompt, model: state.model, sandbox: state.sandbox,
             nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit);
         })().then(result => result.nativeSessionId && nativeSessions.set(command.sessionId, result.nativeSessionId))
           .catch(error => fail(emit, error));
