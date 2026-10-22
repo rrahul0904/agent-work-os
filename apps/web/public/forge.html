@@ -14,20 +14,22 @@
   </header>
   <main>
     <section class="heading">
-      <div><p class="eyebrow">OPERATIONS / EXECUTION OBSERVABILITY</p><h1>See what the agents are actually doing.</h1><p class="subtitle">Read-only, source-backed machine, agent-session, shipping-run and work-item relationships. No synthetic supervisor or invented task dependencies.</p></div>
+      <div><p class="eyebrow">OPERATIONS / EXECUTION OBSERVABILITY</p><h1>See what the agents are actually doing.</h1><p class="subtitle">Source-backed Codex commands, file changes, plans and observed subagents alongside machine, session, shipping-run and work-item records. No synthetic supervisor or invented task dependencies.</p></div>
       <div id="last-update" class="timestamp">No snapshot received</div>
     </section>
     <div id="error" class="error" role="alert" hidden></div>
     <section class="metrics" aria-label="Observed counts">
       <article><span>Machines</span><strong id="count-machine">—</strong></article>
       <article><span>Agent sessions</span><strong id="count-session">—</strong></article>
+      <article><span>Codex actions</span><strong id="count-activity">—</strong></article>
+      <article><span>Observed subagents</span><strong id="count-subagent">—</strong></article>
       <article><span>Shipping runs</span><strong id="count-shipping">—</strong></article>
       <article><span>Work items</span><strong id="count-work">—</strong></article>
     </section>
     <div class="workspace">
       <section class="graph-panel" aria-labelledby="graph-title">
-        <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
-        <p class="graph-notice" id="graph-notice">Machine → session and machine → run edges are shown only when the backend supplies matching IDs. No task dependency contract is implied.</p>
+        <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="activity">Codex actions</option><option value="subagent">Codex subagents</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
+        <p class="graph-notice" id="graph-notice">The graph shows verified machine bindings, captured Codex items, and observed delegation links only. Unexposed child agents are UNKNOWN. This is not a task dependency DAG.</p>
         <div class="graph-scroller"><svg id="graph" role="group" aria-label="Interactive runtime relationship graph" xmlns="http://www.w3.org/2000/svg"><title>Runtime relationship graph</title></svg></div>
         <div class="legend"><span><i class="swatch active"></i> Active/queued</span><span><i class="swatch success"></i> Completed/verified</span><span><i class="swatch warning"></i> Needs attention</span><span><i class="swatch failure"></i> Failed/interrupted</span><span><i class="swatch neutral"></i> Other/unknown</span></div>
       </section>
