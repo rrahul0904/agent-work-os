@@ -61,13 +61,28 @@ export function createForgeSupervisor({ store, dispatch, broadcast, allowedRoot 
       const events = Array.isArray(session.events) ? session.events : [];
       const stage = events.findLast(e => e?.kind === "workspace")?.receipt;
       const diff = events.findLast(e => e?.kind === "workspace.diff")?.receipt;
+      const review = events.findLast(e => e?.kind === "workspace.review")?.receipt;
       if (!stage || !diff || stage.schema !== "rea-forge-worktree/v1" ||
           diff.schema !== "rea-forge-diff/v1" ||
           stage.sessionId !== session.id || diff.sessionId !== session.id ||
+          stage.planId !== id || stage.taskId !== taskId ||
+          diff.planId !== id || diff.taskId !== taskId ||
           stage.sourceSha !== diff.baseSha) conflict("forge_verified_worktree_receipts_required");
       if (diff.untrackedPresent || !diff.completeSnapshot) conflict("forge_untracked_content_requires_review");
       if (diff.trackedDiffDigest !== evidence?.digest) conflict("forge_diff_digest_mismatch");
       if (task.expectChanges && !diff.changed) conflict("forge_expected_change_not_observed");
+      // A separate local verifier process independently reconstructs the
+      // exact Git diff. It does NOT certify tests, security or shipment.
+      if (!review || review.schema !== "rea-forge-independent-diff-review/v1" ||
+          review.sessionId !== session.id || review.planId !== id || review.taskId !== taskId ||
+          review.baseSha !== stage.sourceSha || review.headSha !== diff.headSha ||
+          review.trackedDiffDigest !== diff.trackedDiffDigest ||
+          review.passed !== true || review.staticCheckPassed !== true ||
+          review.testsExecuted !== false || review.sourceMerged !== false ||
+          review.deploymentVerified !== false ||
+          !/^sha256:[a-f0-9]{64}$/.test(review.reportDigest ?? "")) {
+        conflict("forge_independent_static_review_required");
+      }
     }
     const saved = await store.mutateForgePlan(id, current => {
       if (!current) conflict("forge_plan_not_found");
