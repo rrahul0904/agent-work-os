@@ -9,6 +9,7 @@ import { digestShippingContract, validateShippingContract } from "./shipping-con
 import { buildProductSummary, listReceipts, loadPortfolio, rankPortfolio } from "./product-state.js";
 import { JsonStore } from "./store.js";
 import { sanitizeForgeHook } from "./forge-hook-observation.js";
+import { createForgeSupervisor } from "./forge-supervisor.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { CapabilityVerificationRepository } from "./capability-verification-store.js";
@@ -73,7 +74,7 @@ export async function createControlPlane() {
         capabilityVerificationRuns: (await Promise.all(principal.organizationIds.map((organizationId) => capabilityVerifications.listByOrganization(organizationId)))).flat()
       };
     }
-    return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns(), forgeObservations: store.listForgeObservations() };
+    return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns(), forgeObservations: store.listForgeObservations(), forgePlans: forgeEnabled ? forgeSupervisor.list() : [] };
   };
   const finishClientResync = (peer, state, snapshot = null) => {
     try {
@@ -220,6 +221,41 @@ export async function createControlPlane() {
     if (!peer || peer.closed) throw new Error(`Machine ${machineId} is not connected`);
     peer.send(encodeMessage(command));
   };
+  const forgeEnabled = !isProduction && process.env.AGENT_WORK_OS_ENABLE_FORGE_SUPERVISOR === "true";
+  const forgeSupervisor = createForgeSupervisor({
+    store, sendCommand, broadcast,
+    allowedRoot: process.env.AGENT_WORK_OS_FORGE_WORKSPACE_ROOT ?? projectRoot,
+    dispatch: async (plan, task) => {
+      const now = new Date().toISOString();
+      const session = {
+        id: task.sessionId, machineId: plan.machineId, cwd: plan.cwd,
+        agent: task.agent, status: "queued", createdAt: now, updatedAt: now,
+        forgePlanId: plan.id, forgeTaskId: task.id,
+        messages: [{ id: crypto.randomUUID(), role: "user", text: task.prompt, createdAt: now }],
+        events: []
+      };
+      const command = {
+        type: "server.command", commandId: task.commandId,
+        sessionId: session.id, action: "session.start",
+        payload: { cwd: plan.cwd, agent: task.agent, prompt: task.prompt }
+      };
+      if (commandRouter) await store.createSessionWithCommand(session, command);
+      else {
+        await store.createSession(session);
+        try { await sendCommand(plan.machineId, command); }
+        catch (error) {
+          const failed = await store.setSessionStatus(session.id, "failed");
+          broadcast({ type: "session.updated", session: failed });
+          throw error;
+        }
+      }
+      broadcast({ type: "session.updated", session });
+    }
+  });
+  const forgeTimer = forgeEnabled ? setInterval(() => {
+    void forgeSupervisor.tick().catch(error => console.warn("[forge] tick failed", error.message));
+  }, 1500) : null;
+  forgeTimer?.unref?.();
   const machineStaleTimer = setInterval(() => {
     void store.markStaleMachines(machineStaleAfterMs).then((machines) => {
       for (const machine of machines) broadcast({ type: "machine.updated", machine });
@@ -330,7 +366,36 @@ export async function createControlPlane() {
         return json(res, 200, { membership });
       }
 
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns(), forgeObservations: store.listForgeObservations() });
+      if (url.pathname.startsWith("/api/forge/plans")) {
+        if (!forgeEnabled || principal.kind !== "legacy"
+          || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) {
+          return json(res, 403, { error: "forge_local_supervisor_disabled" });
+        }
+        if (req.method === "GET" && url.pathname === "/api/forge/plans") return json(res, 200, { plans: forgeSupervisor.list() });
+        if (req.method === "POST" && url.pathname === "/api/forge/plans") {
+          return json(res, 201, await forgeSupervisor.create(await readJson(req)));
+        }
+        const match = url.pathname.match(/^\\/api\\/forge\\/plans\\/([^/]+)$/);
+        if (req.method === "GET" && match) {
+          const plan = forgeSupervisor.get(decodeURIComponent(match[1]));
+          return plan ? json(res, 200, plan) : json(res, 404, { error: "forge_plan_not_found" });
+        }
+        const action = url.pathname.match(/^\\/api\\/forge\\/plans\\/([^/]+)\\/(approve|stop)$/);
+        if (req.method === "POST" && action) {
+          const plan = action[2] === "approve" ? await forgeSupervisor.approve(decodeURIComponent(action[1]))
+            : await forgeSupervisor.stop(decodeURIComponent(action[1]));
+          return json(res, 200, plan);
+        }
+        const taskAction = url.pathname.match(/^\\/api\\/forge\\/plans\\/([^/]+)\\/tasks\\/([^/]+)\\/(verify|retry)$/);
+        if (req.method === "POST" && taskAction) {
+          const plan = taskAction[3] === "verify"
+            ? await forgeSupervisor.verify(decodeURIComponent(taskAction[1]), decodeURIComponent(taskAction[2]), await readJson(req))
+            : await forgeSupervisor.retry(decodeURIComponent(taskAction[1]), decodeURIComponent(taskAction[2]));
+          return json(res, 200, plan);
+        }
+        return json(res, 404, { error: "forge_route_not_found" });
+      }
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns(), forgeObservations: store.listForgeObservations(), forgePlans: forgeEnabled ? forgeSupervisor.list() : [] });
       if (await handleCapabilityRegistryRequest({ req, res, url, principal, identities, registry: capabilityRegistry, readJson, json })) return;
       if (req.method === "GET" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
         const organizationId = url.searchParams.get("organizationId");
@@ -859,6 +924,7 @@ export async function createControlPlane() {
     close: async () => {
       const serverClosed = new Promise((resolve) => server.close(resolve));
       clearInterval(machineStaleTimer);
+      if (forgeTimer) clearInterval(forgeTimer);
       await commandRouter?.close();
       for (const peer of daemonSockets.values()) peer.close(1001, "server_shutdown");
       for (const peer of clientSockets.keys()) peer.close(1001, "server_shutdown");
