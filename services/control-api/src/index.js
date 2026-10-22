@@ -375,18 +375,18 @@ export async function createControlPlane() {
         if (req.method === "POST" && url.pathname === "/api/forge/plans") {
           return json(res, 201, await forgeSupervisor.create(await readJson(req)));
         }
-        const match = url.pathname.match(/^\\/api\\/forge\\/plans\\/([^/]+)$/);
+        const match = url.pathname.match(/^\/api\/forge\/plans\/([^/]+)$/);
         if (req.method === "GET" && match) {
           const plan = forgeSupervisor.get(decodeURIComponent(match[1]));
           return plan ? json(res, 200, plan) : json(res, 404, { error: "forge_plan_not_found" });
         }
-        const action = url.pathname.match(/^\\/api\\/forge\\/plans\\/([^/]+)\\/(approve|stop)$/);
+        const action = url.pathname.match(/^\/api\/forge\/plans\/([^/]+)\/(approve|stop)$/);
         if (req.method === "POST" && action) {
           const plan = action[2] === "approve" ? await forgeSupervisor.approve(decodeURIComponent(action[1]))
             : await forgeSupervisor.stop(decodeURIComponent(action[1]));
           return json(res, 200, plan);
         }
-        const taskAction = url.pathname.match(/^\\/api\\/forge\\/plans\\/([^/]+)\\/tasks\\/([^/]+)\\/(verify|retry)$/);
+        const taskAction = url.pathname.match(/^\/api\/forge\/plans\/([^/]+)\/tasks\/([^/]+)\/(verify|retry)$/);
         if (req.method === "POST" && taskAction) {
           const plan = taskAction[3] === "verify"
             ? await forgeSupervisor.verify(decodeURIComponent(taskAction[1]), decodeURIComponent(taskAction[2]), await readJson(req))
