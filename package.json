@@ -5,7 +5,9 @@
   "type": "module",
   "description": "Clean-room local coding-agent control plane inspired by observable remote-agent workflows.",
   "license": "MIT",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
     "pg": "8.23.1"
   },
@@ -19,6 +21,7 @@
     "acceptance": "node scripts/acceptance.mjs && node --test services/control-api/integration/*.integration.js",
     "check": "npm test && npm run acceptance",
     "ship": "node scripts/ship.mjs run",
-    "ship:validate": "node scripts/ship.mjs validate"
+    "ship:validate": "node scripts/ship.mjs validate",
+    "forge:intake": "node scripts/forge.mjs intake"
   }
 }
