@@ -11,6 +11,7 @@ import { JsonStore } from "./store.js";
 import { sanitizeForgeHook } from "./forge-hook-observation.js";
 import { createForgeSupervisor } from "./forge-supervisor.js";
 import { buildForgeReport } from "./forge-report.js";
+import { getForgeReleaseReadiness } from "./forge-feature-readiness.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { CapabilityVerificationRepository } from "./capability-verification-store.js";
@@ -367,6 +368,13 @@ export async function createControlPlane() {
         return json(res, 200, { membership });
       }
 
+      if (req.method === "GET" && url.pathname === "/api/forge/readiness") {
+        if (!forgeEnabled || principal.kind !== "legacy" ||
+          !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) {
+          return json(res, 403, { error: "forge_local_readiness_disabled" });
+        }
+        return json(res, 200, getForgeReleaseReadiness());
+      }
       if (url.pathname.startsWith("/api/forge/plans")) {
         if (!forgeEnabled || principal.kind !== "legacy"
           || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) {
