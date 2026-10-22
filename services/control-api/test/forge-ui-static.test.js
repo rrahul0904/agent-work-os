@@ -17,6 +17,10 @@ test("Forge browser/CLI scripts parse in the exact checked-out source tree", () 
     "services/control-api/src/forge-intake.js",
     "services/control-api/src/forge-report.js",
     "scripts/forge.mjs",
+    "scripts/forge-handoff.mjs",
+    "runtime/verifier/forge-readonly-verifier.js",
+    "runtime/verifier/forge-handoff-check.js",
+    "runtime/daemon/src/forge-independent-review.js",
     ".codex/hooks/rea-forge-observe.mjs"
   ]) {
     const result = spawnSync(process.execPath, ["--check", path.join(root, item)], { encoding: "utf8" });
