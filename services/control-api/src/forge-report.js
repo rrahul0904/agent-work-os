@@ -10,6 +10,18 @@ export function buildForgeReport(plan, sessionSummaries = {}) {
   if (!plan || plan.schema !== "rea-forge-plan/v1") throw new Error("forge_report_plan_invalid");
   const tasks = plan.tasks.map(task => {
     const session = task.sessionId ? sessionSummaries[task.sessionId] ?? null : null;
+    const rawDiff = Array.isArray(session?.events)
+      ? session.events.findLast(event => event?.kind === "workspace.diff")?.receipt : null;
+    const diff = rawDiff?.schema === "rea-forge-diff/v1" && rawDiff.sessionId === session?.id
+      ? {
+          baseSha: rawDiff.baseSha, headSha: rawDiff.headSha,
+          trackedDiffDigest: rawDiff.trackedDiffDigest,
+          changed: rawDiff.changed,
+          completeSnapshot: rawDiff.completeSnapshot,
+          untrackedPresent: rawDiff.untrackedPresent,
+          reviewed: false, merged: false, testsPassed: null
+        }
+      : null;
     return {
       taskId: task.id,
       title: task.title, dependsOn: [...task.dependsOn],
@@ -18,6 +30,8 @@ export function buildForgeReport(plan, sessionSummaries = {}) {
       sessionStatus: session?.status ?? "not_observed",
       nativeSessionId: session?.nativeSessionId ?? null,
       eventCount: Array.isArray(session?.events) ? session.events.length : 0,
+      worktreeChangeEvidence: diff,
+      worktreeChangeEvidenceStatus: diff ? (diff.completeSnapshot ? "unreviewed_diff" : "incomplete_untracked_content") : "not_observed",
       attestation: task.verification
         ? { ...task.verification, kind: "human-attestation-not-automated-proof" } : null,
       evidenceGap: task.state === "verified" ? null
