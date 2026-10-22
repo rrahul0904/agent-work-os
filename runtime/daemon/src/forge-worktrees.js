@@ -27,6 +27,43 @@ function checkId(value, label) {
  * worker. If creation is interrupted, the directory remains for investigation;
  * we do not silently delete, reuse or overwrite it.
  */
+/**
+ * Read-only forensic snapshot of the isolated tree, without storing paths,
+ * patch bodies, secrets or file contents. This is NOT a test result or merge
+ * permission. Diff is capped to avoid unbounded memory and output.
+ */
+export async function inspectForgeWorktree(stageReceipt) {
+  if (!stageReceipt || stageReceipt.schema !== "rea-forge-worktree/v1") fail("forge_diff_receipt_missing");
+  const dir = await fs.realpath(stageReceipt.path);
+  if (dir !== stageReceipt.path) fail("forge_diff_symlink_refused");
+  if ((await git(["rev-parse", "--show-toplevel"], dir)) !== dir) fail("forge_diff_not_worktree_root");
+  const headSha = await git(["rev-parse", "--verify", "HEAD^{commit}"], dir);
+  const status = await git(["status", "--porcelain", "--untracked-files=all"], dir);
+  const records = status ? status.split("\n").filter(Boolean) : [];
+  // Git diff only includes tracked changes. Any untracked content is explicitly
+  // marked incomplete so a reviewer cannot mistake this digest for all changes.
+  const untracked = records.some(record => record.startsWith("??"));
+  const { stdout: patch } = await exec("git", ["diff", "--binary", "--no-ext-diff",
+    "--no-textconv", stageReceipt.sourceSha, "--"], {
+    cwd: dir, timeout: 15_000, maxBuffer: 8 * 1024 * 1024,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: "0" }
+  });
+  return {
+    schema: "rea-forge-diff/v1",
+    sessionId: stageReceipt.sessionId,
+    planId: stageReceipt.planId, taskId: stageReceipt.taskId,
+    baseSha: stageReceipt.sourceSha,
+    headSha,
+    trackedDiffDigest: "sha256:" + createHash("sha256").update(patch).digest("hex"),
+    changed: records.length > 0 || headSha !== stageReceipt.sourceSha,
+    observedStatusEntries: records.length,
+    untrackedPresent: untracked,
+    completeSnapshot: !untracked,
+    reviewed: false, testsPassed: null, merged: false,
+    at: new Date().toISOString()
+  };
+}
+
 export async function resumeForgeWorktree(session, root) {
   if (!session?.forgePlanId || !session?.forgeTaskId) fail("forge_resume_not_a_forge_session");
   if (typeof root !== "string" || !path.isAbsolute(root)) fail("forge_worktree_root_invalid");
