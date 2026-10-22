@@ -99,6 +99,11 @@ test("native hook endpoint is opt-in, loopback scoped and requires authenticated
       method: "POST", headers: { "content-type": "application/json" }, body
     });
     assert.equal(unauthenticated.status, 401);
+    const malformed = await fetch(base + "/api/forge/observations", {
+      method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + token },
+      body: JSON.stringify({ sessionId: "forged", eventName: "VerifyShipped" })
+    });
+    assert.equal(malformed.status, 400);
     const accepted = await fetch(base + "/api/forge/observations", {
       method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + token }, body
     });
