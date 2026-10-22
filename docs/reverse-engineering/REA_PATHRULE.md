@@ -63,3 +63,30 @@ The default store location is ~/.agent-work-os/context/<sha256(realpath)>.jsonl.
 5. GitHub CI and runtime acceptance at exact branch SHA, independent QA. Do not merge or deploy without the Shipping OS gate.
 
 **Status:** First implementation wave; NOT a shipped product or verified performance gain.
+
+
+## Read-only MCP connection (optional)
+
+This branch additionally exports a no-network, read-only, stdio JSON-RPC MCP server. It exposes a single tool named awos_context_for_path that accepts a repository-relative path, task intent and character budget. It cannot add records, grant permissions, run tools or deploy.
+
+For Codex, point its MCP config at the locally checked-out script and the specific workspace directory (substitute absolute paths):
+
+~~~toml
+[mcp_servers.awos-context]
+command = "node"
+args = ["/absolute/agent-work-os/scripts/context-mcp.mjs", "/absolute/project/workspace"]
+~~~
+
+Or launch to validate the server manually:
+
+~~~bash
+npm run context:mcp -- "$PWD"
+~~~
+
+This channel is separate from the daemon opt-in prompt injection. MCP tools must be registered by the operator for their respective client; merely checking out the branch does not mutate native Codex/Claude configuration. The server does not use upstream Pathrule dependencies or assets.
+
+### MCP residual risks
+
+- Any connected agent authorized to access the same local workstation can query records for the configured workspace. Configure client/process permissions accordingly.
+- The remote client's model may treat a lower-trust memory as an instruction. Agent Work OS policy must continue to be enforced outside prompting.
+- Read-only MCP is not equivalent to upstream automatic pre-tool injection. That is a separate, unimplemented integration wave.
