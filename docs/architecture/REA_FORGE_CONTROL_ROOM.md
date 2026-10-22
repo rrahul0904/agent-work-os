@@ -75,3 +75,21 @@ In-app browser does not equal a native embedded extension surface. Full app-serv
 ### Acceptance
 
 Only source-backed nodes; no fabricated delegation; no task dependencies without canonical facts; no assumed shipped status from completion of a tool; terminal failure preserved; updated graph within running websocket session; tenant separation; actual in-app local browser verification.
+
+## v0.3 — opt-in hooks for sessions started directly inside Codex
+
+Unlike the Codex CLI event adapter, project-local lifecycle hooks provide signals from **ordinary Codex desktop and CLI conversations in this repository**. A separate authorized Work OS server keeps the data; hooks only send minimal observations to loopback.
+
+Implementation: .codex/hooks.json -> .codex/hooks/rea-forge-observe.mjs -> authenticated POST /api/forge/observations -> bounded JsonStore.forgeObservations -> existing /api/state + /ws -> /forge.html. This is NOT a scheduler, a native custom Codex screen, proof of deployment, or a way to observe other projects without their own approved hooks.
+
+**Required explicit opt-in:**
+1. Check out this branch and review .codex/hooks.json and its JavaScript handler. These commands are local and inspect no transcripts or command arguments.
+2. Set up the local API: AGENT_WORK_OS_ENABLE_FORGE_HOOKS=true AGENT_WORK_OS_TOKEN=dev-token npm run start:api. The route remains disabled in production and refuses non-loopback requests.
+3. In Codex, trust the repo and use /hooks to review/trust the project's hook definitions. Some Codex desktop versions may not persist the trust decision; if necessary use Codex CLI's /hooks review in the same CODEX_HOME, then re-open the desktop project. Never bypass hook trust to make a demo work.
+4. If using a custom token instead of dev-token, launch the Codex process with AGENT_WORK_OS_TOKEN set so its hooks can authenticate. Avoid hardcoding credentials in hooks.json or source files.
+5. Open Codex's built-in browser (Cmd+Shift+B on macOS) and navigate to http://127.0.0.1:8787/. Authenticate in the local app, then open http://127.0.0.1:8787/forge.html.
+6. In the **same trusted repository**, start a regular Codex conversation, request a harmless code read or run tests, and watch the browser graph. It should create a Codex native session and observed tools; observed subagents appear when Codex fires SubagentStart/Stop. No daemon-managed Codex session is needed for this hook route.
+7. Observe live statuses, verify a real child thread ID for subagent links, exercise Stop/Interrupt, reload the viewer, and test disabled-hook mode and unauthorized HTTP POST. Verify that no prompt/tool-argument/file-content appears in the event payload or in the UI.
+8. Record the exact branch SHA, installed Codex version, pass/fail of hook review, and actual local UI evidence; retain PR as draft until this testing is complete.
+
+The hook deliberately never responds with approvals/denials or commands. A dropped hook event must not interrupt coding. Observations may be missing or out of order and must not be used to certify tasks or release readiness.
