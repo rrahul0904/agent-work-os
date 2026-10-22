@@ -286,7 +286,17 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const globalSnapshotAfterSessionUpdates = await databaseInspector.query(
         "SELECT payload FROM agent_work_os_state_v1 WHERE state_key = 'global'"
       );
-      assert.deepEqual(globalSnapshotAfterSessionUpdates.rows[0]?.payload, globalSnapshotBeforeSessionUpdates.rows[0]?.payload,
+      const normalizeLazyShippingMetadata = payload => {
+        const clone = structuredClone(payload);
+        // A concurrent unrelated shipping projection may materialize an empty
+        // timestamp map in the legacy row; the test is about substantive state.
+        if (clone?._shippingRunUpdatedAt &&
+            Object.keys(clone._shippingRunUpdatedAt).length === 0) delete clone._shippingRunUpdatedAt;
+        return clone;
+      };
+      assert.deepEqual(
+        normalizeLazyShippingMetadata(globalSnapshotAfterSessionUpdates.rows[0]?.payload),
+        normalizeLazyShippingMetadata(globalSnapshotBeforeSessionUpdates.rows[0]?.payload),
         "machine and session mutations do not replace the shared legacy JSONB snapshot");
 
       const shippingContractResponse = await api(owner.cookies, null, "/api/shipping/example");
