@@ -205,7 +205,15 @@ export function buildForgeGraph(snapshot = {}, options = {}) {
       }));
     });
   }
-  // Bound each session trace before adding into global node cap.
+  // Prioritize real session roots before activity nodes when the display cap
+  // is reached, so recent native Codex sessions remain inspectable.
+  const observedHooks = nativeHookNodes(itemList(snapshot, "forgeObservations"));
+  for (const candidate of observedHooks.nodes.filter(n => n.kind === "session")) {
+    if (allIds.has(candidate.id)) continue;
+    allIds.add(candidate.id);
+    allNodes.push(candidate);
+  }
+  // Bound each AWOS Codex session trace before adding into global node cap.
   for (const session of allNodes.filter(n => n.kind === "session" && n.raw.agent === "codex")) {
     const projected = codexTraceNodes(session);
     for (const candidate of projected.nodes) {
@@ -215,8 +223,7 @@ export function buildForgeGraph(snapshot = {}, options = {}) {
     }
     allEdges.push(...projected.edges);
   }
-  const observedHooks = nativeHookNodes(itemList(snapshot, "forgeObservations"));
-  for (const candidate of observedHooks.nodes) {
+  for (const candidate of observedHooks.nodes.filter(n => n.kind !== "session")) {
     if (allIds.has(candidate.id)) continue;
     allIds.add(candidate.id);
     allNodes.push(candidate);
