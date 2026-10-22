@@ -10,6 +10,7 @@ import { CursorAdapter } from "./cursor-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
+import { prepareContextPrompt } from "../../../packages/path-context/src/index.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const machineCredential = process.env.AGENT_WORK_OS_MACHINE_TOKEN ?? "";
@@ -81,12 +82,18 @@ function connect() {
         return;
       }
       if (command.action === "session.start") {
-        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`); ack(true);
-        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
+        const prepared = await prepareContextPrompt({ cwd: p.cwd, prompt: p.prompt });
+        ack(true);
+        if (prepared.context?.included.length) emit({ kind: "log", stream: "stdout", text: "Context receipt sha256=" + prepared.context.digest + " included=" + prepared.context.included.join(","), at: new Date().toISOString() });
+        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: prepared.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
       if (command.action === "session.message") {
-        ack(true); void adapter.run({ sessionId: command.sessionId, cwd: state.cwd, prompt: command.payload?.prompt, model: state.model, nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        const prepared = await prepareContextPrompt({ cwd: state.cwd, prompt: command.payload?.prompt });
+        ack(true);
+        if (prepared.context?.included.length) emit({ kind: "log", stream: "stdout", text: "Context receipt sha256=" + prepared.context.digest + " included=" + prepared.context.included.join(","), at: new Date().toISOString() });
+        void adapter.run({ sessionId: command.sessionId, cwd: state.cwd, prompt: prepared.prompt, model: state.model, nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
       if (command.action === "session.interrupt") { await adapter.interrupt(command.sessionId); emit({ kind: "status", status: "interrupted", at: new Date().toISOString() }); ack(true); }
       else throw new Error(`Unsupported server command action ${command.action}`);
