@@ -19,6 +19,8 @@
     </section>
     <div id="error" class="error" role="alert" hidden></div>
     <section class="metrics" aria-label="Observed counts">
+      <article><span>Forge plans</span><strong id="count-plan">—</strong></article>
+      <article><span>Forge tasks</span><strong id="count-task">—</strong></article>
       <article><span>Machines</span><strong id="count-machine">—</strong></article>
       <article><span>Sessions (incl. Codex hooks)</span><strong id="count-session">—</strong></article>
       <article><span>Codex actions</span><strong id="count-activity">—</strong></article>
@@ -26,9 +28,24 @@
       <article><span>Shipping runs</span><strong id="count-shipping">—</strong></article>
       <article><span>Work items</span><strong id="count-work">—</strong></article>
     </section>
+    <section class="forge-operator" aria-labelledby="forge-operator-title">
+      <div class="section-head"><div><p class="eyebrow">DURABLE SUPERVISOR / EXPLICIT APPROVAL</p><h2 id="forge-operator-title">Forge task orchestration</h2></div><span id="forge-supervisor-state" class="connection">Checking local feature gate…</span></div>
+      <div class="forge-operator-grid">
+        <form id="forge-create" class="operator-form">
+          <label>Plan JSON (create in draft mode only)<textarea id="forge-plan-json" name="json" spellcheck="false" rows="8" placeholder='{"title":"Research and implement","machineId":"...","cwd":"/absolute/worktree","maxParallel":2,"tasks":[{"id":"research","title":"Research","agent":"echo","prompt":"Examine sources","dependsOn":[]}]}'></textarea></label>
+          <div class="operator-actions"><button type="submit" id="forge-create-button" disabled>Create draft DAG</button><button type="button" id="forge-template">Insert example template</button></div>
+        </form>
+        <div class="operator-form">
+          <label>Persisted plan<select id="forge-plan-select"><option value="">No plans loaded</option></select></label>
+          <div id="forge-plan-summary" class="hint">Select a plan to inspect dependencies and verification gates.</div>
+          <div class="operator-actions"><button id="forge-approve" type="button" disabled>Approve and dispatch</button><button id="forge-stop" type="button" disabled>Stop scheduling</button></div>
+          <p class="hint">Tasks run through the existing local daemon. Agent completion requires independent evidence and explicit verification before dependents unlock. This UI never authorizes push, merge or deployment.</p>
+        </div>
+      </div>
+    </section>
     <div class="workspace">
       <section class="graph-panel" aria-labelledby="graph-title">
-        <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="activity">Codex actions</option><option value="subagent">Codex subagents</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
+        <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="plan">Forge plans</option><option value="task">Forge tasks</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="activity">Codex actions</option><option value="subagent">Codex subagents</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
         <p class="graph-notice" id="graph-notice">This graph shows recorded Agent Work OS machine bindings and Codex activity, plus opt-in native Codex desktop hook observations. Delegation links require real child IDs. Hook events do not verify task completion.</p>
         <div class="graph-scroller"><svg id="graph" role="group" aria-label="Interactive runtime relationship graph" xmlns="http://www.w3.org/2000/svg"><title>Runtime relationship graph</title></svg></div>
         <div class="legend"><span><i class="swatch active"></i> Active/queued</span><span><i class="swatch success"></i> Completed/verified</span><span><i class="swatch warning"></i> Needs attention</span><span><i class="swatch failure"></i> Failed/interrupted</span><span><i class="swatch neutral"></i> Other/unknown</span></div>
