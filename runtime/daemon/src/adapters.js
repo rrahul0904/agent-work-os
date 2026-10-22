@@ -77,8 +77,8 @@ export class CodexAdapter {
           if (event.type === "turn.failed") { emit({ kind: "status", status: "failed", at: now() }); terminal = true; }
           return;
         }
-        emit({ kind: "log", stream: "stdout", text: line, at: now() });
-      } catch { emit({ kind: "log", stream: "stdout", text: line, at: now() }); }
+        // Unknown JSONL types do not become unsanitized persisted events.
+      } catch { emit({ kind: "log", stream: "stdout", text: "Unparseable Codex JSONL event omitted", at: now() }); }
     });
     const stderr = readline.createInterface({ input: child.stderr });
     stderr.on("line", (line) => line.trim() && emit({ kind: "log", stream: "stderr", text: line, at: now() }));
