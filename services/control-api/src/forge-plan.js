@@ -11,7 +11,8 @@ function requiredText(value, max, name) {
 function safeOptionalUrl(value) {
   if (value == null || value === "") return null;
   if (typeof value !== "string" || value.length > 2048) fail("forge_source_url_invalid");
-  const url = new URL(value);
+  let url;
+  try { url = new URL(value); } catch { fail("forge_source_url_invalid"); }
   if (url.protocol !== "https:" || !url.hostname) fail("forge_source_url_must_be_https");
   return url.toString();
 }
@@ -41,6 +42,9 @@ export function validateForgePlan(spec, { now = () => new Date().toISOString(), 
       updatedAt: now()
     };
   });
+  // Until the daemon has worktree-per-worker isolation, concurrent Codex
+  // sessions must not edit the same cwd. Echo fixtures can exercise parallel DAGs.
+  if (maxParallel > 1 && nodes.some(task => task.agent === "codex")) fail("forge_codex_requires_isolated_worktrees");
   const lookup = new Map(nodes.map(task => [idOf(task), task]));
   if (lookup.size !== nodes.length) fail("forge_duplicate_task");
   for (const node of nodes) {
