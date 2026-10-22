@@ -20,7 +20,7 @@
     <div id="error" class="error" role="alert" hidden></div>
     <section class="metrics" aria-label="Observed counts">
       <article><span>Machines</span><strong id="count-machine">—</strong></article>
-      <article><span>Agent sessions</span><strong id="count-session">—</strong></article>
+      <article><span>Sessions (incl. Codex hooks)</span><strong id="count-session">—</strong></article>
       <article><span>Codex actions</span><strong id="count-activity">—</strong></article>
       <article><span>Observed subagents</span><strong id="count-subagent">—</strong></article>
       <article><span>Shipping runs</span><strong id="count-shipping">—</strong></article>
@@ -29,7 +29,7 @@
     <div class="workspace">
       <section class="graph-panel" aria-labelledby="graph-title">
         <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="activity">Codex actions</option><option value="subagent">Codex subagents</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
-        <p class="graph-notice" id="graph-notice">The graph shows verified machine bindings, captured Codex items, and observed delegation links only. Unexposed child agents are UNKNOWN. This is not a task dependency DAG.</p>
+        <p class="graph-notice" id="graph-notice">This graph shows recorded Agent Work OS machine bindings and Codex activity, plus opt-in native Codex desktop hook observations. Delegation links require real child IDs. Hook events do not verify task completion.</p>
         <div class="graph-scroller"><svg id="graph" role="group" aria-label="Interactive runtime relationship graph" xmlns="http://www.w3.org/2000/svg"><title>Runtime relationship graph</title></svg></div>
         <div class="legend"><span><i class="swatch active"></i> Active/queued</span><span><i class="swatch success"></i> Completed/verified</span><span><i class="swatch warning"></i> Needs attention</span><span><i class="swatch failure"></i> Failed/interrupted</span><span><i class="swatch neutral"></i> Other/unknown</span></div>
       </section>
@@ -38,7 +38,7 @@
         <div id="inspect-content"><p class="placeholder">Click any node to inspect its recorded status, owner binding and recent event types.</p></div>
       </aside>
     </div>
-    <footer><strong>Truth boundary:</strong> This is an observability viewer over existing Agent Work OS records, not a multi-agent scheduler. A completed session is not proof that a product was shipped. Full REA task DAGs and automated dispatch require separately verified backend work.</footer>
+    <footer><strong>Truth boundary:</strong> This viewer combines authoritative Agent Work OS session/run facts with non-authoritative, local Codex hook observations. It is not a multi-agent scheduler. A completed session is not proof that a product was shipped. Full REA task DAGs and automated dispatch require separately verified backend work.</footer>
   </main>
   <script type="module" src="/forge.js"></script>
 </body>
