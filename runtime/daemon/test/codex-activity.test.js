@@ -24,6 +24,15 @@ test("Codex exec args use currently supported sandbox and never --full-auto", ()
     ["exec", "--json", "--sandbox", "workspace-write", "--cd", "/tmp/repo", "resume", "thread-123", "continue"]);
 });
 
+test("Codex read-only demonstration uses actual sandbox isolation and blocks extra permission flags", () => {
+  const args = codexExecArgs({ cwd: "/tmp/source", prompt: "inspect", sandbox: "read-only" });
+  assert.deepEqual(args, ["exec", "--json", "--sandbox", "read-only", "--cd", "/tmp/source", "inspect"]);
+  assert.throws(() => codexExecArgs({ cwd: "/tmp/source", prompt: "inspect", sandbox: "read-only" },
+    { extra: ["--full-auto"] }), /forge_codex_readonly_extra_args_refused/);
+  assert.throws(() => codexExecArgs({ cwd: "/tmp/source", prompt: "inspect", sandbox: "danger-full-access" }),
+    /forge_codex_sandbox_invalid/);
+});
+
 test("real Codex exec JSONL tool items produce keyed lifecycle metadata without secrets", () => {
   const original = {
     id: "item_1", type: "command_execution",
