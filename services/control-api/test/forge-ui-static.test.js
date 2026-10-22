@@ -34,7 +34,8 @@ test("Forge HTML declares all controls referenced by the controller", () => {
     "count-machine", "count-session", "count-activity", "count-subagent", "count-shipping", "count-work"
   ]) {
     assert.ok(html.includes("id=\"" + id + "\""), "HTML missing " + id);
-    assert.ok(js.includes(id), "JS missing " + id);
+    if (id.startsWith("count-")) assert.ok(js.includes('"#count-" + kind'), "JS missing dynamic count selector");
+    else assert.ok(js.includes(id), "JS missing " + id);
   }
   assert.ok(html.includes('src="/forge.js"'));
   assert.ok(html.includes('href="/forge.css"'));
