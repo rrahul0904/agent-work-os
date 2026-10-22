@@ -1,0 +1,16 @@
+// Public observations only; independent implementation, not a source-code reconstruction.
+// Provenance: https://www.reddit.com/r/AppBuilding/comments/1xc9b58/7_apps_and_counting_using_the_8020_rule_how_do/
+export const commonCapabilities = Object.freeze([
+  'privacy-local-first','accessible-design-system','portable-export',
+  'settings-and-preferences','versioned-data-migrations','consent-and-telemetry',
+  'feature-entitlements','recovery-and-sync-contracts','smoke-test-contracts','release-evidence'
+]);
+export const products = Object.freeze([
+  { id:'reveal-the-dream', site:'https://revealthedream.com/', outcome:'Daily check-ins gradually uncover a chosen goal photo', distinctive:['goal-journey','photo-reveal','widgets'], dependencies:['privacy-local-first','feature-entitlements','recovery-and-sync-contracts'], gates:['photo-consent','notification-permission'], priority:2 },
+  { id:'prompt-petal', site:'https://promptpetal.com/', outcome:'Reuse saved prompts across AI tools', distinctive:['prompt-vault','clipboard-history','workflows','mcp-adapter'], dependencies:['privacy-local-first','portable-export','feature-entitlements'], gates:['clipboard-opt-in','input-permission-disclosure','secret-redaction'], priority:1 },
+  { id:'keep-the-diff', site:'https://keepthediff.com/', outcome:'Record planned versus actual spend and amount retained', distinctive:['decision-ledger','spending-difference','summary'], dependencies:['privacy-local-first','portable-export','versioned-data-migrations'], gates:['financial-privacy-review','non-bank-ledger-disclosure'], priority:3 },
+  { id:'still-dock', site:'https://stilldock.com/', outcome:'Stabilize Dock settings and guard Mac keyboard shortcuts', distinctive:['dock-lock','shortcut-guards','profiles'], dependencies:['settings-and-preferences','feature-entitlements','smoke-test-contracts'], gates:['macos-accessibility-review','system-settings-safety','signed-native-build'], priority:5 },
+  { id:'little-bird-trading', site:'https://littlebirdtrading.com/', outcome:'Timed publication of support/resistance/pivot levels', distinctive:['market-levels','data-feed','release-clock'], dependencies:['feature-entitlements','release-evidence','versioned-data-migrations'], gates:['market-data-license','financial-disclaimer','data-replay-validation'], priority:7 },
+  { id:'my-lined-chart', site:'https://mylinedchart.com/', outcome:'Portable machine-readable chart annotations', distinctive:['chart-zones','notes','strategy-export'], dependencies:['portable-export','versioned-data-migrations','release-evidence'], gates:['broker-terms-review','market-data-license','read-only-first','backtest-disclosure'], priority:6 },
+  { id:'the-long-view', site:'https://thelongviewapp.com/', outcome:'Illustrative milestones for smoking cessation', distinctive:['quit-tracker','evidence-linked-estimates','milestones'], dependencies:['privacy-local-first','settings-and-preferences','release-evidence'], gates:['clinical-content-review','no-individual-longevity-promise','wellness-data-privacy'], priority:4 }
+]);

@@ -1,0 +1,23 @@
+name: app-factory-research
+on:
+  pull_request:
+    paths:
+      - 'packages/app-factory/**'
+      - '.github/workflows/app-factory-research.yml'
+  push:
+    paths:
+      - 'packages/app-factory/**'
+      - '.github/workflows/app-factory-research.yml'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test packages/app-factory/test/*.test.mjs
+      - run: node packages/app-factory/cli.mjs --check
+      - run: node packages/app-factory/cli.mjs --gate still-dock
