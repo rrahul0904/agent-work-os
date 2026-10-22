@@ -23,7 +23,8 @@ Terminal A, from repository root:
 
 Terminal B, from repository root:
 
-    AGENT_WORK_OS_TOKEN=dev-token AGENT_WORK_OS_SERVER_URL=ws://127.0.0.1:8787/ws npm run start:daemon
+    mkdir -p "$HOME/.local/share/rea-forge-worktrees"
+    AGENT_WORK_OS_TOKEN=dev-token AGENT_WORK_OS_SERVER_URL=ws://127.0.0.1:8787/ws AGENT_WORK_OS_FORGE_ISOLATE_WORKTREES=true AGENT_WORK_OS_FORGE_WORKTREE_ROOT="$HOME/.local/share/rea-forge-worktrees" npm run start:daemon
 
 Open the repository in Codex, inspect and trust the project's .codex/hooks.json. Open Codex in-app browser, authenticate to http://127.0.0.1:8787/ and open http://127.0.0.1:8787/forge.html. This is the Codex browser panel, NOT a custom native Codex conversation widget.
 
@@ -54,3 +55,11 @@ Echo is for safe smoke tests only. Use --agent codex when its locally available 
 - Full UX browser/desktop QA, security hardening and production rollout.
 
 Current product status: DEVELOPMENT / DRAFT PR / NOT PRODUCTION SHIPPED. Never automatically push, merge, deploy, purchase or grant irreversible provider effects.
+
+## Isolated Codex worktrees (new increment)
+
+An approved Forge Codex task must now stage an isolated DETACHED Git worktree at the exact checked-out commit. The daemon refuses Codex Forge tasks unless AGENT_WORK_OS_FORGE_ISOLATE_WORKTREES=true and AGENT_WORK_OS_FORGE_WORKTREE_ROOT names a pre-existing real directory outside the source checkout. The source repository must be clean: untracked, modified or staged contents block staging. No fetch, push, merge or automatic deletion.
+
+The worker emits a source-backed workspace receipt BEFORE execution and a post-run diff digest receipt afterward. These records include baseline SHA, resulting HEAD SHA, change presence, and untracked-state completeness, but do not expose patch text, file paths or secrets. This does not prove tests passed or source merged. Resuming a native Codex session requires a matching persisted workspace receipt and exactly the same isolated directory; absent or forged receipts fail closed.
+
+Caution: detached isolated changes are deliberately NOT promoted automatically into the source worktree. Downstream dependencies need human-approved integration/patch review before their code can be assumed visible. Code-writing concurrency remains maxParallel=1, pending conflict-safe promotion and independent verifier. Operate with Git worktree listing and receipts; review or remove residual worktrees manually once source changes are safely integrated and backed up.
