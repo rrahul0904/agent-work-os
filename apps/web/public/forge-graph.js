@@ -105,6 +105,83 @@ function codexTraceNodes(session, maxActivities = 20) {
   return { nodes, edges };
 }
 
+
+// Project trusted-local-hook transport as *observations*, not AWOS Runs.
+function nativeHookNodes(records) {
+  const grouped = new Map();
+  for (const item of records) {
+    if (!item || item.source !== "codex-hook/v1") continue;
+    const sessionId = identity(item.sessionId);
+    const eventName = identity(item.eventName);
+    if (!sessionId || !eventName) continue;
+    if (!grouped.has(sessionId)) grouped.set(sessionId, []);
+    grouped.get(sessionId).push(item);
+  }
+  const nodes = [], edges = [];
+  for (const [sessionId, recordsForSession] of grouped) {
+    const rootId = "session:hook:" + sessionId;
+    let state = "observed";
+    const terminalState = recordsForSession.findLast(e => e.eventName === "SessionEnd" || e.eventName === "Interrupt");
+    if (terminalState) state = terminalState.eventName === "Interrupt" ? "interrupted" : "ended";
+    else if (recordsForSession.some(e => e.eventName === "Stop")) state = "turn-ended";
+    else if (recordsForSession.some(e => e.eventName === "SessionStart" || e.eventName === "UserPromptSubmit")) state = "running";
+    nodes.push(node({
+      id: rootId, rawId: sessionId, kind: "session", humanKind: "Codex native session",
+      label: "Codex desktop · " + sessionId.slice(0, 14), status: state,
+      source: "codex-hook/v1", raw: { agent: "codex-native-hook", source: "codex-hook/v1" },
+      eventCount: recordsForSession.length, updatedAt: recordsForSession.at(-1)?.receivedAt ?? null,
+      machineId: "", projectId: "", organizationId: ""
+    }));
+    const activity = new Map(), child = new Map();
+    for (const observed of recordsForSession) {
+      const name = observed.eventName;
+      if (name === "SubagentStart" || name === "SubagentStop") {
+        if (!observed.agentId) continue;
+        const old = child.get(observed.agentId);
+        child.set(observed.agentId, {
+          ...observed,
+          status: name === "SubagentStop" ? "stopped" : old?.status ?? "running"
+        });
+      }
+      const key = observed.toolUseId
+        ? "tool:" + (observed.turnId ?? "unknown") + ":" + observed.toolUseId
+        : "event:" + observed.id;
+      const old = activity.get(key);
+      // Terminal post-hook beats a delayed asynchronous pre-hook.
+      if (!old || observed.eventName === "PostToolUse" || old.eventName !== "PostToolUse") activity.set(key, observed);
+    }
+    for (const observed of [...activity.values()].slice(-20)) {
+      const id = "activity:hook:" + sessionId + ":" + (observed.toolUseId
+        ? (observed.turnId ?? "unknown") + ":" + observed.toolUseId
+        : observed.id);
+      const labelText = observed.toolName
+        ? "Codex tool · " + observed.toolName
+        : "Codex hook · " + observed.eventName;
+      const status = observed.eventName === "PreToolUse" ? "running"
+        : observed.eventName === "PostToolUse" ? "observed"
+          : observed.eventName === "Interrupt" ? "interrupted"
+            : observed.eventName === "Stop" ? "turn-ended" : "observed";
+      nodes.push(node({
+        id, rawId: observed.toolUseId || observed.id, kind: "activity", humanKind: "Codex hook event",
+        label: labelText, status, raw: observed, sessionId, traceId: observed.turnId,
+        updatedAt: observed.receivedAt ?? null, eventCount: 1, source: "codex-hook/v1"
+      }));
+      edges.push({ id: rootId + "->" + id, from: rootId, to: id, kind: "observed-native-hook" });
+    }
+    for (const observed of child.values()) {
+      const id = "subagent:hook:" + sessionId + ":" + observed.agentId;
+      nodes.push(node({
+        id, rawId: observed.agentId, kind: "subagent", humanKind: "Codex native subagent",
+        label: observed.agentType ? "Subagent · " + observed.agentType : "Subagent · " + observed.agentId.slice(0, 12),
+        status: observed.status, raw: observed, sessionId,
+        eventCount: 1, source: "codex-hook/v1", updatedAt: observed.receivedAt ?? null
+      }));
+      edges.push({ id: rootId + "->" + id, from: rootId, to: id, kind: "observed-native-subagent" });
+    }
+  }
+  return { nodes, edges };
+}
+
 /** Projection never assumes dependency edges between unrelated work items. */
 export function buildForgeGraph(snapshot = {}, options = {}) {
   const cap = options.maxNodes ?? 100;
@@ -138,6 +215,13 @@ export function buildForgeGraph(snapshot = {}, options = {}) {
     }
     allEdges.push(...projected.edges);
   }
+  const observedHooks = nativeHookNodes(itemList(snapshot, "forgeObservations"));
+  for (const candidate of observedHooks.nodes) {
+    if (allIds.has(candidate.id)) continue;
+    allIds.add(candidate.id);
+    allNodes.push(candidate);
+  }
+  allEdges.push(...observedHooks.edges);
   const nodes = allNodes.slice(0, cap);
   const included = new Set(nodes.map(n => n.id));
   for (const entry of nodes) {
