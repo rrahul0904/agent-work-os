@@ -2,7 +2,7 @@ import { GRAPH_KINDS, buildForgeGraph, layoutForgeGraph } from "./forge-graph.js
 
 const svgNS = "http://www.w3.org/2000/svg";
 const token = localStorage.getItem("agentWorkOsToken") || "";
-const state = { snapshot: { machines: [], sessions: [], shippingRuns: [], workItems: [] },
+const state = { snapshot: { machines: [], sessions: [], shippingRuns: [], workItems: [], forgeObservations: [] },
   graph: null, selected: null, filter: "all", socket: null, reconnects: 0, refreshPromise: null };
 const graphEl = document.querySelector("#graph");
 const connectionEl = document.querySelector("#connection");
@@ -125,6 +125,7 @@ function renderInspector() {
     ...(node.sessionId ? [fact("Parent Agent Work OS session", node.sessionId)] : []),
     ...(node.traceId ? [fact("Codex turn trace", node.traceId)] : []),
     ...(node.itemType ? [fact("Codex item type", node.itemType)] : []),
+    ...(node.source ? [fact("Evidence source", node.source)] : []),
     ...(node.kind === "subagent" ? [fact("Delegated thread", node.rawId)] : []),
     fact("Machine binding", node.machineId || "None recorded"),
     fact("Project ID", node.projectId || "None recorded"),
@@ -133,6 +134,8 @@ function renderInspector() {
     ...(node.raw.exitCode !== undefined ? [fact("Command exit code", node.raw.exitCode)] : []),
     ...(node.raw.changedFileCount !== undefined ? [fact("Files changed", node.raw.changedFileCount)] : []),
     ...(node.raw.planStepCount !== undefined ? [fact("Plan steps recorded", node.raw.planStepCount)] : []),
+    ...(node.raw.eventName ? [fact("Codex hook event", node.raw.eventName)] : []),
+    ...(node.raw.toolName ? [fact("Tool name", node.raw.toolName)] : []),
     fact("Shipping receipt attached", node.kind === "shipping" ? (node.evidence ? "Yes" : "No") : "Not applicable")
   );
   const heading = document.createElement("h3"); heading.textContent = "Recent recorded events";
@@ -203,6 +206,8 @@ function connect() {
       upsert(state.snapshot.sessions || [], message.session);
     else if (message.type === "shipping.run.updated") state.snapshot.shippingRuns =
       upsert(state.snapshot.shippingRuns || [], message.run, "runId");
+    else if (message.type === "forge.observation.updated" && message.observation?.id) state.snapshot.forgeObservations =
+      upsert(state.snapshot.forgeObservations || [], message.observation).slice(0, 1000);
     else if (message.workItem && message.workItem.id) state.snapshot.workItems =
       upsert(state.snapshot.workItems || [], message.workItem);
     else return;
