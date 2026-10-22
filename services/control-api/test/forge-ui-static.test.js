@@ -18,6 +18,8 @@ test("Forge browser/CLI scripts parse in the exact checked-out source tree", () 
     "services/control-api/src/forge-report.js",
     "scripts/forge.mjs",
     "scripts/forge-handoff.mjs",
+    "scripts/forge-demo.mjs",
+    "services/control-api/src/forge-demo.js",
     "runtime/verifier/forge-readonly-verifier.js",
     "runtime/verifier/forge-handoff-check.js",
     "runtime/daemon/src/forge-independent-review.js",
