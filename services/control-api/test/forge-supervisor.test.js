@@ -171,6 +171,7 @@ test("Codex verification refuses arbitrary hashes, forged source receipts and un
   };
   const diff = {
     schema: "rea-forge-diff/v1", sessionId: "session-1",
+    planId: plan.id, taskId: "implement",
     baseSha: stage.sourceSha, headSha: stage.sourceSha,
     trackedDiffDigest: digest, changed: true, completeSnapshot: true,
     untrackedPresent: false
@@ -226,10 +227,10 @@ test("Code implementation cannot be attested if no actual change was observed", 
     status: "completed", messages: [], forgePlanId: plan.id, forgeTaskId: "code",
     events: [{
       kind: "workspace", receipt: { schema: "rea-forge-worktree/v1",
-        sessionId: "sess", sourceSha: "a".repeat(40) }
+        sessionId: "sess", planId: plan.id, taskId: "code", sourceSha: "a".repeat(40) }
     }, {
       kind: "workspace.diff", receipt: { schema: "rea-forge-diff/v1",
-        sessionId: "sess", baseSha: "a".repeat(40),
+        sessionId: "sess", planId: plan.id, taskId: "code", baseSha: "a".repeat(40), headSha: "a".repeat(40),
         trackedDiffDigest: "sha256:" + "b".repeat(64),
         completeSnapshot: true, untrackedPresent: false, changed: false }
     }] });
