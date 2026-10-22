@@ -42,3 +42,32 @@ test("even human-attested plan requires separate Shipping OS receipt", () => {
   assert.equal(report.releaseReceipt, null);
   assert.equal(report.deployed, false);
 });
+
+
+test("tracker manifest includes only redacted Git worktree SHA evidence, never raw patch content", () => {
+  let plan = approveForgePlan(validateForgePlan({
+    title: "Review source", cwd: "/tmp/forge", machineId: "mac", tasks: [
+      { id: "change", title: "Code task", agent: "codex", prompt: "private draft prompt", dependsOn: [] }
+    ]
+  }));
+  plan = claimNextForgeTask(plan, { sessionId: "session-1", commandId: "command-1" }).plan;
+  plan = reconcileForgeTask(plan, "change", { id: "session-1", status: "completed" });
+  const receipt = {
+    schema: "rea-forge-diff/v1", sessionId: "session-1",
+    baseSha: "a".repeat(40), headSha: "a".repeat(40),
+    trackedDiffDigest: "sha256:" + "b".repeat(64),
+    changed: true, completeSnapshot: false, untrackedPresent: true,
+    secret: "should-not-leak", patch: "password=example"
+  };
+  const report = buildForgeReport(plan, { "session-1": {
+    id: "session-1", status: "completed",
+    events: [{ kind: "workspace.diff", receipt }]
+  } });
+  assert.equal(report.tasks[0].worktreeChangeEvidenceStatus, "incomplete_untracked_content");
+  assert.equal(report.tasks[0].worktreeChangeEvidence.changed, true);
+  assert.equal(report.tasks[0].worktreeChangeEvidence.testsPassed, null);
+  assert.equal(report.tasks[0].worktreeChangeEvidence.merged, false);
+  assert.equal(JSON.stringify(report).includes("password=example"), false);
+  assert.equal(JSON.stringify(report).includes("should-not-leak"), false);
+  assert.equal(JSON.stringify(report).includes("private draft"), false);
+});
