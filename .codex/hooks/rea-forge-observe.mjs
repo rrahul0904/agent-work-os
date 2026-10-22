@@ -2,6 +2,7 @@
 // Hooks must be reviewed/trusted in Codex. Sends metadata ONLY to loopback.
 // Transport failures are advisory and must never deny/approve tool execution.
 import { randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
 const ALLOWED = new Set([
   "SessionStart", "SessionEnd", "UserPromptSubmit", "PreToolUse", "PostToolUse",
@@ -27,7 +28,7 @@ function projectHook(raw) {
 }
 export { projectHook };
 
-if (process.argv[1] && import.meta.url === new URL("file://" + process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let text = "";
   try {
     for await (const chunk of process.stdin) {
@@ -37,7 +38,9 @@ if (process.argv[1] && import.meta.url === new URL("file://" + process.argv[1]).
     const raw = JSON.parse(text);
     const projected = projectHook(raw);
     if (projected) {
-      const target = "http://127.0.0.1:" + (process.env.AGENT_WORK_OS_PORT ?? "8787") + "/api/forge/observations";
+      const port = Number(process.env.AGENT_WORK_OS_PORT ?? "8787");
+      if (!Number.isSafeInteger(port) || port < 1 || port > 65535) throw new Error("forge_port_invalid");
+      const target = "http://127.0.0.1:" + port + "/api/forge/observations";
       // Development-token compatibility. Never send credentials anywhere other
       // than literal loopback; production API rejects observations.
       const token = process.env.AGENT_WORK_OS_TOKEN || "dev-token";
