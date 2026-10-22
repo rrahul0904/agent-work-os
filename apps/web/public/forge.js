@@ -132,6 +132,19 @@ function renderInspector() {
     fact("Project ID", node.projectId || "None recorded"),
     fact("Last recorded update", date(node.updatedAt)),
     fact("Recorded events", node.eventCount),
+    ...(Array.isArray(node.raw.events)
+      ? (() => {
+          const lastDiff = node.raw.events.findLast(e => e?.kind === "workspace.diff");
+          const lastStage = node.raw.events.findLast(e => e?.kind === "workspace");
+          const result = [];
+          if (lastStage?.receipt?.sourceSha) result.push(fact("Isolated worktree baseline SHA", lastStage.receipt.sourceSha));
+          if (lastDiff?.receipt?.trackedDiffDigest) {
+            result.push(fact("Observed tracked diff digest", lastDiff.receipt.trackedDiffDigest));
+            result.push(fact("Changed files detected", lastDiff.receipt.changed ? "Yes · unverified" : "No"));
+            result.push(fact("Untracked content included", lastDiff.receipt.completeSnapshot ? "No untracked content" : "NO · review required"));
+          }
+          return result;
+        })() : []),
     ...(node.raw.exitCode !== undefined ? [fact("Command exit code", node.raw.exitCode)] : []),
     ...(node.raw.changedFileCount !== undefined ? [fact("Files changed", node.raw.changedFileCount)] : []),
     ...(node.raw.planStepCount !== undefined ? [fact("Plan steps recorded", node.raw.planStepCount)] : []),
