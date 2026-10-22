@@ -192,6 +192,33 @@ async function forgeRequest(path, payload) {
   if (!response.ok) throw new Error(body.error || body.message || "Forge request failed: " + response.status);
   return body;
 }
+function renderReleaseReadiness(report) {
+  const target = document.querySelector("#forge-coverage-detail");
+  const summary = document.querySelector("#forge-coverage-summary");
+  if (!target || !summary) return;
+  target.replaceChildren();
+  if (!report || !Array.isArray(report.features) || report.releaseReady !== false) {
+    summary.textContent = "Release proof unavailable";
+    return;
+  }
+  summary.textContent = report.counts.localImplementation + "/" + report.counts.total +
+    " locally coded · 0 release verified";
+  summary.className = "connection warn";
+  const list = document.createElement("div");
+  list.className = "coverage-list";
+  for (const item of report.features) {
+    const entry = document.createElement("div");
+    entry.className = "coverage-item";
+    const head = document.createElement("strong"); head.textContent = item.title;
+    const state = document.createElement("span");
+    state.className = item.stage === "implemented_local" ? "coverage-local" : "coverage-missing";
+    state.textContent = item.stage === "implemented_local" ? "CODED · NOT SHIPPED" : "NOT IMPLEMENTED";
+    const description = document.createElement("p"); description.textContent = item.unresolved;
+    entry.append(head, state, description); list.append(entry);
+  }
+  target.append(list);
+}
+
 let forgeSupervisorEnabled = false;
 let selectedPlanId = "";
 async function probeForgeSupervisor() {
@@ -200,6 +227,8 @@ async function probeForgeSupervisor() {
     forgeSupervisorEnabled = true;
     state.snapshot.forgePlans = result.plans || [];
     error(""); refreshDisplay();
+    try { renderReleaseReadiness(await forgeRequest("/api/forge/readiness")); }
+    catch { document.querySelector("#forge-coverage-summary").textContent = "Coverage API unavailable"; }
   } catch {
     forgeSupervisorEnabled = false;
     document.querySelector("#forge-supervisor-state").textContent = "Disabled · opt-in local feature";
