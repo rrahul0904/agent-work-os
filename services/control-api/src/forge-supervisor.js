@@ -48,12 +48,32 @@ export function createForgeSupervisor({ store, dispatch, broadcast, allowedRoot 
     return redactForgePlan(saved);
   };
   const verify = async (id, taskId, evidence) => {
-    const saved = await store.mutateForgePlan(id, prior => {
-      if (!prior) conflict("forge_plan_not_found");
-      const task = prior.tasks.find(t => t.id === taskId);
-      if (!task?.sessionId) conflict("forge_task_session_missing");
-      // Pure-function transition checks state and evidence digest.
-      return verifyForgeTask(prior, taskId, evidence);
+    const prior = store.getForgePlan(id);
+    if (!prior) conflict("forge_plan_not_found");
+    const task = prior.tasks.find(t => t.id === taskId);
+    if (!task?.sessionId) conflict("forge_task_session_missing");
+    const session = await store.getSession(task.sessionId);
+    if (!session || session.status !== "completed") conflict("forge_completed_session_required");
+    if (session.forgePlanId && (session.forgePlanId !== id || session.forgeTaskId !== taskId)) {
+      conflict("forge_session_task_binding_mismatch");
+    }
+    if (task.agent === "codex") {
+      const events = Array.isArray(session.events) ? session.events : [];
+      const stage = events.findLast(e => e?.kind === "workspace")?.receipt;
+      const diff = events.findLast(e => e?.kind === "workspace.diff")?.receipt;
+      if (!stage || !diff || stage.schema !== "rea-forge-worktree/v1" ||
+          diff.schema !== "rea-forge-diff/v1" ||
+          stage.sessionId !== session.id || diff.sessionId !== session.id ||
+          stage.sourceSha !== diff.baseSha) conflict("forge_verified_worktree_receipts_required");
+      if (diff.untrackedPresent || !diff.completeSnapshot) conflict("forge_untracked_content_requires_review");
+      if (diff.trackedDiffDigest !== evidence?.digest) conflict("forge_diff_digest_mismatch");
+      if (task.expectChanges && !diff.changed) conflict("forge_expected_change_not_observed");
+    }
+    const saved = await store.mutateForgePlan(id, current => {
+      if (!current) conflict("forge_plan_not_found");
+      const currentTask = current.tasks.find(t => t.id === taskId);
+      if (currentTask?.sessionId !== task.sessionId) conflict("forge_session_changed_during_attestation");
+      return verifyForgeTask(current, taskId, evidence);
     });
     emitted(saved);
     return redactForgePlan(saved);
