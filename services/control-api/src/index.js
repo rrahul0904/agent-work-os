@@ -238,7 +238,7 @@ export async function createControlPlane() {
       const command = {
         type: "server.command", commandId: task.commandId,
         sessionId: session.id, action: "session.start",
-        payload: { cwd: plan.cwd, agent: task.agent, prompt: task.prompt }
+        payload: { cwd: plan.cwd, agent: task.agent, prompt: task.prompt, forgePlanId: plan.id, forgeTaskId: task.id }
       };
       if (commandRouter) await store.createSessionWithCommand(session, command);
       else {
