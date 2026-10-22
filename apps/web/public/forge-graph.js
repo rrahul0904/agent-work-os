@@ -6,11 +6,11 @@ const TYPES = [
   ["shipping", "shippingRuns", "Shipping run", "projectId"],
   ["work", "workItems", "Work item", "title"]
 ];
-export const GRAPH_KINDS = ["machine", "session", "activity", "subagent", "shipping", "work"];
+export const GRAPH_KINDS = ["plan", "task", "machine", "session", "activity", "subagent", "shipping", "work"];
 const TERMINAL = new Set(["complete", "completed", "shipped", "verified", "success", "passed"]);
 const FAILED = new Set(["failed", "error", "errored", "cancelled", "canceled", "interrupted"]);
-const BLOCKED = new Set(["blocked", "waiting", "needs_input", "lost", "unknown", "reconciling", "notfound", "not_found"]);
-const ACTIVE = new Set(["online", "queued", "running", "in_progress", "inprogress", "building", "verifying", "repairing", "pending", "pendinginit", "pending_init"]);
+const BLOCKED = new Set(["blocked", "waiting", "needs_input", "lost", "unknown", "reconciling", "notfound", "not_found", "awaiting_verification", "awaiting_release", "stopped"]);
+const ACTIVE = new Set(["online", "queued", "running", "in_progress", "inprogress", "building", "verifying", "repairing", "pending", "pendinginit", "pending_init", "draft", "dispatching"]);
 
 export function statusTone(value) {
   const status = String(value ?? "unknown").toLowerCase();
@@ -205,6 +205,48 @@ export function buildForgeGraph(snapshot = {}, options = {}) {
       }));
     });
   }
+  // Versioned Forge plan DAG edges come from the actual durable supervisor,
+  // never an LLM guess. Plans are orchestration attempts, not shipped receipts.
+  for (const plan of itemList(snapshot, "forgePlans")) {
+    const planId = identity(plan.id);
+    if (!planId || !Array.isArray(plan.tasks)) continue;
+    const id = "plan:" + planId;
+    if (allIds.has(id)) continue;
+    allIds.add(id);
+    allNodes.push(node({
+      id, rawId: planId, kind: "plan", humanKind: "REA Forge plan",
+      label: label(plan.title, "Forge plan"), status: statusOf(plan),
+      raw: plan, machineId: identity(plan.machineId), projectId: "",
+      eventCount: Array.isArray(plan.events) ? plan.events.length : 0,
+      updatedAt: plan.updatedAt ?? null
+    }));
+    for (const task of plan.tasks) {
+      const taskId = identity(task.id);
+      if (!taskId) continue;
+      const childId = "task:" + planId + ":" + taskId;
+      if (allIds.has(childId)) continue;
+      allIds.add(childId);
+      allNodes.push(node({
+        id: childId, rawId: taskId, kind: "task", humanKind: "Forge task",
+        label: label(task.title, "Task"), status: statusOf(task),
+        raw: task, machineId: "", projectId: "",
+        planId, sessionId: identity(task.sessionId),
+        updatedAt: task.updatedAt ?? null, verification: task.verification ?? null
+      }));
+      allEdges.push({ id: id + "->" + childId, from: id, to: childId, kind: "canonical-plan-task" });
+      if (task.sessionId) allEdges.push({
+        id: childId + "->session:" + task.sessionId, from: childId,
+        to: "session:" + task.sessionId, kind: "observed-task-dispatch"
+      });
+      for (const dependency of Array.isArray(task.dependsOn) ? task.dependsOn : []) {
+        allEdges.push({
+          id: "task:" + planId + ":" + dependency + "->" + childId,
+          from: "task:" + planId + ":" + dependency, to: childId,
+          kind: "versioned-task-dependency"
+        });
+      }
+    }
+  }
   // Prioritize real session roots before activity nodes when the display cap
   // is reached, so recent native Codex sessions remain inspectable.
   const observedHooks = nativeHookNodes(itemList(snapshot, "forgeObservations"));
@@ -244,7 +286,7 @@ export function buildForgeGraph(snapshot = {}, options = {}) {
     source: "agent-work-os-authoritative-snapshot",
     nodes, edges, counts, totalNodes: allNodes.length,
     truncated: allNodes.length - nodes.length,
-    taskDependencyGraphAvailable: false
+    taskDependencyGraphAvailable: itemList(snapshot, "forgePlans").some(p => Array.isArray(p.tasks) && p.tasks.length > 0)
   };
 }
 export function layoutForgeGraph(graph) {
@@ -266,7 +308,7 @@ export function layoutForgeGraph(graph) {
       return { ...edge, x1: from.x + boxWidth, y1: from.y + boxHeight / 2,
         x2: to.x, y2: to.y + boxHeight / 2 };
     }).filter(Boolean),
-    width: 1960,
+    width: 326 * GRAPH_KINDS.length + 20,
     height: Math.max(330, topY + maxInColumn * gapY + 18)
   };
 }
