@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import readline from "node:readline";
+import { codexExecArgs, projectCodexExecEvent } from "./codex-activity.js";
 
 const now = () => new Date().toISOString();
 
@@ -37,13 +38,10 @@ export class CodexAdapter {
   async run(request, emit) {
     if (!this.found) throw new Error("Codex CLI is not installed");
     if (this.children.has(request.sessionId)) throw new Error("A Codex turn is already running for this session");
+    const traceId = randomUUID();
     const model = request.model || process.env.AGENT_WORK_OS_CODEX_MODEL;
     const extra = parseJsonArgs(process.env.AGENT_WORK_OS_CODEX_ARGS);
-    const args = ["exec", "--json", "--full-auto", "--cd", request.cwd];
-    if (model) args.push("--model", model);
-    args.push(...extra);
-    if (request.nativeSessionId) args.push("resume", request.nativeSessionId, request.prompt);
-    else args.push(request.prompt);
+    const args = codexExecArgs(request, { model, extra });
 
     emit({ kind: "status", status: "running", message: "Codex turn started", at: now() });
     const child = spawn(this.found.executable, args, { cwd: request.cwd, env: process.env, stdio: ["pipe", "pipe", "pipe"] });
@@ -59,11 +57,16 @@ export class CodexAdapter {
         if (event.type === "thread.started" && typeof event.thread_id === "string") {
           nativeSessionId = event.thread_id; emit({ kind: "thread", nativeSessionId, at: now() }); return;
         }
-        if (event.type === "item.started" || event.type === "item.completed") {
-          const item = event.item ?? {}; const itemType = item.type ?? "item";
-          if (itemType === "agent_message" && typeof item.text === "string" && event.type === "item.completed") emit({ kind: "text", text: item.text, at: now() });
-          else if (itemType === "error") emit({ kind: "error", message: String(item.message ?? "Codex item error"), at: now() });
-          else emit({ kind: "tool", name: String(itemType), phase: event.type === "item.started" ? "started" : "completed", payload: item, at: now() });
+        if (event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") {
+          const projected = projectCodexExecEvent(event, now());
+          if (projected) emit({ ...projected, traceId });
+          const item = event.item ?? {};
+          if (item.type === "agent_message" && typeof item.text === "string" && event.type === "item.completed") {
+            emit({ kind: "text", text: item.text, at: now() });
+          }
+          if (item.type === "error" && event.type === "item.completed") {
+            emit({ kind: "error", message: String(item.message ?? "Codex item error"), at: now() });
+          }
           return;
         }
         if (event.type === "turn.completed") {
@@ -74,16 +77,18 @@ export class CodexAdapter {
           if (event.type === "turn.failed") { emit({ kind: "status", status: "failed", at: now() }); terminal = true; }
           return;
         }
-        emit({ kind: "log", stream: "stdout", text: line, at: now() });
-      } catch { emit({ kind: "log", stream: "stdout", text: line, at: now() }); }
+        // Unknown JSONL types do not become unsanitized persisted events.
+      } catch { emit({ kind: "log", stream: "stdout", text: "Unparseable Codex JSONL event omitted", at: now() }); }
     });
     const stderr = readline.createInterface({ input: child.stderr });
     stderr.on("line", (line) => line.trim() && emit({ kind: "log", stream: "stderr", text: line, at: now() }));
     const code = await new Promise((resolve, reject) => { child.once("error", reject); child.once("exit", resolve); })
       .finally(() => { this.children.delete(request.sessionId); stdout.close(); stderr.close(); });
-    if (!terminal) {
-      if (code !== 0) emit({ kind: "error", message: `Codex exited with code ${code ?? "unknown"}`, at: now() });
-      emit({ kind: "status", status: code === 0 ? "completed" : "failed", at: now() });
+    if (code !== 0 || !terminal) {
+      emit({ kind: "error", message: code !== 0
+        ? `Codex exited with code ${code ?? "unknown"}`
+        : "Codex exited without a terminal turn event", at: now() });
+      emit({ kind: "status", status: "failed", at: now() });
     }
     return { nativeSessionId };
   }

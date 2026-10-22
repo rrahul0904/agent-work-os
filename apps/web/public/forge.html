@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080e1c">
+  <title>REA Forge — Live Control Room</title>
+  <link rel="stylesheet" href="/forge.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="brand-icon">RF</span><span><strong>REA Forge</strong><small>Agent Work OS · Live Control Room</small></span></a>
+    <div class="top-actions"><span id="connection" class="connection" role="status">Connecting…</span><button type="button" id="refresh">Refresh</button><a class="back-link" href="/">Shipping OS ↗</a></div>
+  </header>
+  <main>
+    <section class="heading">
+      <div><p class="eyebrow">OPERATIONS / EXECUTION OBSERVABILITY</p><h1>See what the agents are actually doing.</h1><p class="subtitle">Source-backed Codex commands, file changes, plans and observed subagents alongside machine, session, shipping-run and work-item records. No synthetic supervisor or invented task dependencies.</p></div>
+      <div id="last-update" class="timestamp">No snapshot received</div>
+    </section>
+    <div id="error" class="error" role="alert" hidden></div>
+    <section class="metrics" aria-label="Observed counts">
+      <article><span>Forge plans</span><strong id="count-plan">—</strong></article>
+      <article><span>Forge tasks</span><strong id="count-task">—</strong></article>
+      <article><span>Machines</span><strong id="count-machine">—</strong></article>
+      <article><span>Sessions (incl. Codex hooks)</span><strong id="count-session">—</strong></article>
+      <article><span>Codex actions</span><strong id="count-activity">—</strong></article>
+      <article><span>Observed subagents</span><strong id="count-subagent">—</strong></article>
+      <article><span>Shipping runs</span><strong id="count-shipping">—</strong></article>
+      <article><span>Work items</span><strong id="count-work">—</strong></article>
+    </section>
+    <section class="forge-operator" aria-labelledby="forge-operator-title">
+      <div class="section-head"><div><p class="eyebrow">DURABLE SUPERVISOR / EXPLICIT APPROVAL</p><h2 id="forge-operator-title">Forge task orchestration</h2></div><span id="forge-supervisor-state" class="connection">Checking local feature gate…</span></div>
+      <div class="forge-operator-grid">
+        <form id="forge-create" class="operator-form">
+          <label>Plan JSON (create in draft mode only)<textarea id="forge-plan-json" name="json" spellcheck="false" rows="8" placeholder='{"title":"Research and implement","machineId":"...","cwd":"/absolute/worktree","maxParallel":2,"tasks":[{"id":"research","title":"Research","agent":"echo","prompt":"Examine sources","dependsOn":[]}]}'></textarea></label>
+          <div class="operator-actions"><button type="submit" id="forge-create-button" disabled>Create draft DAG</button><button type="button" id="forge-template">Insert example template</button></div>
+        </form>
+        <div class="operator-form">
+          <label>Persisted plan<select id="forge-plan-select"><option value="">No plans loaded</option></select></label>
+          <div id="forge-plan-summary" class="hint">Select a plan to inspect dependencies and verification gates.</div>
+          <div class="operator-actions"><button id="forge-approve" type="button" disabled>Approve and dispatch</button><button id="forge-stop" type="button" disabled>Stop scheduling</button><button id="forge-export" type="button" disabled>Export evidence report</button></div>
+          <p class="hint">Tasks run through the existing local daemon. Agent completion requires independent evidence and explicit verification before dependents unlock. This UI never authorizes push, merge or deployment.</p>
+        </div>
+      </div>
+    </section>
+    <section class="forge-operator" aria-label="REA Forge release readiness">
+      <div class="section-head">
+        <div><p class="eyebrow">RELEASE EVIDENCE / FEATURE COVERAGE</p><h2>Full feature coverage</h2></div>
+        <span id="forge-coverage-summary" class="connection warn">Checking feature coverage…</span>
+      </div>
+      <p class="graph-notice">Features listed below are implementation claims, not independent shipping proof. A passing CI check cannot replace live Codex UX, autonomous provider verification, release gates or deployment receipts.</p>
+      <div id="forge-coverage-detail" class="coverage-table" aria-live="polite"><p class="hint">Readiness inventory unavailable until the local supervisor is enabled.</p></div>
+      <p class="hint">Canonical release blockers: <a href="https://github.com/rrahul0904/agent-work-os/issues/359" target="_blank" rel="noopener noreferrer">Agent Work OS issue #359 ↗</a></p>
+    </section>
+    <div class="workspace">
+      <section class="graph-panel" aria-labelledby="graph-title">
+        <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="plan">Forge plans</option><option value="task">Forge tasks</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="activity">Codex actions</option><option value="subagent">Codex subagents</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
+        <p class="graph-notice" id="graph-notice">This graph shows recorded Agent Work OS machine bindings and Codex activity, plus opt-in native Codex desktop hook observations. Delegation links require real child IDs. Hook events do not verify task completion.</p>
+        <div class="graph-scroller"><svg id="graph" role="group" aria-label="Interactive runtime relationship graph" xmlns="http://www.w3.org/2000/svg"><title>Runtime relationship graph</title></svg></div>
+        <div class="legend"><span><i class="swatch active"></i> Active/queued</span><span><i class="swatch success"></i> Completed/verified</span><span><i class="swatch warning"></i> Needs attention</span><span><i class="swatch failure"></i> Failed/interrupted</span><span><i class="swatch neutral"></i> Other/unknown</span></div>
+      </section>
+      <aside class="inspector" aria-labelledby="inspector-title">
+        <p class="eyebrow">INSPECTION / EVIDENCE</p><h2 id="inspector-title">Selected node</h2>
+        <div id="inspect-content"><p class="placeholder">Click any node to inspect its recorded status, owner binding and recent event types.</p></div>
+      </aside>
+    </div>
+    <footer><strong>Truth boundary:</strong> This viewer combines authoritative Agent Work OS session/run facts with non-authoritative, local Codex hook observations. It is not a multi-agent scheduler. A completed session is not proof that a product was shipped. Full REA task DAGs and automated dispatch require separately verified backend work.</footer>
+  </main>
+  <script type="module" src="/forge.js"></script>
+</body>
+</html>

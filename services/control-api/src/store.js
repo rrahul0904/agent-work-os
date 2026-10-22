@@ -16,9 +16,10 @@ const REALTIME_EVENT_MIGRATION_URL = new URL("../../../migrations/007_realtime_e
 export class JsonStore {
   constructor(filePath) {
     this.filePath = filePath;
-    this.state = { machines: {}, sessions: {}, shippingRuns: {}, workItems: {}, workItemEvents: [] };
+    this.state = { machines: {}, sessions: {}, shippingRuns: {}, workItems: {}, workItemEvents: [], forgeObservations: [], forgePlans: {} };
     this.writeChain = Promise.resolve();
     this.workItemWriteChain = Promise.resolve();
+    this.forgePlanWriteChain = Promise.resolve();
     this.shippingRunWriteChains = new Map();
     this.pool = process.env.DATABASE_URL
       ? new Pool({
@@ -98,6 +99,41 @@ export class JsonStore {
     if (this.pool) await this.pool.query(await readFile(REALTIME_EVENT_MIGRATION_URL, "utf8"));
   }
 
+  listForgePlans() { return Object.values(this.state.forgePlans ?? {}).map(x => structuredClone(x)); }
+  getForgePlan(id) {
+    const plan = this.state.forgePlans?.[id];
+    return plan ? structuredClone(plan) : null;
+  }
+  async createForgePlan(plan) {
+    return this.mutateForgePlan(plan.id, prior => {
+      if (prior) throw new Error("forge_plan_already_exists");
+      return plan;
+    });
+  }
+  mutateForgePlan(id, update) {
+    const action = this.forgePlanWriteChain.catch(() => {}).then(async () => {
+      const prior = this.state.forgePlans?.[id] ?? null;
+      const updated = update(prior ? structuredClone(prior) : null);
+      if (!updated) return prior ? structuredClone(prior) : null;
+      if (updated.id !== id || updated.schema !== "rea-forge-plan/v1") throw new Error("forge_plan_integrity_invalid");
+      this.state.forgePlans ??= {};
+      this.state.forgePlans[id] = structuredClone(updated);
+      await this.#persist();
+      return structuredClone(updated);
+    });
+    this.forgePlanWriteChain = action.then(() => undefined, () => undefined);
+    return action;
+  }
+  listForgeObservations() { return structuredClone(this.state.forgeObservations ?? []); }
+  async addForgeObservation(observation) {
+    // The hook stream is an advisory local observer, never a Run/WorkItem receipt.
+    const next = { ...observation, id: crypto.randomUUID(), receivedAt: new Date().toISOString() };
+    this.state.forgeObservations ??= [];
+    this.state.forgeObservations.push(next);
+    if (this.state.forgeObservations.length > 1000) this.state.forgeObservations.splice(0, this.state.forgeObservations.length - 1000);
+    await this.#persist();
+    return structuredClone(next);
+  }
   listMachines() {
     if (this.pool) return this.pool.query("SELECT record FROM agent_work_os_machines_v1 ORDER BY record->>'name', machine_id").then((result) => {
       const machines = result.rows.map((row) => row.record);
@@ -693,7 +729,9 @@ function normalizeState(parsed = {}) {
     sessions: parsed.sessions ?? {},
     shippingRuns: parsed.shippingRuns ?? {},
     workItems: parsed.workItems ?? {},
-    workItemEvents: parsed.workItemEvents ?? []
+    workItemEvents: parsed.workItemEvents ?? [],
+    forgeObservations: Array.isArray(parsed.forgeObservations) ? parsed.forgeObservations.slice(-1000) : [],
+    forgePlans: parsed.forgePlans && typeof parsed.forgePlans === "object" && !Array.isArray(parsed.forgePlans) ? parsed.forgePlans : {}
   };
 }
 
