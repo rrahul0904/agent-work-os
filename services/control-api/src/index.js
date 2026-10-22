@@ -505,7 +505,9 @@ export async function createControlPlane() {
           || principal.kind !== "legacy" || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) {
           return json(res, 403, { error: "forge_local_observer_disabled" });
         }
-        const observation = sanitizeForgeHook(await readJson(req));
+        let observation;
+        try { observation = sanitizeForgeHook(await readJson(req)); }
+        catch { return json(res, 400, { error: "forge_hook_payload_invalid" }); }
         const saved = await store.addForgeObservation(observation);
         broadcast({ type: "forge.observation.updated", observation: saved });
         return json(res, 202, { ok: true, id: saved.id });
