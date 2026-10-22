@@ -1,4 +1,4 @@
-import { buildForgeGraph, layoutForgeGraph } from "./forge-graph.js";
+import { GRAPH_KINDS, buildForgeGraph, layoutForgeGraph } from "./forge-graph.js";
 
 const svgNS = "http://www.w3.org/2000/svg";
 const token = localStorage.getItem("agentWorkOsToken") || "";
@@ -8,8 +8,8 @@ const graphEl = document.querySelector("#graph");
 const connectionEl = document.querySelector("#connection");
 const errorEl = document.querySelector("#error");
 const inspector = document.querySelector("#inspect-content");
-const kinds = ["machine", "session", "shipping", "work"];
-const titles = ["MACHINES", "AGENT SESSIONS", "SHIPPING RUNS", "WORK ITEMS"];
+const kinds = GRAPH_KINDS;
+const titles = ["MACHINES", "AGENT SESSIONS", "CODEX ACTIVITY", "SUBAGENTS", "SHIPPING RUNS", "WORK ITEMS"];
 
 function createSvg(tag, attributes = {}, content) {
   const el = document.createElementNS(svgNS, tag);
@@ -50,7 +50,7 @@ function refreshDisplay() {
   document.querySelector("#graph-notice").textContent =
     "Showing " + shown.length + " of " + original.totalNodes + " observed records" +
     (original.truncated ? " (" + original.truncated + " excluded by safety cap)" : "") +
-    ". Edges represent recorded machine bindings only. Task dependencies are not yet available in this API.";
+    ". Edges represent recorded machine bindings, Codex item membership and observed delegation. Task dependencies are not yet available in this API.";
   renderSvg(view);
   renderInspector();
 }
@@ -122,10 +122,17 @@ function renderInspector() {
     fact("Name", node.label),
     fact("State reported by backend", node.status),
     fact("Record ID", node.rawId),
+    ...(node.sessionId ? [fact("Parent Agent Work OS session", node.sessionId)] : []),
+    ...(node.traceId ? [fact("Codex turn trace", node.traceId)] : []),
+    ...(node.itemType ? [fact("Codex item type", node.itemType)] : []),
+    ...(node.kind === "subagent" ? [fact("Delegated thread", node.rawId)] : []),
     fact("Machine binding", node.machineId || "None recorded"),
     fact("Project ID", node.projectId || "None recorded"),
     fact("Last recorded update", date(node.updatedAt)),
     fact("Recorded events", node.eventCount),
+    ...(node.raw.exitCode !== undefined ? [fact("Command exit code", node.raw.exitCode)] : []),
+    ...(node.raw.changedFileCount !== undefined ? [fact("Files changed", node.raw.changedFileCount)] : []),
+    ...(node.raw.planStepCount !== undefined ? [fact("Plan steps recorded", node.raw.planStepCount)] : []),
     fact("Shipping receipt attached", node.kind === "shipping" ? (node.evidence ? "Yes" : "No") : "Not applicable")
   );
   const heading = document.createElement("h3"); heading.textContent = "Recent recorded events";
