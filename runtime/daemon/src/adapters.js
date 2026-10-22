@@ -38,6 +38,7 @@ export class CodexAdapter {
   async run(request, emit) {
     if (!this.found) throw new Error("Codex CLI is not installed");
     if (this.children.has(request.sessionId)) throw new Error("A Codex turn is already running for this session");
+    const traceId = randomUUID();
     const model = request.model || process.env.AGENT_WORK_OS_CODEX_MODEL;
     const extra = parseJsonArgs(process.env.AGENT_WORK_OS_CODEX_ARGS);
     const args = codexExecArgs(request, { model, extra });
@@ -58,7 +59,7 @@ export class CodexAdapter {
         }
         if (event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") {
           const projected = projectCodexExecEvent(event, now());
-          if (projected) emit(projected);
+          if (projected) emit({ ...projected, traceId });
           const item = event.item ?? {};
           if (item.type === "agent_message" && typeof item.text === "string" && event.type === "item.completed") {
             emit({ kind: "text", text: item.text, at: now() });
