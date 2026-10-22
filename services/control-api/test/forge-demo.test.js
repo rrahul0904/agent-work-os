@@ -26,6 +26,7 @@ test("Codex demo prompts for real tools/subagents without write or provider auth
   assert.equal(plan.tasks.length, 1);
   assert.equal(plan.maxParallel, 1);
   assert.equal(plan.tasks[0].expectChanges, false);
+  assert.equal(plan.tasks[0].sandbox, "read-only");
   assert.match(plan.tasks[0].prompt, /do not change files/i);
   assert.match(plan.tasks[0].prompt, /subagents are available/i);
   assert.equal(plan.tasks[0].agent, "codex");
