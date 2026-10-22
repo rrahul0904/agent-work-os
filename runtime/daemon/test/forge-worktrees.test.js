@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, mkdir, readFile, writeFile, symlink } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { stageForgeWorktree, resumeForgeWorktree } from "../src/forge-worktrees.js";
+import { stageForgeWorktree, resumeForgeWorktree, inspectForgeWorktree } from "../src/forge-worktrees.js";
 
 function git(cwd, ...args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -70,4 +70,29 @@ test("resuming Forge Codex sessions requires real provenance from matching sessi
   const forged = { ...receipt, path: f.source };
   await assert.rejects(resumeForgeWorktree({ ...session, events: [{ kind: "workspace", receipt: forged }] }, f.root),
     /forge_resume_workspace_outside_root/);
+});
+
+
+test("diff metadata proves changed checkout without storing patch or source filenames", async () => {
+  const f = await fixture();
+  const stage = await stageForgeWorktree(request(f));
+  const before = await inspectForgeWorktree(stage);
+  assert.equal(before.changed, false);
+  assert.equal(before.completeSnapshot, true);
+  assert.equal(before.headSha, f.sha);
+  await writeFile(path.join(stage.path, "README.md"), "SECRET=should-not-appear\n", "utf8");
+  const after = await inspectForgeWorktree(stage);
+  assert.equal(after.changed, true);
+  assert.equal(after.untrackedPresent, false);
+  assert.notEqual(after.trackedDiffDigest, before.trackedDiffDigest);
+  assert.equal(after.reviewed, false);
+  assert.equal(after.testsPassed, null);
+  assert.equal(after.merged, false);
+  assert.equal(JSON.stringify(after).includes("SECRET"), false);
+  assert.equal(JSON.stringify(after).includes("README.md"), false);
+  await writeFile(path.join(stage.path, "untracked.private"), "private", "utf8");
+  const incomplete = await inspectForgeWorktree(stage);
+  assert.equal(incomplete.untrackedPresent, true);
+  assert.equal(incomplete.completeSnapshot, false);
+  assert.equal(git(f.source, "status", "--porcelain"), "");
 });
