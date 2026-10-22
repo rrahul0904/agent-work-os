@@ -2,14 +2,14 @@ import { GRAPH_KINDS, buildForgeGraph, layoutForgeGraph } from "./forge-graph.js
 
 const svgNS = "http://www.w3.org/2000/svg";
 const token = localStorage.getItem("agentWorkOsToken") || "";
-const state = { snapshot: { machines: [], sessions: [], shippingRuns: [], workItems: [], forgeObservations: [] },
+const state = { snapshot: { machines: [], sessions: [], shippingRuns: [], workItems: [], forgeObservations: [], forgePlans: [] },
   graph: null, selected: null, filter: "all", socket: null, reconnects: 0, refreshPromise: null };
 const graphEl = document.querySelector("#graph");
 const connectionEl = document.querySelector("#connection");
 const errorEl = document.querySelector("#error");
 const inspector = document.querySelector("#inspect-content");
 const kinds = GRAPH_KINDS;
-const titles = ["MACHINES", "AGENT SESSIONS", "CODEX ACTIVITY", "SUBAGENTS", "SHIPPING RUNS", "WORK ITEMS"];
+const titles = ["FORGE PLANS", "DAG TASKS", "MACHINES", "AGENT SESSIONS", "CODEX ACTIVITY", "SUBAGENTS", "SHIPPING RUNS", "WORK ITEMS"];
 
 function createSvg(tag, attributes = {}, content) {
   const el = document.createElementNS(svgNS, tag);
@@ -50,9 +50,10 @@ function refreshDisplay() {
   document.querySelector("#graph-notice").textContent =
     "Showing " + shown.length + " of " + original.totalNodes + " observed records" +
     (original.truncated ? " (" + original.truncated + " excluded by safety cap)" : "") +
-    ". Edges represent recorded machine bindings, Codex item membership and observed delegation. Task dependencies are not yet available in this API.";
+    ". Solid edges represent recorded machine bindings, Codex activity, observed delegation, and verified Forge task dependencies where plans exist.";
   renderSvg(view);
   renderInspector();
+  renderSupervisorControls();
 }
 function renderSvg(layout) {
   graphEl.replaceChildren();
@@ -136,8 +137,12 @@ function renderInspector() {
     ...(node.raw.planStepCount !== undefined ? [fact("Plan steps recorded", node.raw.planStepCount)] : []),
     ...(node.raw.eventName ? [fact("Codex hook event", node.raw.eventName)] : []),
     ...(node.raw.toolName ? [fact("Tool name", node.raw.toolName)] : []),
+    ...(node.planId ? [fact("Plan ID", node.planId)] : []),
+    ...(Array.isArray(node.raw.dependsOn) ? [fact("Depends on", node.raw.dependsOn.join(", ") || "No prerequisites")] : []),
+    ...(node.verification?.digest ? [fact("Verification digest", node.verification.digest)] : []),
     fact("Shipping receipt attached", node.kind === "shipping" ? (node.evidence ? "Yes" : "No") : "Not applicable")
   );
+  if (node.kind === "task") renderTaskVerificationControls(node);
   const heading = document.createElement("h3"); heading.textContent = "Recent recorded events";
   inspector.append(heading);
   const events = Array.isArray(node.raw.events) ? node.raw.events.slice(-12).reverse() : [];
@@ -157,6 +162,98 @@ function renderInspector() {
   });
   inspector.append(ul);
 }
+async function forgeRequest(path, payload) {
+  const response = await fetch(path, {
+    method: payload === undefined ? "GET" : "POST",
+    credentials: "same-origin",
+    headers: { ...(token ? { authorization: "Bearer " + token } : {}), "content-type": "application/json" },
+    ...(payload === undefined ? {} : { body: JSON.stringify(payload) })
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || body.message || "Forge request failed: " + response.status);
+  return body;
+}
+let forgeSupervisorEnabled = false;
+let selectedPlanId = "";
+async function probeForgeSupervisor() {
+  try {
+    const result = await forgeRequest("/api/forge/plans");
+    forgeSupervisorEnabled = true;
+    state.snapshot.forgePlans = result.plans || [];
+    error(""); refreshDisplay();
+  } catch {
+    forgeSupervisorEnabled = false;
+    document.querySelector("#forge-supervisor-state").textContent = "Disabled · opt-in local feature";
+    document.querySelector("#forge-create-button").disabled = true;
+  }
+}
+function renderSupervisorControls() {
+  document.querySelector("#forge-supervisor-state").textContent = forgeSupervisorEnabled
+    ? "Local supervisor enabled" : "Local supervisor disabled (set AGENT_WORK_OS_ENABLE_FORGE_SUPERVISOR=true)";
+  document.querySelector("#forge-create-button").disabled = !forgeSupervisorEnabled;
+  const select = document.querySelector("#forge-plan-select");
+  const plans = state.snapshot.forgePlans || [];
+  if (!plans.some(p => p.id === selectedPlanId)) selectedPlanId = plans[0]?.id || "";
+  select.replaceChildren();
+  for (const plan of plans) {
+    const option = document.createElement("option");
+    option.value = plan.id; option.textContent = short(plan.title, 35) + " · " + plan.state;
+    option.selected = plan.id === selectedPlanId;
+    select.append(option);
+  }
+  if (!plans.length) {
+    const option = document.createElement("option"); option.value = ""; option.textContent = "No plans";
+    select.append(option);
+  }
+  const plan = plans.find(p => p.id === selectedPlanId);
+  document.querySelector("#forge-plan-summary").textContent = plan
+    ? plan.tasks.map(t => t.id + ": " + t.state + (t.dependsOn.length ? " · after " + t.dependsOn.join(",") : "")).join("\n")
+    : "Create a draft plan, inspect the DAG, then approve dispatch.";
+  document.querySelector("#forge-plan-summary").style.whiteSpace = "pre-wrap";
+  document.querySelector("#forge-approve").disabled = !forgeSupervisorEnabled || plan?.state !== "draft";
+  document.querySelector("#forge-stop").disabled = !forgeSupervisorEnabled || !["draft", "running"].includes(plan?.state);
+}
+function renderTaskVerificationControls(node) {
+  if (!forgeSupervisorEnabled || !node.planId) return;
+  if (!["awaiting_verification", "blocked", "failed"].includes(node.status)) return;
+  const panel = document.createElement("div"); panel.className = "verify-controls";
+  const hint = document.createElement("p");
+  hint.textContent = node.status === "awaiting_verification"
+    ? "External verification is required. Attach a SHA-256 digest of real test/review evidence; this records a human attestation, not automated proof."
+    : "This task needs operator investigation. Retry may repeat partially executed work.";
+  panel.append(hint);
+  if (node.status === "awaiting_verification") {
+    const reviewer = document.createElement("input"); reviewer.placeholder = "Independent reviewer identity";
+    const digest = document.createElement("input"); digest.placeholder = "sha256: + 64 hex characters";
+    const reviewerLabel = document.createElement("label"); reviewerLabel.textContent = "Reviewer"; reviewerLabel.append(reviewer);
+    const digestLabel = document.createElement("label"); digestLabel.textContent = "Evidence digest"; digestLabel.append(digest);
+    const button = document.createElement("button"); button.type = "button"; button.textContent = "Attest evidence and unlock dependents";
+    button.onclick = async () => {
+      if (!window.confirm("Confirm you independently verified actual test evidence for this specific task?")) return;
+      try {
+        await forgeRequest("/api/forge/plans/" + encodeURIComponent(node.planId) +
+          "/tasks/" + encodeURIComponent(node.rawId) + "/verify",
+        { approved: true, reviewer: reviewer.value, digest: digest.value });
+        await refreshState();
+      } catch (e) { error(e.message); }
+    };
+    panel.append(reviewerLabel, digestLabel, button);
+  } else {
+    const retry = document.createElement("button"); retry.type = "button"; retry.className = "danger";
+    retry.textContent = "Authorize one retry";
+    retry.onclick = async () => {
+      if (!window.confirm("Retry could repeat a partially executed Codex task. Have you inspected the prior attempt?")) return;
+      try {
+        await forgeRequest("/api/forge/plans/" + encodeURIComponent(node.planId) +
+          "/tasks/" + encodeURIComponent(node.rawId) + "/retry", {});
+        await refreshState();
+      } catch (e) { error(e.message); }
+    };
+    panel.append(retry);
+  }
+  inspector.append(panel);
+}
+
 async function refreshState() {
   if (state.refreshPromise) return state.refreshPromise;
   state.refreshPromise = (async () => {
@@ -208,6 +305,8 @@ function connect() {
       upsert(state.snapshot.shippingRuns || [], message.run, "runId");
     else if (message.type === "forge.observation.updated" && message.observation?.id) state.snapshot.forgeObservations =
       upsert(state.snapshot.forgeObservations || [], message.observation).slice(0, 1000);
+    else if (message.type === "forge.plan.updated" && message.plan?.id) state.snapshot.forgePlans =
+      upsert(state.snapshot.forgePlans || [], message.plan);
     else if (message.workItem && message.workItem.id) state.snapshot.workItems =
       upsert(state.snapshot.workItems || [], message.workItem);
     else return;
@@ -227,6 +326,54 @@ document.querySelector("#filter").addEventListener("change", event => {
   state.filter = event.target.value; refreshDisplay();
 });
 document.querySelector("#refresh").addEventListener("click", refreshState);
+document.querySelector("#forge-plan-select").addEventListener("change", event => {
+  selectedPlanId = event.target.value;
+  renderSupervisorControls();
+});
+document.querySelector("#forge-template").addEventListener("click", () => {
+  const machine = state.snapshot.machines?.find(m => m.status === "online");
+  const spec = {
+    title: "REA Forge proof-of-execution",
+    machineId: machine?.id ?? "REPLACE_WITH_ONLINE_MACHINE_ID",
+    cwd: "/ABSOLUTE/PATH/UNDER/APPROVED/WORKSPACE_ROOT",
+    maxParallel: 2,
+    tasks: [
+      { id: "research", title: "Collect evidence", agent: "echo", prompt: "Read public source and report evidence", dependsOn: [] },
+      { id: "inventory", title: "Inventory existing work", agent: "echo", prompt: "Inspect owner repository and roadmap", dependsOn: [] },
+      { id: "architecture", title: "Propose clean-room design", agent: "echo", prompt: "Design architecture and interfaces", dependsOn: ["research", "inventory"] },
+      { id: "verify", title: "Independent review", agent: "echo", prompt: "Review code/tests and capture evidence", dependsOn: ["architecture"] }
+    ]
+  };
+  document.querySelector("#forge-plan-json").value = JSON.stringify(spec, null, 2);
+});
+document.querySelector("#forge-create").addEventListener("submit", async event => {
+  event.preventDefault();
+  if (!forgeSupervisorEnabled) return;
+  try {
+    const spec = JSON.parse(document.querySelector("#forge-plan-json").value);
+    const plan = await forgeRequest("/api/forge/plans", spec);
+    selectedPlanId = plan.id;
+    await refreshState();
+  } catch (e) { error(e.message); }
+});
+document.querySelector("#forge-approve").addEventListener("click", async () => {
+  if (!forgeSupervisorEnabled || !selectedPlanId) return;
+  if (!window.confirm("Start approved local Forge tasks through the existing daemon? No merge, push or deploy permission is granted.")) return;
+  try {
+    await forgeRequest("/api/forge/plans/" + encodeURIComponent(selectedPlanId) + "/approve", {});
+    await refreshState();
+  } catch (e) { error(e.message); }
+});
+document.querySelector("#forge-stop").addEventListener("click", async () => {
+  if (!forgeSupervisorEnabled || !selectedPlanId) return;
+  if (!window.confirm("Stop new scheduling? Already running external tasks will continue unless separately interrupted.")) return;
+  try {
+    await forgeRequest("/api/forge/plans/" + encodeURIComponent(selectedPlanId) + "/stop", {});
+    await refreshState();
+  } catch (e) { error(e.message); }
+});
+
 await refreshState();
+await probeForgeSupervisor();
 connect();
 setInterval(refreshState, 30_000);
