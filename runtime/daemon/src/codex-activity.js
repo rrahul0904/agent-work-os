@@ -68,7 +68,7 @@ export function projectCodexExecEvent(source, at = new Date().toISOString()) {
     // Preserve the count, not arbitrary plan text, which may contain secrets.
     if (Array.isArray(item.items)) event.planStepCount = Math.min(200, item.items.length);
   }
-  if (event.phase === "completed" && ["failed", "errored", "interrupted"].includes(event.status)) event.status = "failed";
+  if (item.type === "error" || (event.phase === "completed" && ["failed", "errored", "interrupted"].includes(event.status))) event.status = "failed";
   return event;
 }
 
