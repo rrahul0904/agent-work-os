@@ -45,3 +45,33 @@ Run this in Codex with a fresh local checkout/worktree on the branch:
 Codex skill / future plugin -> Agent Work OS control-plane authority -> existing authenticated snapshots/WebSocket -> REA Forge read-only graph. The graph never invokes a tool or starts an agent. Next build phase: versioned Flow/DAG facts and durable supervisor execution under existing canonical WorkItem/Run ownership, tested with fake/echo executor and receipt-backed restart reconciliation before real parallel Codex workers.
 
 Related existing work: #39 (Flow), #88 (REA provider), #251 / PR #252 (durable supervisor, unmerged), #259 (Capability Fabric), #267 (execution fabric), #328 (Myrmidon), #345 (visual graph), #352 (code explorer), #51 (Shipping OS).
+
+## v0.2 — native Codex activity projection
+
+Source: AWOS-authorized sessions started by its existing daemon with Codex CLI JSONL (codex exec --json). This does NOT automatically observe unrelated threads started in the Codex desktop app. The supported in-Codex viewing surface is the built-in browser panel displaying the localhost Forge graph; a native integrated Codex conversation panel has not been installed.
+
+Data path: Codex exec JSONL -> bounded, redacted codex.activity events -> existing daemon.session.event -> canonical AWOS session store -> existing /ws -> Forge graph.
+
+Observed links:
+- Machine to session: recorded machineId.
+- Session to item: actual Codex item ID and per-turn traceId.
+- Collaboration item to subagent: ONLY source-emitted receiver_thread_ids, including observed child status if supplied.
+- Task DAG edges: not available in current snapshot and never fabricated.
+
+Commands, prompts, diffs, file paths and stdout are intentionally omitted from the new activity projection. The existing AWOS session already stores final answer/error messages separately. Unrecognized JSONL does not become raw persisted payload. Historical Codex CLI releases have omitted delegation spawn events in JSON output. Missing child IDs must display as not observed; never invent them.
+
+### Test inside Codex
+
+1. Check out the feature branch in the Codex desktop app, run npm test and npm run acceptance.
+2. Run local AWOS API with AGENT_WORK_OS_TOKEN=dev-token npm run start:api.
+3. Run daemon with AGENT_WORK_OS_TOKEN=dev-token AGENT_WORK_OS_SERVER_URL=ws://127.0.0.1:8787/ws npm run start:daemon.
+4. Open Codex built-in browser (Cmd+Shift+B), visit http://127.0.0.1:8787/ and sign into the **local development** control plane; navigate to http://127.0.0.1:8787/forge.html.
+5. In the existing AWOS Local Agents interface, start a codex session with an authorized safe task in a temporary worktree. It MUST be started via AWOS for this integration to observe it. If the codex capability is missing, check whether Codex CLI is installed and authenticated.
+6. Inspect live command started/completed nodes, actual file-change and plan nodes when emitted, and actual delegation only when child IDs are observed. Simulate failed command, daemon disconnect and reload. Capture verifiable local evidence.
+7. Record exact SHA, CLI version, CI run, screenshots where actually taken, and any failures. Leave PR #358 in draft pending independent approval.
+
+In-app browser does not equal a native embedded extension surface. Full app-server observer support for Codex-desktop-owned threads requires a separate authorization and lifecycle design.
+
+### Acceptance
+
+Only source-backed nodes; no fabricated delegation; no task dependencies without canonical facts; no assumed shipped status from completion of a tool; terminal failure preserved; updated graph within running websocket session; tenant separation; actual in-app local browser verification.
