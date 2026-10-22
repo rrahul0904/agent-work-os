@@ -8,6 +8,7 @@ import { acceptWebSocket } from "../../../packages/protocol/src/websocket.js";
 import { digestShippingContract, validateShippingContract } from "./shipping-contract.js";
 import { buildProductSummary, listReceipts, loadPortfolio, rankPortfolio } from "./product-state.js";
 import { JsonStore } from "./store.js";
+import { sanitizeForgeHook } from "./forge-hook-observation.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { CapabilityVerificationRepository } from "./capability-verification-store.js";
@@ -72,7 +73,7 @@ export async function createControlPlane() {
         capabilityVerificationRuns: (await Promise.all(principal.organizationIds.map((organizationId) => capabilityVerifications.listByOrganization(organizationId)))).flat()
       };
     }
-    return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() };
+    return { cursor, sequenceCursor, machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns(), forgeObservations: store.listForgeObservations() };
   };
   const finishClientResync = (peer, state, snapshot = null) => {
     try {
@@ -329,7 +330,7 @@ export async function createControlPlane() {
         return json(res, 200, { membership });
       }
 
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns(), forgeObservations: store.listForgeObservations() });
       if (await handleCapabilityRegistryRequest({ req, res, url, principal, identities, registry: capabilityRegistry, readJson, json })) return;
       if (req.method === "GET" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
         const organizationId = url.searchParams.get("organizationId");
@@ -496,6 +497,18 @@ export async function createControlPlane() {
         if (principal.kind === "user" && !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
         const item = await workItems.get(decodeURIComponent(workItemMatch[1]), organizationId);
         return item ? json(res, 200, item) : json(res, 404, { error: "work_item_not_found" });
+      }
+      if (req.method === "POST" && url.pathname === "/api/forge/observations") {
+        // Observer-only, opt-in and loopback-only. Never accept this source as
+        // authoritative WorkItem/Run transitions, even with valid token.
+        if (isProduction || process.env.AGENT_WORK_OS_ENABLE_FORGE_HOOKS !== "true"
+          || principal.kind !== "legacy" || !["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress)) {
+          return json(res, 403, { error: "forge_local_observer_disabled" });
+        }
+        const observation = sanitizeForgeHook(await readJson(req));
+        const saved = await store.addForgeObservation(observation);
+        broadcast({ type: "forge.observation.updated", observation: saved });
+        return json(res, 202, { ok: true, id: saved.id });
       }
       if (req.method === "GET" && url.pathname === "/api/product") {
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
