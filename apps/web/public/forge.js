@@ -212,6 +212,7 @@ function renderSupervisorControls() {
   document.querySelector("#forge-plan-summary").style.whiteSpace = "pre-wrap";
   document.querySelector("#forge-approve").disabled = !forgeSupervisorEnabled || plan?.state !== "draft";
   document.querySelector("#forge-stop").disabled = !forgeSupervisorEnabled || !["draft", "running"].includes(plan?.state);
+  document.querySelector("#forge-export").disabled = !forgeSupervisorEnabled || !plan;
 }
 function renderTaskVerificationControls(node) {
   if (!forgeSupervisorEnabled || !node.planId) return;
@@ -362,6 +363,18 @@ document.querySelector("#forge-approve").addEventListener("click", async () => {
   try {
     await forgeRequest("/api/forge/plans/" + encodeURIComponent(selectedPlanId) + "/approve", {});
     await refreshState();
+  } catch (e) { error(e.message); }
+});
+document.querySelector("#forge-export").addEventListener("click", async () => {
+  if (!forgeSupervisorEnabled || !selectedPlanId) return;
+  try {
+    const report = await forgeRequest("/api/forge/plans/" + encodeURIComponent(selectedPlanId) + "/report");
+    const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a"); link.href = url;
+    link.download = "rea-forge-" + selectedPlanId.replaceAll(/[^a-zA-Z0-9_-]/g, "") + "-evidence.json";
+    document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 500);
   } catch (e) { error(e.message); }
 });
 document.querySelector("#forge-stop").addEventListener("click", async () => {
