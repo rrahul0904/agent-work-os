@@ -194,6 +194,17 @@ test("Codex verification refuses arbitrary hashes, forged source receipts and un
   });
   await assert.rejects(service.verify(plan.id, "implement", evidence), /forge_untracked_content_requires_review/);
   await store.addEvent("session-1", { kind: "workspace.diff", receipt: diff });
+  await assert.rejects(service.verify(plan.id, "implement", evidence),
+    /forge_independent_static_review_required/);
+  const independentReceipt = {
+    schema: "rea-forge-independent-diff-review/v1",
+    sessionId: "session-1", planId: plan.id, taskId: "implement",
+    baseSha: stage.sourceSha, headSha: diff.headSha, trackedDiffDigest: digest,
+    staticCheckPassed: true, passed: true, testsExecuted: false,
+    sourceMerged: false, deploymentVerified: false,
+    reportDigest: "sha256:" + "9".repeat(64)
+  };
+  await store.addEvent("session-1", { kind: "workspace.review", receipt: independentReceipt });
   const verified = await service.verify(plan.id, "implement", evidence);
   assert.equal(verified.tasks[0].state, "verified");
   assert.equal(verified.state, "awaiting_release");
