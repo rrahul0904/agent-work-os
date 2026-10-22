@@ -30,3 +30,17 @@ This is a **workflow skill**, not a background agent scheduler. Do not claim aut
 ## Codex acceptance workflow
 
 Read docs/architecture/REA_FORGE_CONTROL_ROOM.md and complete the exact-head tests and browser verification first. Only after the control-room slice is independently verified should the next increment introduce a versioned real Task DAG and deterministic fake backend. Keep work/authorization/receipts under Agent Work OS authority, while treating REA as a research provider and Autonomous Forge as an optional scheduler adapter.
+
+## Current executable intake (implemented, local-only)
+
+To begin from a target URL, with the local API and daemon running and the repository hooks explicitly trusted:
+
+```bash
+AGENT_WORK_OS_TOKEN=dev-token npm run forge:intake -- --url https://example.org/product --cwd "$(pwd)" --title "Research + build target" --agent codex
+```
+
+The feature requires `AGENT_WORK_OS_ENABLE_FORGE_SUPERVISOR=true` on the local API, and the working directory must be under the approved `AGENT_WORK_OS_FORGE_WORKSPACE_ROOT`. The command reads currently online compatible machines and creates a deterministic six-task DRAFT: owner inventory, REA evidence, architecture, implementation, independent review, release-readiness. It never auto-approves dispatch. Codex workers are serialized until per-worker worktree isolation is implemented.
+
+Open http://127.0.0.1:8787/forge.html in Codex's built-in browser, inspect the draft plan, then approve only if its effects are authorized. At each agent completion, inspect independent evidence, attach a real SHA-256 digest and reviewer identity, then attest to unlock dependent work. A human attestation is not a certified deployment receipt. No direct push, merge, provider writes or public deployment.
+
+The control room also shows direct-Codex-session lifecycle hooks as non-authoritative observations; do not confuse them with the authorized Forge task DAG.
