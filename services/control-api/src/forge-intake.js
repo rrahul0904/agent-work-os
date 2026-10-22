@@ -20,7 +20,7 @@ export function buildForgeIntakeSpec({ sourceUrl, cwd, machineId, title, goal, a
       "ROLE: Independent verifier, not the builder. Independently inspect the exact working-tree diff, licensing, tests, UX and threat model. Execute tests, reproduce failures, record exact SHA or uncommitted diff ID and evidence digests. Identify repairs. Do not self-certify model output. " + guardrail },
     { id: "release-readiness", title: "Shipping OS release gate and tracker proposal", dependsOn: ["independent-review"], prompt:
       "ROLE: Shipping readiness reviewer. Evaluate real test evidence, UAT, provenance, tested SHA and release constraints. Produce a proposed tracker status and gated Shipping OS handoff. DO NOT deploy, publish, mark SHIPPED or automatically update canonical tracker without independent receipt and authorization. " + guardrail }
-  ].map(task => ({ ...task, agent }));
+  ].map(task => ({ ...task, agent, expectChanges: task.id === "implementation" }));
   return {
     title: name, sourceUrl, cwd, machineId,
     maxParallel: agent === "codex" ? 1 : 2,
