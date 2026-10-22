@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import os from "node:os";
 import path from "node:path";
+import { stageForgeWorktree } from "./forge-worktrees.js";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
@@ -81,8 +82,32 @@ function connect() {
         return;
       }
       if (command.action === "session.start") {
-        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`); ack(true);
-        void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        const p = command.payload;
+        const adapter = adapters.get(p?.agent);
+        if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
+        const isForge = Boolean(p.forgePlanId || p.forgeTaskId);
+        if (isForge && (!p.forgePlanId || !p.forgeTaskId)) throw new Error("forge_task_identity_incomplete");
+        // A Forge coding task cannot write to the operator's checkout.
+        if (isForge && p.agent === "codex" &&
+            (process.env.AGENT_WORK_OS_FORGE_ISOLATE_WORKTREES !== "true"
+              || !process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT)) {
+          throw new Error("forge_worktree_isolation_not_enabled");
+        }
+        ack(true);
+        void (async () => {
+          let cwd = p.cwd;
+          if (isForge && p.agent === "codex") {
+            const receipt = await stageForgeWorktree({
+              cwd: p.cwd, root: process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT,
+              planId: p.forgePlanId, taskId: p.forgeTaskId, sessionId: command.sessionId
+            });
+            cwd = receipt.path;
+            emit({ kind: "workspace", receipt, at: new Date().toISOString() });
+          }
+          return adapter.run({ sessionId: command.sessionId, cwd, prompt: p.prompt, model: p.model }, emit);
+        })().then(result => result.nativeSessionId && nativeSessions.set(command.sessionId, result.nativeSessionId))
+          .catch(error => fail(emit, error));
+        return;
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
       if (command.action === "session.message") {
