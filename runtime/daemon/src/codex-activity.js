@@ -73,7 +73,10 @@ export function projectCodexExecEvent(source, at = new Date().toISOString()) {
 }
 
 export function codexExecArgs(request, { model = null, extra = [] } = {}) {
-  const args = ["exec", "--json", "--sandbox", "workspace-write", "--cd", request.cwd];
+  const sandbox = request.sandbox ?? "workspace-write";
+  if (!["read-only", "workspace-write"].includes(sandbox)) throw new Error("forge_codex_sandbox_invalid");
+  if (sandbox === "read-only" && extra.length) throw new Error("forge_codex_readonly_extra_args_refused");
+  const args = ["exec", "--json", "--sandbox", sandbox, "--cd", request.cwd];
   if (model) args.push("--model", model);
   if (!Array.isArray(extra) || extra.some(x => typeof x !== "string")) throw new Error("invalid_codex_args");
   // Extras can increase privileges, so this function does not interpret them:
