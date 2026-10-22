@@ -136,8 +136,14 @@ function renderInspector() {
       ? (() => {
           const lastDiff = node.raw.events.findLast(e => e?.kind === "workspace.diff");
           const lastStage = node.raw.events.findLast(e => e?.kind === "workspace");
+          const lastReview = node.raw.events.findLast(e => e?.kind === "workspace.review");
           const result = [];
           if (lastStage?.receipt?.sourceSha) result.push(fact("Isolated worktree baseline SHA", lastStage.receipt.sourceSha));
+          if (lastReview?.receipt?.schema === "rea-forge-independent-diff-review/v1") {
+            result.push(fact("Independent Git verification", lastReview.receipt.passed ? "STATIC PASS · tests not run" : "FAILED / INCOMPLETE"));
+            result.push(fact("Reviewer report digest", lastReview.receipt.reportDigest ?? "Unavailable"));
+            result.push(fact("Source merged", "No — separate approval required"));
+          }
           if (lastDiff?.receipt?.trackedDiffDigest) {
             result.push(fact("Observed tracked diff digest", lastDiff.receipt.trackedDiffDigest));
             result.push(fact("Changed files detected", lastDiff.receipt.changed ? "Yes · unverified" : "No"));
