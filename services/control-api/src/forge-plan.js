@@ -37,6 +37,7 @@ export function validateForgePlan(spec, { now = () => new Date().toISOString(), 
       agent: input.agent,
       prompt: requiredText(input.prompt, 12000, "task_prompt"),
       dependsOn: [...input.dependsOn],
+      expectChanges: input.expectChanges === true,
       state: "pending", attempt: 0,
       sessionId: null, commandId: null, verification: null,
       updatedAt: now()
