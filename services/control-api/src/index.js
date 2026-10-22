@@ -232,14 +232,14 @@ export async function createControlPlane() {
       const session = {
         id: task.sessionId, machineId: plan.machineId, cwd: plan.cwd,
         agent: task.agent, status: "queued", createdAt: now, updatedAt: now,
-        forgePlanId: plan.id, forgeTaskId: task.id,
+        forgePlanId: plan.id, forgeTaskId: task.id, sandbox: task.sandbox,
         messages: [{ id: crypto.randomUUID(), role: "user", text: task.prompt, createdAt: now }],
         events: []
       };
       const command = {
         type: "server.command", commandId: task.commandId,
         sessionId: session.id, action: "session.start",
-        payload: { cwd: plan.cwd, agent: task.agent, prompt: task.prompt, forgePlanId: plan.id, forgeTaskId: task.id }
+        payload: { cwd: plan.cwd, agent: task.agent, sandbox: task.sandbox, prompt: task.prompt, forgePlanId: plan.id, forgeTaskId: task.id }
       };
       if (commandRouter) await store.createSessionWithCommand(session, command);
       else {
