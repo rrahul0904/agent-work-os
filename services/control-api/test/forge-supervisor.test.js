@@ -1,4 +1,5 @@
 import test from "node:test";
+import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, symlink } from "node:fs/promises";
 import path from "node:path";
@@ -202,9 +203,15 @@ test("Codex verification refuses arbitrary hashes, forged source receipts and un
     sessionId: "session-1", planId: plan.id, taskId: "implement",
     baseSha: stage.sourceSha, headSha: diff.headSha, trackedDiffDigest: digest,
     staticCheckPassed: true, passed: true, testsExecuted: false,
-    sourceMerged: false, deploymentVerified: false,
-    reportDigest: "sha256:" + "9".repeat(64)
+    sourceMerged: false, deploymentVerified: false
   };
+  await store.addEvent("session-1", { kind: "workspace.review", receipt: {
+    ...independentReceipt, reportDigest: "sha256:" + "9".repeat(64)
+  } });
+  await assert.rejects(service.verify(plan.id, "implement", evidence),
+    /forge_review_receipt_digest_invalid/);
+  independentReceipt.reportDigest = "sha256:" + createHash("sha256")
+    .update(JSON.stringify(independentReceipt)).digest("hex");
   await store.addEvent("session-1", { kind: "workspace.review", receipt: independentReceipt });
   const verified = await service.verify(plan.id, "implement", evidence);
   assert.equal(verified.tasks[0].state, "verified");
