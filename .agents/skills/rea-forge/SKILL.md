@@ -44,3 +44,15 @@ The feature requires `AGENT_WORK_OS_ENABLE_FORGE_SUPERVISOR=true` on the local A
 Open http://127.0.0.1:8787/forge.html in Codex's built-in browser, inspect the draft plan, then approve only if its effects are authorized. At each agent completion, inspect independent evidence, attach a real SHA-256 digest and reviewer identity, then attest to unlock dependent work. A human attestation is not a certified deployment receipt. No direct push, merge, provider writes or public deployment.
 
 The control room also shows direct-Codex-session lifecycle hooks as non-authoritative observations; do not confuse them with the authorized Forge task DAG.
+
+## Release integrity: all-feature readiness and independent review
+
+Before calling REA Forge complete, load the local authenticated `/api/forge/readiness` endpoint and inspect the entire 14-feature inventory in the Control Room. Its implementation-stage entries are NOT release receipts. Canonical blockers remain in https://github.com/rrahul0904/agent-work-os/issues/359. Do not label a feature deployed from its files, CI success or agent narrative. The entire product remains NOT SHIPPED while any gate is unresolved.
+
+For each Forge Codex worker, the daemon runs the independent, read-only Git verifier in a separate process after computing the worker's diff. Verification binds task, session, source SHA and actual patch digest; human attestation must reference the observed digest. This STATIC receipt never executes application tests or security checks and cannot authorize promotion or deployment.
+
+To preflight a code handoff without writing to the receiving checkout, with the local API and worktree root configured, run:
+
+    AGENT_WORK_OS_TOKEN=dev-token AGENT_WORK_OS_FORGE_WORKTREE_ROOT="$HOME/.local/share/rea-forge-worktrees" npm run forge:handoff -- --session ACTUAL_COMPLETED_SESSION_ID --destination /absolute/clean/receiving/repo
+
+This command checks source and target exact HEAD, clean destination, worker Git diff and independent static verification, then runs git apply --check. It does NOT apply the patch, merge commits, grant deployment approval, or restart downstream work. If conflicts or missing receipts are found, preserve both worktrees and report BLOCKED.
