@@ -27,6 +27,27 @@ function checkId(value, label) {
  * worker. If creation is interrupted, the directory remains for investigation;
  * we do not silently delete, reuse or overwrite it.
  */
+export async function resumeForgeWorktree(session, root) {
+  if (!session?.forgePlanId || !session?.forgeTaskId) fail("forge_resume_not_a_forge_session");
+  if (typeof root !== "string" || !path.isAbsolute(root)) fail("forge_worktree_root_invalid");
+  const rootReal = await fs.realpath(root);
+  if (rootReal !== path.resolve(root)) fail("forge_worktree_root_symlink_refused");
+  const record = Array.isArray(session.events)
+    ? session.events.findLast(event => event?.kind === "workspace" &&
+      event.receipt?.schema === "rea-forge-worktree/v1" &&
+      event.receipt?.sessionId === session.id &&
+      event.receipt?.planId === session.forgePlanId &&
+      event.receipt?.taskId === session.forgeTaskId)
+    : null;
+  if (!record) fail("forge_resume_workspace_receipt_missing");
+  const candidate = record.receipt.path;
+  if (typeof candidate !== "string" || path.dirname(candidate) !== rootReal) fail("forge_resume_workspace_outside_root");
+  const real = await fs.realpath(candidate);
+  if (real !== candidate) fail("forge_resume_workspace_symlink_refused");
+  if ((await git(["rev-parse", "--show-toplevel"], real)) !== real) fail("forge_resume_not_worktree_root");
+  return real;
+}
+
 export async function stageForgeWorktree({ cwd, root, planId, taskId, sessionId }) {
   for (const [label, id] of [["plan", planId], ["task", taskId], ["session", sessionId]]) checkId(id, label);
   if (typeof root !== "string" || !path.isAbsolute(root) ||
@@ -40,6 +61,11 @@ export async function stageForgeWorktree({ cwd, root, planId, taskId, sessionId 
   if (cwdReal !== absCwd) fail("forge_worktree_source_symlink_refused");
   const info = await fs.stat(rootReal);
   if (!info.isDirectory()) fail("forge_worktree_root_not_directory");
+  // Worktree storage must be outside the input checkout to keep the source
+  // clean and avoid recursive Git discovery.
+  if (rootReal === cwdReal || rootReal.startsWith(cwdReal + path.sep)) {
+    fail("forge_worktree_root_inside_checkout");
+  }
   const gitRoot = await git(["rev-parse", "--show-toplevel"], cwdReal);
   if (gitRoot !== cwdReal) fail("forge_worktree_source_must_be_repo_root");
   // Non-clean HEAD makes source assumptions unrepeatable, including staged
