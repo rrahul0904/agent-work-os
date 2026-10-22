@@ -46,7 +46,7 @@ test("even human-attested plan requires separate Shipping OS receipt", () => {
 
 test("tracker manifest includes only redacted Git worktree SHA evidence, never raw patch content", () => {
   let plan = approveForgePlan(validateForgePlan({
-    title: "Review source", cwd: "/tmp/forge", machineId: "mac", tasks: [
+    title: "Review source", cwd: "/tmp/forge", machineId: "mac", maxParallel: 1, tasks: [
       { id: "change", title: "Code task", agent: "codex", prompt: "private draft prompt", dependsOn: [] }
     ]
   }));
