@@ -2,6 +2,7 @@
 import os from "node:os";
 import path from "node:path";
 import { stageForgeWorktree, resumeForgeWorktree, inspectForgeWorktree } from "./forge-worktrees.js";
+import { runForgeIndependentReview } from "./forge-independent-review.js";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
@@ -113,6 +114,15 @@ function connect() {
               try {
                 const diff = await inspectForgeWorktree(workspaceReceipt);
                 emit({ kind: "workspace.diff", receipt: diff, at: new Date().toISOString() });
+                try {
+                  const review = await runForgeIndependentReview(
+                    workspaceReceipt, diff, process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT
+                  );
+                  emit({ kind: "workspace.review", receipt: review, at: new Date().toISOString() });
+                } catch {
+                  emit({ kind: "workspace.issue", code: "forge_independent_review_unavailable",
+                    at: new Date().toISOString() });
+                }
               } catch {
                 emit({ kind: "workspace.issue", code: "forge_diff_unavailable", at: new Date().toISOString() });
               }
