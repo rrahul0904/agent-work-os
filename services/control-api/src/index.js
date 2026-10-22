@@ -10,6 +10,7 @@ import { buildProductSummary, listReceipts, loadPortfolio, rankPortfolio } from 
 import { JsonStore } from "./store.js";
 import { sanitizeForgeHook } from "./forge-hook-observation.js";
 import { createForgeSupervisor } from "./forge-supervisor.js";
+import { buildForgeReport } from "./forge-report.js";
 import { DomainValidationError, createWorkItem } from "../../../packages/domain/src/index.js";
 import { createWorkItemRepository } from "./work-item-store.js";
 import { CapabilityVerificationRepository } from "./capability-verification-store.js";
@@ -374,6 +375,17 @@ export async function createControlPlane() {
         if (req.method === "GET" && url.pathname === "/api/forge/plans") return json(res, 200, { plans: forgeSupervisor.list() });
         if (req.method === "POST" && url.pathname === "/api/forge/plans") {
           return json(res, 201, await forgeSupervisor.create(await readJson(req)));
+        }
+        const reportMatch = url.pathname.match(/^\/api\/forge\/plans\/([^/]+)\/report$/);
+        if (req.method === "GET" && reportMatch) {
+          const plan = store.getForgePlan(decodeURIComponent(reportMatch[1]));
+          if (!plan) return json(res, 404, { error: "forge_plan_not_found" });
+          const sessions = {};
+          for (const task of plan.tasks) if (task.sessionId) {
+            const session = await store.getSession(task.sessionId);
+            if (session) sessions[task.sessionId] = session;
+          }
+          return json(res, 200, buildForgeReport(plan, sessions));
         }
         const match = url.pathname.match(/^\/api\/forge\/plans\/([^/]+)$/);
         if (req.method === "GET" && match) {
