@@ -26,7 +26,7 @@ export function forgeDemoSpec({ mode, machineId, cwd }) {
     machineId, cwd, maxParallel: 1,
     tasks: [{
       id: "inspect", title: "Read-only architecture and risk inspection", agent: "codex",
-      dependsOn: [], expectChanges: false,
+      dependsOn: [], expectChanges: false, sandbox: "read-only",
       prompt: [
         "You are running a REAL REA Forge observability acceptance demo.",
         "Inspect this repository only; do not change files, install dependencies, fetch network resources, push, merge, deploy or access secrets.",
