@@ -147,3 +147,84 @@ test("dispatch failure enters blocker instead of secretly retrying commands", as
   await service.tick();
   assert.equal(calls, 1, "no automatic retries after uncertain dispatch");
 });
+
+
+test("Codex verification refuses arbitrary hashes, forged source receipts and untracked output", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "forge-diff-attestation-"));
+  const store = new JsonStore(path.join(root, "state.json")); await store.load();
+  const input = {
+    title: "Coding task", cwd: root, machineId: "mac-1", maxParallel: 1,
+    tasks: [{
+      id: "implement", title: "Implement", agent: "codex", prompt: "Make change",
+      dependsOn: [], expectChanges: true
+    }]
+  };
+  let plan = approveForgePlan(validateForgePlan(input));
+  plan = claimNextForgeTask(plan, { sessionId: "session-1", commandId: "cmd-1" }).plan;
+  plan = reconcileForgeTask(plan, "implement", { id: "session-1", status: "completed" });
+  await store.createForgePlan(plan);
+  const now = new Date().toISOString();
+  const digest = "sha256:" + "c".repeat(64);
+  const stage = {
+    schema: "rea-forge-worktree/v1", sessionId: "session-1",
+    planId: plan.id, taskId: "implement", sourceSha: "a".repeat(40)
+  };
+  const diff = {
+    schema: "rea-forge-diff/v1", sessionId: "session-1",
+    baseSha: stage.sourceSha, headSha: stage.sourceSha,
+    trackedDiffDigest: digest, changed: true, completeSnapshot: true,
+    untrackedPresent: false
+  };
+  await store.createSession({
+    id: "session-1", machineId: "mac-1", agent: "codex",
+    forgePlanId: plan.id, forgeTaskId: "implement", cwd: root,
+    status: "completed", createdAt: now, updatedAt: now,
+    events: [{ kind: "workspace", receipt: stage }, { kind: "workspace.diff", receipt: diff }],
+    messages: []
+  });
+  const service = createForgeSupervisor({
+    store, dispatch: async () => {}, broadcast: () => {}, allowedRoot: root
+  });
+  const evidence = { approved: true, reviewer: "Independent QA", digest };
+  await assert.rejects(service.verify(plan.id, "implement", {
+    ...evidence, digest: "sha256:" + "d".repeat(64)
+  }), /forge_diff_digest_mismatch/);
+  await store.addEvent("session-1", {
+    kind: "workspace.diff", receipt: { ...diff, untrackedPresent: true, completeSnapshot: false }
+  });
+  await assert.rejects(service.verify(plan.id, "implement", evidence), /forge_untracked_content_requires_review/);
+  await store.addEvent("session-1", { kind: "workspace.diff", receipt: diff });
+  const verified = await service.verify(plan.id, "implement", evidence);
+  assert.equal(verified.tasks[0].state, "verified");
+  assert.equal(verified.state, "awaiting_release");
+  assert.equal(verified.tasks[0].verification.method, "human-attestation");
+});
+
+test("Code implementation cannot be attested if no actual change was observed", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "forge-no-change-"));
+  const store = new JsonStore(path.join(root, "state.json")); await store.load();
+  let plan = approveForgePlan(validateForgePlan({
+    title: "No-op code", cwd: root, machineId: "mac", maxParallel: 1,
+    tasks: [{ id: "code", title: "Code", agent: "codex", prompt: "Change code",
+      dependsOn: [], expectChanges: true }]
+  }));
+  plan = claimNextForgeTask(plan, { sessionId: "sess", commandId: "cmd" }).plan;
+  plan = reconcileForgeTask(plan, "code", { id: "sess", status: "completed" });
+  await store.createForgePlan(plan);
+  await store.createSession({ id: "sess", machineId: "mac", agent: "codex",
+    status: "completed", messages: [], forgePlanId: plan.id, forgeTaskId: "code",
+    events: [{
+      kind: "workspace", receipt: { schema: "rea-forge-worktree/v1",
+        sessionId: "sess", sourceSha: "a".repeat(40) }
+    }, {
+      kind: "workspace.diff", receipt: { schema: "rea-forge-diff/v1",
+        sessionId: "sess", baseSha: "a".repeat(40),
+        trackedDiffDigest: "sha256:" + "b".repeat(64),
+        completeSnapshot: true, untrackedPresent: false, changed: false }
+    }] });
+  const svc = createForgeSupervisor({ store, dispatch: async () => {},
+    broadcast: () => {}, allowedRoot: root });
+  await assert.rejects(svc.verify(plan.id, "code", {
+    approved: true, reviewer: "Reviewer", digest: "sha256:" + "b".repeat(64)
+  }), /forge_expected_change_not_observed/);
+});
