@@ -214,11 +214,14 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         const failedSession = await failedSessionResponse.json();
         return result.rows[0]?.status === "failed" && failedSession.status === "failed";
       }, 2_000, "routed daemon rejection persists and fails the queued session");
-      const rejectedCommand = await databaseInspector.query(
-        "SELECT status, ack_error, ack_reconciliation_status FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]
-      );
-      assert.equal(rejectedCommand.rows[0]?.ack_error, "agent_unavailable");
-      assert.equal(rejectedCommand.rows[0]?.ack_reconciliation_status, "complete");
+      await waitFor(async () => {
+        const rejectedCommand = await databaseInspector.query(
+          "SELECT status, ack_error, ack_reconciliation_status FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]
+        );
+        return rejectedCommand.rows[0]?.status === "failed"
+          && rejectedCommand.rows[0]?.ack_error === "agent_unavailable"
+          && rejectedCommand.rows[0]?.ack_reconciliation_status === "complete";
+      }, 2_000, "ack reconciliation reaches complete after session failure");
       await databaseInspector.query(
         `UPDATE agent_work_os_sessions_v1
          SET status = 'queued', record = jsonb_set(record, '{status}', '"queued"'::jsonb)
