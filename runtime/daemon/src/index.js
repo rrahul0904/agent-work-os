@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import os from "node:os";
 import path from "node:path";
-import { stageForgeWorktree } from "./forge-worktrees.js";
+import { stageForgeWorktree, resumeForgeWorktree } from "./forge-worktrees.js";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
@@ -111,7 +111,22 @@ function connect() {
       }
       const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
       if (command.action === "session.message") {
-        ack(true); void adapter.run({ sessionId: command.sessionId, cwd: state.cwd, prompt: command.payload?.prompt, model: state.model, nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
+        if (state.forgePlanId && (state.agent !== "codex" ||
+            process.env.AGENT_WORK_OS_FORGE_ISOLATE_WORKTREES !== "true" ||
+            !process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT)) {
+          throw new Error("forge_resume_workspace_unavailable");
+        }
+        ack(true);
+        void (async () => {
+          const cwd = state.forgePlanId
+            ? await resumeForgeWorktree(state, process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT)
+            : state.cwd;
+          return adapter.run({ sessionId: command.sessionId, cwd,
+            prompt: command.payload?.prompt, model: state.model,
+            nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit);
+        })().then(result => result.nativeSessionId && nativeSessions.set(command.sessionId, result.nativeSessionId))
+          .catch(error => fail(emit, error));
+        return;
       }
       if (command.action === "session.interrupt") { await adapter.interrupt(command.sessionId); emit({ kind: "status", status: "interrupted", at: new Date().toISOString() }); ack(true); }
       else throw new Error(`Unsupported server command action ${command.action}`);
