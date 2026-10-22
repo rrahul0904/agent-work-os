@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { approveForgePlan, claimNextForgeTask, reconcileForgeTask, retryForgeTask, terminateForgePlan, validateForgePlan, verifyForgeTask } from "./forge-plan.js";
 
@@ -83,6 +84,10 @@ export function createForgeSupervisor({ store, dispatch, broadcast, allowedRoot 
           !/^sha256:[a-f0-9]{64}$/.test(review.reportDigest ?? "")) {
         conflict("forge_independent_static_review_required");
       }
+      const { reportDigest, ...reportBody } = review;
+      const reconstructed = "sha256:" + createHash("sha256")
+        .update(JSON.stringify(reportBody)).digest("hex");
+      if (reconstructed !== reportDigest) conflict("forge_review_receipt_digest_invalid");
     }
     const saved = await store.mutateForgePlan(id, current => {
       if (!current) conflict("forge_plan_not_found");
