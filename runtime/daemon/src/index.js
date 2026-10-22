@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import os from "node:os";
 import path from "node:path";
-import { stageForgeWorktree, resumeForgeWorktree } from "./forge-worktrees.js";
+import { stageForgeWorktree, resumeForgeWorktree, inspectForgeWorktree } from "./forge-worktrees.js";
 import { PROTOCOL_VERSION, decodeMessage, encodeMessage } from "../../../packages/protocol/src/index.js";
 import { createDefaultShippingSupervisor } from "../../../services/control-api/src/shipping-supervisor.js";
 import { ShippingStore } from "../../../services/control-api/src/shipping-store.js";
@@ -96,15 +96,28 @@ function connect() {
         ack(true);
         void (async () => {
           let cwd = p.cwd;
+          let workspaceReceipt = null;
           if (isForge && p.agent === "codex") {
             const receipt = await stageForgeWorktree({
               cwd: p.cwd, root: process.env.AGENT_WORK_OS_FORGE_WORKTREE_ROOT,
               planId: p.forgePlanId, taskId: p.forgeTaskId, sessionId: command.sessionId
             });
             cwd = receipt.path;
+            workspaceReceipt = receipt;
             emit({ kind: "workspace", receipt, at: new Date().toISOString() });
           }
-          return adapter.run({ sessionId: command.sessionId, cwd, prompt: p.prompt, model: p.model }, emit);
+          try {
+            return await adapter.run({ sessionId: command.sessionId, cwd, prompt: p.prompt, model: p.model }, emit);
+          } finally {
+            if (workspaceReceipt) {
+              try {
+                const diff = await inspectForgeWorktree(workspaceReceipt);
+                emit({ kind: "workspace.diff", receipt: diff, at: new Date().toISOString() });
+              } catch {
+                emit({ kind: "workspace.issue", code: "forge_diff_unavailable", at: new Date().toISOString() });
+              }
+            }
+          }
         })().then(result => result.nativeSessionId && nativeSessions.set(command.sessionId, result.nativeSessionId))
           .catch(error => fail(emit, error));
         return;
