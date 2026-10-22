@@ -43,6 +43,15 @@
         </div>
       </div>
     </section>
+    <section class="forge-operator" aria-label="REA Forge release readiness">
+      <div class="section-head">
+        <div><p class="eyebrow">RELEASE EVIDENCE / FEATURE COVERAGE</p><h2>Full feature coverage</h2></div>
+        <span id="forge-coverage-summary" class="connection warn">Checking feature coverage…</span>
+      </div>
+      <p class="graph-notice">Features listed below are implementation claims, not independent shipping proof. A passing CI check cannot replace live Codex UX, autonomous provider verification, release gates or deployment receipts.</p>
+      <div id="forge-coverage-detail" class="coverage-table" aria-live="polite"><p class="hint">Readiness inventory unavailable until the local supervisor is enabled.</p></div>
+      <p class="hint">Canonical release blockers: <a href="https://github.com/rrahul0904/agent-work-os/issues/359" target="_blank" rel="noopener noreferrer">Agent Work OS issue #359 ↗</a></p>
+    </section>
     <div class="workspace">
       <section class="graph-panel" aria-labelledby="graph-title">
         <div class="section-head"><div><p class="eyebrow">REAL EXECUTION EVENTS</p><h2 id="graph-title">Runtime relationship graph</h2></div><div class="graph-actions"><label for="filter">Show</label><select id="filter"><option value="all">Everything</option><option value="plan">Forge plans</option><option value="task">Forge tasks</option><option value="machine">Machines</option><option value="session">Sessions</option><option value="activity">Codex actions</option><option value="subagent">Codex subagents</option><option value="shipping">Shipping runs</option><option value="work">Work items</option></select></div></div>
