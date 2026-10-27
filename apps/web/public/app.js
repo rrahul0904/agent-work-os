@@ -169,7 +169,7 @@ function agentsHtml() {
 function machineCard(m){return `<article class="machine-card"><div><i class="${m.status==='online'?'online':'offline'}"></i><strong>${esc(m.name)}</strong></div><small>${esc(m.platform)}/${esc(m.arch)}</small><div class="chips">${(m.capabilities||[]).map(c=>`<span>${esc(c.name)}</span>`).join('')}${m.shipping?.enabled?'<span class="shipping-chip">shipping</span>':''}</div></article>`;}
 function sessionHtml(s){return `<div class="panel-head"><div><p class="eyebrow">${esc(s.agent)} SESSION</p><h2>${esc(s.cwd)}</h2></div><button class="danger compact" id="interrupt">Interrupt</button></div><div class="messages">${(s.messages||[]).map(m=>`<div class="msg ${m.role}"><small>${esc(m.role)}</small><pre>${esc(m.text)}</pre></div>`).join('')}</div><form id="follow" class="follow"><textarea name="text" placeholder="Send a follow-up…"></textarea><button class="primary">Send</button></form>`;}
 function agentWelcome(){return `<div class="empty big"><strong>Local execution, remote control.</strong><p>Connect the daemon on your workstation to run Codex without moving source or credentials into the control plane.</p></div>`;}
-function newSessionHtml(){const online=state.machines.filter(m=>m.status==='online');return `<form id="new-session" class="stack"><div class="panel-head"><div><p class="eyebrow">NEW AGENT SESSION</p><h2>Delegate work</h2></div></div><label>Machine<select name="machineId">${online.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label><label>Agent<select name="agent">${(online[0]?.capabilities||[]).map(c=>`<option>${esc(c.name)}</option>`).join('')}</select></label><label>Working directory<input name="cwd" placeholder="/path/to/repo"></label><label>Model<input name="model" placeholder="optional"></label><label>Prompt<textarea name="prompt" placeholder="Implement the next verified change…"></textarea></label><button class="primary" ${online.length?'':'disabled'}>Start local agent</button></form>`;}
+function newSessionHtml(){const online=state.machines.filter(m=>m.status==='online');return `<form id="new-session" class="stack"><div class="panel-head"><div><p class="eyebrow">NEW AGENT SESSION</p><h2>Delegate work</h2></div></div><label>Machine<select name="machineId">${online.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label><label>Agent<select name="agent">${(online[0]?.capabilities||[]).map(c=>`<option value="${esc(c.name)}">${esc(c.name)}${c.mode==='chat_only_no_tools'?' (chat only — no tools)':''}</option>`).join('')}</select></label><label>Working directory<input name="cwd" placeholder="/path/to/repo"></label><label>Model<input name="model" placeholder="optional"></label><label>Prompt<textarea name="prompt" placeholder="Implement the next verified change…"></textarea></label><p class="muted">Coding agents can modify your repository according to their local permissions. model-chat only sends text to an explicitly configured model API; it does not execute commands or tools.</p><button class="primary" ${online.length?'':'disabled'}>Start local agent</button></form>`;}
 
 function launchDrawer() {
   const shippingMachines=state.machines.filter(m=>m.status==='online'&&m.shipping?.enabled);
@@ -191,6 +191,20 @@ function wire() {
   document.querySelector('#validate-contract')?.addEventListener('click',async()=>{try{const contract=JSON.parse(new FormData(shippingForm).get('contract'));await api('/api/shipping/contracts/validate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contract})});setNotice('Shipping Contract is valid.','success');}catch(error){setNotice(error.message,'error');}});
   if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
   const newSession=document.querySelector('#new-session');
+  // Agent capabilities belong to the selected machine, not the first online machine.
+  if(newSession){
+    const machinePicker=newSession.querySelector('select[name="machineId"]');
+    const agentPicker=newSession.querySelector('select[name="agent"]');
+    machinePicker?.addEventListener('change',()=>{
+      const machine=state.machines.find(m=>m.id===machinePicker.value);
+      agentPicker.replaceChildren(...(machine?.capabilities||[]).map(c=>{
+        const option=document.createElement('option');
+        option.value=c.name;
+        option.textContent=c.name+(c.mode==='chat_only_no_tools'?' (chat only — no tools)':'');
+        return option;
+      }));
+    });
+  }
   if(newSession)newSession.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(newSession);const session=await api('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(f))});state.selectedSession=session.id;state.sessions=upsert(state.sessions,session,true);render();}catch(error){setNotice(error.message,'error');}};
   const follow=document.querySelector('#follow');
   const selected=state.sessions.find(s=>s.id===state.selectedSession)||state.sessions[0];
