@@ -90,8 +90,9 @@ try {
     headers: { ...headers, "content-type": "application/json" },
     body: JSON.stringify({ machineId: machine.id, cwd: root, agent: "model-chat", prompt: "text-only question" })
   });
-  assert.equal(create.status, 201, await create.text().catch(() => "no body"));
-  const session = await create.json();
+  const sessionBody = await create.text();
+  assert.equal(create.status, 201, sessionBody);
+  const session = JSON.parse(sessionBody);
   const first = await waitFor(async () => {
     const response = await fetch(base + "/api/sessions/" + session.id, { headers });
     if (!response.ok) return null;
