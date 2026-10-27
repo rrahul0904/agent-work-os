@@ -122,3 +122,50 @@ test("interrupt aborts the active HTTP request and no successful output is recor
   assert.equal(events.some((event) => event.status === "completed"), false);
   assert.equal(adapter.active.size, 0);
 });
+
+
+test("remote HTTPS requires separate explicit approval before any private prompt is sent", async () => {
+  let called = 0;
+  const env = localEnv({
+    AGENT_WORK_OS_COMPAT_CHAT_BASE_URL: "https://inference.example/v1",
+    AGENT_WORK_OS_COMPAT_CHAT_ALLOWED_ORIGINS: "https://inference.example"
+  });
+  const adapter = new OpenAICompatibleChatAdapter({ env, fetchImpl: async () => { called += 1; return completion("remote"); } });
+  await assert.rejects(adapter.run({ sessionId: "private", prompt: "private repository code" }, () => {}), /MODEL_CHAT_ROUTE_POLICY_DENIED/);
+  assert.equal(called, 0);
+  const authorized = new OpenAICompatibleChatAdapter({
+    env: { ...env, AGENT_WORK_OS_COMPAT_CHAT_ALLOW_PRIVATE_REMOTE: "true" },
+    fetchImpl: async () => { called += 1; return completion("operator approved"); }
+  });
+  await authorized.run({ sessionId: "operator-approved", prompt: "authorized operator test" }, () => {});
+  assert.equal(called, 1);
+});
+
+test("process-local admission enforces bounded request rate, never silently falls back", async () => {
+  let calls = 0;
+  const adapter = new OpenAICompatibleChatAdapter({
+    env: localEnv({ AGENT_WORK_OS_COMPAT_CHAT_REQUESTS_PER_MINUTE: "1" }),
+    fetchImpl: async () => { calls += 1; return completion("ok"); }
+  });
+  await adapter.run({ sessionId: "first", prompt: "first" }, () => {});
+  await assert.rejects(adapter.run({ sessionId: "second", prompt: "second" }, () => {}), /MODEL_CHAT_RATE_QUOTA_EXCEEDED/);
+  assert.equal(calls, 1);
+  assert.equal(adapter.gate.snapshot().active, 0);
+});
+
+test("concurrent requests are refused even when rate quota has spare capacity", async () => {
+  let abort = null;
+  const adapter = new OpenAICompatibleChatAdapter({
+    env: localEnv({ AGENT_WORK_OS_COMPAT_CHAT_MAX_CONCURRENT: "1", AGENT_WORK_OS_COMPAT_CHAT_REQUESTS_PER_MINUTE: "10" }),
+    fetchImpl: async (_url, options) => await new Promise((_resolve, reject) => {
+      abort = () => reject(new Error("stopped"));
+      options.signal.addEventListener("abort", abort, { once: true });
+    })
+  });
+  const first = adapter.run({ sessionId: "one", prompt: "first" }, () => {});
+  await assert.rejects(adapter.run({ sessionId: "two", prompt: "second" }, () => {}), /MODEL_CHAT_CONCURRENCY_QUOTA_EXCEEDED/);
+  assert.equal(adapter.gate.snapshot().active, 1);
+  await adapter.interrupt("one");
+  await assert.rejects(first, /MODEL_CHAT_INTERRUPTED_OR_TIMEOUT/);
+  assert.equal(adapter.gate.snapshot().active, 0);
+});
