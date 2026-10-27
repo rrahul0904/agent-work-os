@@ -57,6 +57,21 @@ AGENT_WORK_OS_CODEX_ARGS='["--ephemeral"]'
 
 Use CLI permission/sandbox settings appropriate for your environment. The control plane never receives your Codex credentials.
 
+## Unified Agent Workspace — OpenAI-compatible model chat
+
+The existing browser workspace and local daemon support Codex, Claude Code, OpenCode and Cursor. An additional **opt-in `model-chat`** lane can send text requests to a user-configured, OpenAI-compatible local or approved HTTPS inference API. Unlike the coding agents, this chat-only lane cannot run tools or edit files.
+
+```sh
+AGENT_WORK_OS_COMPAT_CHAT_ENABLED=true \
+AGENT_WORK_OS_COMPAT_CHAT_BASE_URL=http://127.0.0.1:8000/v1 \
+AGENT_WORK_OS_COMPAT_CHAT_MODEL=your-approved-model-id \
+npm run start:daemon
+```
+
+For an approved remote HTTPS provider only, set `AGENT_WORK_OS_COMPAT_CHAT_ALLOWED_ORIGINS` to its exact origin; optional `AGENT_WORK_OS_COMPAT_CHAT_API_KEY` stays in the daemon environment. No remote endpoint is permitted by default. The model cannot be changed by an untrusted browser request, HTTP redirects are forbidden, and session continuity fails closed if the daemon loses in-memory history. Operator UAT must validate data residency, provider retention and network egress separately.
+
+See [Unified Agent Workspace REA/implementation contract](./docs/UNIFIED_AGENT_WORKSPACE_2026-10-27.md). The canonical model economics/usage gateway remains Token Intelligence; its simulation is not a real hosted model.
+
 ## Identity and organizations (initial production-hardening slice)
 
 When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles and issue revocable, machine-bound daemon credentials. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production requires PostgreSQL; machine credentials authenticate daemons and the shared bearer credential is rejected for production daemon and customer REST access.
