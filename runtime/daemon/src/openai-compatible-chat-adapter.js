@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createLocalRequestGate, planInference } from "../../../packages/inference-policy/src/index.js";
 
 const MAX_PROMPT_CHARS = 16_000;
 const MAX_HISTORY_CHARS = 80_000;
@@ -93,6 +94,12 @@ export class OpenAICompatibleChatAdapter {
         env.AGENT_WORK_OS_COMPAT_CHAT_BASE_URL,
         env.AGENT_WORK_OS_COMPAT_CHAT_ALLOWED_ORIGINS
       );
+      this.gate = createLocalRequestGate({
+        requestsPerMinute: Number(env.AGENT_WORK_OS_COMPAT_CHAT_REQUESTS_PER_MINUTE || 30),
+        maxConcurrent: Number(env.AGENT_WORK_OS_COMPAT_CHAT_MAX_CONCURRENT || 1)
+      });
+      this.privateRemoteApproved = env.AGENT_WORK_OS_COMPAT_CHAT_ALLOW_PRIVATE_REMOTE === "true";
+      this.laneVerifiedAtMs = Date.now();
       this.enabled = true;
     } catch (error) {
       this.configError = error.message;
@@ -123,9 +130,34 @@ export class OpenAICompatibleChatAdapter {
     const messages = [...(previous || []), { role: "user", content: request.prompt }];
     const size = messages.reduce((n, message) => n + message.content.length, 0);
     if (size > MAX_HISTORY_CHARS) throw new Error("MODEL_CHAT_CONTEXT_LIMIT");
+    const lane = {
+      id: "configured-model-chat",
+      type: this.endpoint.kind,
+      model: this.model,
+      protocol: "chat_completions",
+      health: "ready", // Config acceptance only, not a verified model-health probe.
+      verifiedAtMs: this.laneVerifiedAtMs,
+      maxContextTokens: 1_000_000, // Local admission bound below; NOT a model capacity claim.
+      tools: false,
+      permitsPrivate: this.endpoint.kind === "local_machine" || this.privateRemoteApproved,
+      region: this.endpoint.kind === "local_machine" ? "local" : this.endpoint.origin,
+      runtimeRevision: "operator_configured_unverified",
+      priority: 0
+    };
+    const route = planInference({
+      request: { protocol: "chat_completions", privacy: "private", tools: false, contextTokens: Math.ceil(size / 4) },
+      lanes: [lane],
+      policy: {
+        allowedLaneTypes: ["local_machine", "approved_remote"],
+        allowedModels: [this.model], allowedRegions: [lane.region], maxHealthAgeMs: 24 * 60 * 60 * 1000
+      }
+    });
+    if (route.status !== "eligible") throw new Error("MODEL_CHAT_ROUTE_POLICY_DENIED");
+    // Process-local safety bounds. Tenant-wide atomic quotas remain owned by Token Intelligence.
+    const releaseAdmission = this.gate.admit();
     const controller = new AbortController();
     this.active.set(request.sessionId, controller);
-    emit({ kind: "status", status: "running", message: "Open-model chat started (tools disabled)", at: new Date().toISOString() });
+    emit({ kind: "status", status: "running", message: "Open-model chat admitted (tools disabled; policy " + route.digest.slice(0, 12) + ")", at: new Date().toISOString() });
     if (!request.nativeSessionId) emit({ kind: "thread", nativeSessionId, at: new Date().toISOString() });
 
     const timer = setTimeout(() => controller.abort("timeout"), this.timeoutMs);
@@ -167,6 +199,7 @@ export class OpenAICompatibleChatAdapter {
     } finally {
       clearTimeout(timer);
       this.active.delete(request.sessionId);
+      releaseAdmission();
     }
   }
 
