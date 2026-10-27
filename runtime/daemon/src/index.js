@@ -7,6 +7,7 @@ import { ShippingStore } from "../../../services/control-api/src/shipping-store.
 import { ClaudeCodeAdapter, CodexAdapter, EchoAdapter } from "./adapters.js";
 import { OpenCodeAdapter } from "./opencode-adapter.js";
 import { CursorAdapter } from "./cursor-adapter.js";
+import { OpenAICompatibleChatAdapter } from "./openai-compatible-chat-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
@@ -31,6 +32,8 @@ const openCode = new OpenCodeAdapter();
 if (openCode.capability()) adapters.set("opencode", openCode);
 const cursor = new CursorAdapter();
 if (cursor.capability()) adapters.set("cursor", cursor);
+const modelChat = new OpenAICompatibleChatAdapter();
+if (modelChat.capability()) adapters.set("model-chat", modelChat);
 const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode, openCode, cursor);
 if (capabilityVerification.capability()) adapters.set("capability-verify", capabilityVerification);
 

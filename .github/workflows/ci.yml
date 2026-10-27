@@ -27,5 +27,7 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
+      - name: Check browser workspace JavaScript syntax
+        run: node --check apps/web/public/app.js
       - run: npm test
       - run: npm run acceptance
