@@ -72,6 +72,32 @@ For an approved remote HTTPS provider only, set `AGENT_WORK_OS_COMPAT_CHAT_ALLOW
 
 See [Unified Agent Workspace REA/implementation contract](./docs/UNIFIED_AGENT_WORKSPACE_2026-10-27.md). The canonical model economics/usage gateway remains Token Intelligence; its simulation is not a real hosted model.
 
+## Wave 3: AgentDock and CodeAtlas read-only integrations
+
+Both integrations run only on the **local workstation daemon**, are **off by default**, and surface independently in the existing browser's machine capability list. Neither performs project edits.
+
+**AgentDock** — start your own `agentdockd` on loopback and opt in:
+
+```bash
+AGENT_WORK_OS_AGENTDOCK_READONLY_ENABLED=true npm run start:daemon
+```
+
+Choose agent `agentdock`; ask `status` or `projects` only. These map to AgentDock's actual `GET /v1/status` and `GET /v1/projects`; chat receives a sanitized daemon summary or project count, **never** local paths, command lines, port-management mutations, process metadata, or credentials. `AGENT_WORK_OS_AGENTDOCK_PORT` may override the default loopback port 7317.
+
+**CodeAtlas** — install the separately owned `codeatlas` CLI and explicitly index your working tree first. The index must be sealed to its Git revision and bytes:
+
+```bash
+codeatlas index /absolute/project/root
+node scripts/seal-codeatlas-index.mjs /absolute/project/root
+AGENT_WORK_OS_CODEATLAS_READONLY_ENABLED=true \
+AGENT_WORK_OS_CODEATLAS_ROOT=/absolute/project/root \
+npm run start:daemon
+```
+
+Choose agent `codeatlas-search`, enter `search process_order`, and use the exact same project root as the session working directory. The integration refuses dirty tracked worktrees, missing/stale index digests, symlinked index directories and any command other than symbol search. Search invokes `codeatlas search <symbol> --db <verified-index>` **without a shell**. Output strips docstrings, absolute foreign paths and metadata. The index seal is an **operator assertion**, not a cryptographic proof that the compiler indexed every file. No background indexing, uploading or code edits occur.
+
+These are functional **local read-only integrations**, not an AgentDock desktop release or a CodeAtlas hosted service. Complete cross-machine UAT and independent security/release checks are still required.
+
 ## Identity and organizations (initial production-hardening slice)
 
 When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles and issue revocable, machine-bound daemon credentials. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production requires PostgreSQL; machine credentials authenticate daemons and the shared bearer credential is rejected for production daemon and customer REST access.
