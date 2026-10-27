@@ -9,6 +9,7 @@ import { OpenCodeAdapter } from "./opencode-adapter.js";
 import { CursorAdapter } from "./cursor-adapter.js";
 import { OpenAICompatibleChatAdapter } from "./openai-compatible-chat-adapter.js";
 import { AgentDockReadOnlyAdapter } from "./agentdock-readonly-adapter.js";
+import { CodeAtlasSearchAdapter } from "./codeatlas-search-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
@@ -37,6 +38,8 @@ const modelChat = new OpenAICompatibleChatAdapter();
 if (modelChat.capability()) adapters.set("model-chat", modelChat);
 const agentDock = new AgentDockReadOnlyAdapter();
 if (agentDock.capability()) adapters.set("agentdock", agentDock);
+const codeAtlas = new CodeAtlasSearchAdapter();
+if (codeAtlas.capability()) adapters.set("codeatlas-search", codeAtlas);
 const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode, openCode, cursor);
 if (capabilityVerification.capability()) adapters.set("capability-verify", capabilityVerification);
 
