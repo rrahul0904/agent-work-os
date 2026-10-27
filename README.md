@@ -118,6 +118,29 @@ No API keys or customer data are echoed in the verdict. **Even a fully populated
 
 The Wave 1–4 PR stack may be merged only after ordered base-branch reconciliation and exact-head retesting; draft branches are not production grants.
 
+## Wave 6 — governed Token Intelligence provider lane
+
+The local daemon can now use the **existing Token Intelligence model gateway**, with its PostgreSQL-backed per-key request admission and monthly token reservations, as an independent `token-intelligence` chat agent in the current browser workspace. This replaces neither the existing coding-agent CLIs nor the more direct `model-chat` option.
+
+1. Run the Token Intelligence gateway in a *trusted local environment*, with its own PostgreSQL migrations, an Enterprise organization, a scoped `gateway:invoke` API key, active request/monthly token quotas, and `TI_INFERENCE_LIVE_ENABLED=1` with an approved local model server. **Do not use production until its security NO-GO is cleared.**
+2. Run Agent Work OS local daemon with the following opt-in settings:
+
+```sh
+AGENT_WORK_OS_TI_ENABLED=true \
+AGENT_WORK_OS_TI_ENDPOINT=http://127.0.0.1:3000/api/v1/inference/chat-completions \
+AGENT_WORK_OS_TI_MODEL=exact-model-approved-in-token-intelligence \
+AGENT_WORK_OS_TI_API_KEY=daemon-held-enterprise-gateway-key \
+npm run start:daemon
+```
+
+3. Open the existing Agent Work OS browser and choose `token-intelligence` on the local machine. Send messages normally. The adapter sends JSON Chat Completions requests with an independent UUID idempotency key per turn, `store:false`, `stream:false`, and bounded `max_tokens`, then records the response in the existing session. Only the daemon sends the gateway API key; it is never placed in a browser capability or session event.
+
+Remote gateway deployment requires **all** of: HTTPS, exact `AGENT_WORK_OS_TI_ALLOWED_ORIGIN` and `AGENT_WORK_OS_TI_PRIVATE_REMOTE_APPROVED=true`. Do not enable those settings for private code without a signed data-handling agreement and egress/retention review. All redirects and caller-selected endpoints/models are denied. The gateway backend is the quota authority; the daemon's limits are only additional local safety caps.
+
+This adapter is **text-only**: no tool execution, no automatic fallback, no retry of possibly accepted provider calls, no durable conversation reconstruction after a daemon restart. User prompts and assistant responses exist in the Agent Work OS session store, so this is **not** a no-content-retention product, even though the Token Intelligence event ledger stores only hashes/usage metadata.
+
+CI tests use a disposable local HTTP gateway fixture, not a real Qwen/DeepSeek deployment. True cross-repo UAT against a migrated Token Intelligence server is still required before release.
+
 ## Identity and organizations (initial production-hardening slice)
 
 When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles and issue revocable, machine-bound daemon credentials. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production requires PostgreSQL; machine credentials authenticate daemons and the shared bearer credential is rejected for production daemon and customer REST access.
