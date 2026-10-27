@@ -12,6 +12,8 @@ function snapshotRoot(root) {
   if (typeof root !== "string" || !path.isAbsolute(root)) throw new Error("CODEATLAS_ABSOLUTE_ROOT_REQUIRED");
   const actual = realpathSync(root);
   const folder = path.join(actual, ".codeatlas");
+  const directory = lstatSync(folder);
+  if (!directory.isDirectory() || directory.isSymbolicLink()) throw new Error("CODEATLAS_INDEX_DIR_NOT_SAFE");
   const dbPath = path.join(folder, "index.sqlite3");
   const metadata = lstatSync(dbPath);
   if (!metadata.isFile() || metadata.isSymbolicLink() || metadata.size > MAX_INDEX_BYTES) {
@@ -73,7 +75,7 @@ export class CodeAtlasSearchAdapter {
     this.enabled = env.AGENT_WORK_OS_CODEATLAS_READONLY_ENABLED === "true";
     this.root = env.AGENT_WORK_OS_CODEATLAS_ROOT || "";
     this.execFileImpl = execFileImpl;
-    this.active = new Set();
+    this.active = new Map();
   }
 
   capability() {
@@ -91,12 +93,13 @@ export class CodeAtlasSearchAdapter {
     if (realpathSync(request.cwd) !== snapshot.actual) throw new Error("CODEATLAS_WORKSPACE_MISMATCH");
     const nativeSessionId = "codeatlas-" + request.sessionId;
     if (request.nativeSessionId && request.nativeSessionId !== nativeSessionId) throw new Error("CODEATLAS_SESSION_MISMATCH");
-    this.active.add(request.sessionId);
+    const controller = new AbortController();
+    this.active.set(request.sessionId, controller);
     try {
       emit({ kind: "status", status: "running", message: "CodeAtlas read-only symbol search", at: new Date().toISOString() });
       if (!request.nativeSessionId) emit({ kind: "thread", nativeSessionId, at: new Date().toISOString() });
       const { stdout } = await this.execFileImpl("codeatlas", ["search", match[1], "--db", snapshot.dbPath], {
-        cwd: snapshot.actual, timeout: 5000, maxBuffer: MAX_SEARCH_OUTPUT_BYTES, windowsHide: true,
+        cwd: snapshot.actual, timeout: 5000, signal: controller.signal, maxBuffer: MAX_SEARCH_OUTPUT_BYTES, windowsHide: true,
         env: { PATH: process.env.PATH, HOME: process.env.HOME, VIRTUAL_ENV: process.env.VIRTUAL_ENV, LANG: "C.UTF-8" }
       });
       // Refuse if source changed while the search was executing.
@@ -112,14 +115,11 @@ export class CodeAtlasSearchAdapter {
       emit({ kind: "status", status: "completed", at: new Date().toISOString() });
       return { nativeSessionId };
     } catch (error) {
+      if (controller.signal.aborted) throw new Error("CODEATLAS_INTERRUPTED");
       if (error.message?.startsWith("CODEATLAS_")) throw error;
       throw new Error("CODEATLAS_SEARCH_FAILED");
     } finally { this.active.delete(request.sessionId); }
   }
 
-  async interrupt() {
-    // Each bounded read-only query has a hard 5s subprocess timeout.
-    // Interrupt of a running query is not implemented; report that accurately.
-    throw new Error("CODEATLAS_INTERRUPT_NOT_SUPPORTED");
-  }
+  async interrupt(sessionId) { this.active.get(sessionId)?.abort("user_interrupt"); }
 }
