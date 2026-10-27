@@ -110,6 +110,14 @@ npm run start:daemon
 
 Choose `cowork-files` in the existing Agent Work OS browser and use the same directory as the approved machine-local root. Reads are limited to `.md`, `.txt`, `.json` and `.csv`, at most 32 KiB per file and 8,000 displayed characters. Hidden files, symlinks, traversal, binary data, oversized files, writes and shell operations are rejected. This is operator-root opt-in, **not** independent per-file approval. Do not configure untrusted shared roots; a separate human action-grant system is required before releasing general Cowork file workflows.
 
+## Wave 5: independent-evidence release preflight — never deploys
+
+Run `npm run release:preflight -- /path/to/evidence-manifest.json` to evaluate a production *candidate*. A hard, deterministic NO-GO is returned if any required check is missing: approved AWS/OCI/on-prem hosting; exact source/tested/deployed 40-character Git SHA; unit/integration/browser/security/dependency and live-model evidence; durable tenant quotas; tenant isolation; auth/RBAC and credentials; rights; backup/rollback; operator UAT; independent review; explicit owner approval; HTTPS production URL and live verification.
+
+No API keys or customer data are echoed in the verdict. **Even a fully populated manifest only returns `REQUIRES_FINAL_EXTERNAL_AUTHORIZATION`: it never merges, bills, deploys, certifies source evidence or declares SHIPPED.** Actual independent QA must inspect real receipts, runtime and source SHA.
+
+The Wave 1–4 PR stack may be merged only after ordered base-branch reconciliation and exact-head retesting; draft branches are not production grants.
+
 ## Identity and organizations (initial production-hardening slice)
 
 When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles and issue revocable, machine-bound daemon credentials. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production requires PostgreSQL; machine credentials authenticate daemons and the shared bearer credential is rejected for production daemon and customer REST access.
