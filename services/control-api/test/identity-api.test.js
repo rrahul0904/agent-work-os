@@ -208,11 +208,11 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       machineSocket.sendMessage({ type: "daemon.command.ack", machineId, commandId: routedCommand.commandId, ok: false, error: "agent_unavailable" });
       await waitFor(async () => {
         const [result, failedSessionResponse] = await Promise.all([
-          databaseInspector.query("SELECT status, ack_error FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]),
+          databaseInspector.query("SELECT status, ack_error, ack_reconciliation_status FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]),
           api(owner.cookies, null, `/api/sessions/${encodeURIComponent(replicaSession.id)}?organizationId=${encodeURIComponent(alphaId)}`)
         ]);
         const failedSession = await failedSessionResponse.json();
-        return result.rows[0]?.status === "failed" && failedSession.status === "failed";
+        return result.rows[0]?.status === "failed" && failedSession.status === "failed" && result.rows[0]?.ack_reconciliation_status === "complete";
       }, 2_000, "routed daemon rejection persists and fails the queued session");
       const rejectedCommand = await databaseInspector.query(
         "SELECT status, ack_error, ack_reconciliation_status FROM agent_work_os_daemon_commands_v1 WHERE command_id = $1", [routedCommand.commandId]

@@ -98,6 +98,18 @@ Choose agent `codeatlas-search`, enter `search process_order`, and use the exact
 
 These are functional **local read-only integrations**, not an AgentDock desktop release or a CodeAtlas hosted service. Complete cross-machine UAT and independent security/release checks are still required.
 
+## Wave 4: bounded Cowork file inspection
+
+The opt-in `cowork-files` local adapter is the initial **read-only** Cowork capability. It does not replace a document editor, browser automation provider or per-action approval system. The only allowed commands are `list` and `read relative/path.md`.
+
+```bash
+AGENT_WORK_OS_COWORK_FILES_READONLY_ENABLED=true \
+AGENT_WORK_OS_COWORK_FILES_ROOT=/absolute/approved/workspace \
+npm run start:daemon
+```
+
+Choose `cowork-files` in the existing Agent Work OS browser and use the same directory as the approved machine-local root. Reads are limited to `.md`, `.txt`, `.json` and `.csv`, at most 32 KiB per file and 8,000 displayed characters. Hidden files, symlinks, traversal, binary data, oversized files, writes and shell operations are rejected. This is operator-root opt-in, **not** independent per-file approval. Do not configure untrusted shared roots; a separate human action-grant system is required before releasing general Cowork file workflows.
+
 ## Identity and organizations (initial production-hardening slice)
 
 When `DATABASE_URL` is configured, the API supports first-party account registration and login. Registration creates an organization with an Owner membership. Owner/Admin members can issue email-bound, expiring invitations for Admin/Member/Viewer roles and issue revocable, machine-bound daemon credentials. The session token is stored as a hash in PostgreSQL and sent in an `HttpOnly`, `SameSite=Strict` cookie by default. PostgreSQL-backed registration and login limits apply across API instances. Mutating cookie-authenticated requests require the matching `X-CSRF-Token` header. Production requires PostgreSQL; machine credentials authenticate daemons and the shared bearer credential is rejected for production daemon and customer REST access.
