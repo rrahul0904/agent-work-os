@@ -31,7 +31,7 @@ export class IdentityRepository {
     await this.pool.query(await readFile(MACHINE_MIGRATION_URL, "utf8"));
   }
 
-  async register({ email, password, organizationName }) {
+  async register({ email, password, organizationName }, transactionClient = null) {
     const normalizedEmail = normalizeEmail(email);
     validatePassword(password);
     const name = validateOrganizationName(organizationName);
@@ -45,7 +45,7 @@ export class IdentityRepository {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
 
     try {
-      await this.#transaction(async (client) => {
+      const persist = async (client) => {
         await client.query(
           `INSERT INTO agent_work_os_users_v1 (id, email, password_salt, password_hash)
            VALUES ($1, $2, $3, $4)`,
@@ -60,7 +60,12 @@ export class IdentityRepository {
           [organizationId, userId]
         );
         await insertSession(client, { sessionId, userId, rawSessionToken, expiresAt });
-      });
+      };
+      // The first-owner CLI already holds a PostgreSQL advisory lock and an
+      // open transaction. Persist on THAT same connection so rollback undoes
+      // everything; a separate pool connection would commit prematurely.
+      if (transactionClient) await persist(transactionClient);
+      else await this.#transaction(persist);
     } catch (error) {
       if (error.code === "23505") throw new IdentityError("identity_email_in_use", 409);
       throw error;
