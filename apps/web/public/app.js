@@ -429,7 +429,7 @@ function wire() {
           approvedOrigin:destination==='approved_remote'?form.get('approvedOrigin'):null,
           allowPrivate:form.get('reviewed')==='on'})
       });
-      state.modelPolicies=upsert(state.modelPolicies.filter(x=>!(x.agent===response.policy.agent&&x.model===response.policy.model)),response.policy,true);
+      state.modelPolicies=[response.policy,...state.modelPolicies.filter(x=>!(x.agent===response.policy.agent&&x.model===response.policy.model))];
       setNotice('Model grant recorded. Provider verification remains a separate release gate.','success');
     }catch(error){setNotice(error.message,'error');}
   };
