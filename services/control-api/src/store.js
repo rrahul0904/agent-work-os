@@ -546,10 +546,10 @@ export class JsonStore {
       if (!current || current.organizationId !== run.organizationId || current.machineId !== run.machineId) return null;
       return this.upsertShippingRun(run);
     }
-    return this.#upsertTenantShippingRun(run, { allowInsert: false });
+    return this.#upsertTenantShippingRun(run, { allowInsert: false, machineReported: true });
   }
 
-  async #upsertTenantShippingRun(run, { allowInsert = true, command = null } = {}) {
+  async #upsertTenantShippingRun(run, { allowInsert = true, command = null, machineReported = false } = {}) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -564,6 +564,12 @@ export class JsonStore {
         throw Object.assign(new Error("shipping_run_machine_mismatch"), { code: "shipping_run_machine_mismatch", statusCode: 409 });
       }
       if (!selected.rows[0] && !allowInsert) {
+        await client.query("COMMIT");
+        return null;
+      }
+      // A connected machine must never be able to preempt or counterfeit a
+      // human production approval by submitting a fabricated run event.
+      if (machineReported && selected.rows[0]?.record?.state === "AWAITING_APPROVAL") {
         await client.query("COMMIT");
         return null;
       }
