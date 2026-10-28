@@ -99,6 +99,12 @@ export class OpenAICompatibleChatAdapter {
         maxConcurrent: Number(env.AGENT_WORK_OS_COMPAT_CHAT_MAX_CONCURRENT || 1)
       });
       this.privateRemoteApproved = env.AGENT_WORK_OS_COMPAT_CHAT_ALLOW_PRIVATE_REMOTE === "true";
+      this.upstreamRegion = env.AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_REGION || "";
+      this.upstreamRetention = env.AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_RETENTION || "";
+      if (!/^[A-Za-z0-9._:/-]{2,120}$/.test(this.upstreamRegion) ||
+          !["zero","bounded"].includes(this.upstreamRetention)) {
+        throw new Error("MODEL_CHAT_UPSTREAM_PRIVACY_ATTESTATION_REQUIRED");
+      }
       this.laneVerifiedAtMs = Date.now();
       this.enabled = true;
     } catch (error) {
@@ -109,7 +115,9 @@ export class OpenAICompatibleChatAdapter {
 
   capability() {
     if (!this.enabled || this.configError) return null;
-    return { name: this.name, version: "model-chat/v1", model: this.model, lane: this.endpoint.kind, mode: "chat_only_no_tools" };
+    return { name: this.name, version: "model-chat/v1", model: this.model, lane: this.endpoint.kind, mode: "chat_only_no_tools",
+      upstreamRegion:this.upstreamRegion, upstreamRetention:this.upstreamRetention,
+      upstreamTrust:"operator_declared_not_independently_verified" };
   }
 
   async run(request, emit) {
@@ -140,7 +148,7 @@ export class OpenAICompatibleChatAdapter {
       maxContextTokens: 1_000_000, // Local admission bound below; NOT a model capacity claim.
       tools: false,
       permitsPrivate: this.endpoint.kind === "local_machine" || this.privateRemoteApproved,
-      region: this.endpoint.kind === "local_machine" ? "local" : this.endpoint.origin,
+      region: this.upstreamRegion,
       runtimeRevision: "operator_configured_unverified",
       priority: 0
     };

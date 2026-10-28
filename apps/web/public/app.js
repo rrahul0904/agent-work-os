@@ -1,5 +1,5 @@
 const state = {
-  page: 'overview', product: null, projects: [], machines: [], sessions: [], shippingRuns: [],
+  page: 'overview', product: null, projects: [], modelPolicies: [], machines: [], sessions: [], shippingRuns: [],
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
   connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
   authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
@@ -92,6 +92,7 @@ async function bootstrap() {
     state.shippingRuns=tenantEntries(snapshot.shippingRuns);
     state.product=product;
     state.projects=state.authMode==='account'?(await api('/api/projects'+tenantQuery())).projects:[];
+    state.modelPolicies=state.authMode==='account'?(await api('/api/model-policies'+tenantQuery())).policies:[];
     state.contractText=JSON.stringify(example,null,2);
     connect();
   }catch(error){state.authError=error.message;}
@@ -211,7 +212,7 @@ async function logout(renderNow=true){
   const oldSocket=state.socket;state.socket=null;oldSocket?.close();
   token='';localStorage.removeItem('agentWorkOsToken');
   state.csrfToken=null;state.accountEmail=null;state.accountUserId=null;state.organizations=[];state.organizationId=null;
-  state.machines=[];state.sessions=[];state.shippingRuns=[];state.projects=[];state.product=null;
+  state.machines=[];state.sessions=[];state.shippingRuns=[];state.projects=[];state.modelPolicies=[];state.product=null;
   state.connected=false;state.lastCursor=null;state.seenEventTags.clear();
   if(renderNow)renderLogin();
 }
@@ -224,7 +225,7 @@ function render() {
   app.innerHTML = `<div class="product-shell">
     <aside class="sidebar">
       <div class="brand"><div class="mark">SO</div><div><strong>Shipping OS</strong><small>Agent Work OS</small></div></div>
-      <nav>${navButton('overview','Overview','⌂')}${state.authMode==='account'?navButton('projects','Projects','◆'):navButton('portfolio','Portfolio','◆')}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
+      <nav>${navButton('overview','Overview','⌂')}${state.authMode==='account'?navButton('projects','Projects','◆'):navButton('portfolio','Portfolio','◆')}${state.authMode==='account'?navButton('models','Model policies','◎'):''}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
       <div class="sidebar-foot"><div class="connection"><i class="${state.connected?'online':'offline'}"></i>${state.connected?'Realtime connected':'Reconnecting'}</div><button class="ghost small" id="logout">Lock console</button></div>
     </aside>
     <div class="workspace">
@@ -237,10 +238,11 @@ function render() {
   wire();
 }
 function navButton(page,label,icon) { return `<button data-page="${page}" class="nav-item ${state.page===page?'active':''}"><span>${icon}</span>${label}</button>`; }
-function pageTitle() { return ({overview:'Factory overview',portfolio:'Portfolio queue',projects:'Team projects',runs:'Shipping runs',receipts:'Release evidence',agents:'Local agent control'})[state.page]; }
+function pageTitle() { return ({overview:'Factory overview',portfolio:'Portfolio queue',projects:'Team projects',models:'Model permissions',runs:'Shipping runs',receipts:'Release evidence',agents:'Local agent control'})[state.page]; }
 function pageHtml() {
   if (state.page === 'portfolio') return portfolioHtml();
   if (state.page === 'projects') return projectsHtml();
+  if (state.page === 'models') return modelPoliciesHtml();
   if (state.page === 'runs') return runsHtml();
   if (state.page === 'receipts') return receiptsHtml();
   if (state.page === 'agents') return agentsHtml();
@@ -298,6 +300,30 @@ function projectsHtml() {
          <button class="danger compact" data-project-id="${esc(project.id)}" data-project-action="archived">Archive</button>
        </div>`:''}
        </div></article>`).join(''):'<article class="panel" style="padding:20px">No projects yet. Create one to start an evidence-backed task.</article>'}</section>`;
+}
+function modelPoliciesHtml(){
+  const role=state.organizations.find(x=>x.organizationId===state.organizationId)?.role||'viewer';
+  const manager=['owner','admin'].includes(role);
+  const caps=state.machines.flatMap(machine=>(machine.capabilities||[])
+    .filter(cap=>['model-chat','token-intelligence'].includes(cap.name)&&cap.model)
+    .map(cap=>({machine:machine.name||machine.id,...cap})));
+  return `<section class="section-head"><div><p class="eyebrow">EXPLICIT PRIVATE DATA PERMISSIONS</p>
+      <h2>Model policies</h2><p class="muted">An approved policy is an operator declaration, not proof that a hosted provider meets its terms. Unknown upstreams remain denied.</p></div></section>
+    ${manager?`<form class="panel" id="grant-model" style="padding:20px;display:grid;gap:12px">
+       <strong>Authorize one configured model</strong>
+       <label>Model capability<select name="candidate" required>
+         ${caps.map((cap,i)=>`<option value="${i}">${esc(cap.machine)} · ${esc(cap.name)} / ${esc(cap.model)} · ${esc(cap.upstreamRegion||'region unknown')}</option>`).join('')}
+       </select></label>
+       <label>Approved HTTPS origin (only when upstream is remote)<input name="approvedOrigin" placeholder="https://approved-provider.example"></label>
+       <label><input type="checkbox" name="reviewed" required> I have reviewed the model's upstream destination, retention terms, rights and region.</label>
+       <button class="primary" type="submit" ${caps.length?'':'disabled'}>Authorize model</button>
+     </form>`:''}
+    <section class="portfolio-list">${state.modelPolicies.length?state.modelPolicies.map(p=>`<article class="project-card"><div class="project-main">
+      <div class="project-title"><h3>${esc(p.agent)} · ${esc(p.model)}</h3>${statusBadge(p.status)}</div>
+      <p>${esc(p.destination)} · ${esc(p.region)} · ${esc(p.retention)} retention</p>
+      <small>Private data explicitly approved: ${p.allowPrivate===true?'Yes':'No'} · Reviewed by ${esc(p.approvedBy||'unknown')}</small>
+      ${manager&&p.status==='approved'?`<div class="drawer-actions"><button class="danger compact" data-model-revoke="${esc(p.agent)}|${esc(p.model)}">Revoke grant</button></div>`:''}
+    </div></article>`).join(''):'<article class="panel" style="padding:20px">No approved models. Tenant chat is denied until an Owner/Admin grants one.</article>'}</section>`;
 }
 function runsHtml() {
   const runs = state.shippingRuns || [];
@@ -383,6 +409,39 @@ function wire() {
   document.querySelector('#launch')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#launch-inline')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#refresh')?.addEventListener('click',()=>refreshProduct());
+  const grantModel=document.querySelector('#grant-model');
+  if(grantModel)grantModel.onsubmit=async event=>{
+    event.preventDefault();
+    const caps=state.machines.flatMap(machine=>(machine.capabilities||[])
+      .filter(cap=>['model-chat','token-intelligence'].includes(cap.name)&&cap.model)
+      .map(cap=>({machine:machine.name||machine.id,...cap})));
+    const form=new FormData(grantModel),cap=caps[Number(form.get('candidate'))];
+    if(!cap||!['zero','bounded'].includes(cap.upstreamRetention)||!cap.upstreamRegion)
+      return setNotice('Unknown upstream residency/retention. Configure and review this model first.','error');
+    const destination=cap.name==='token-intelligence'?cap.upstreamDestination:cap.lane;
+    if(!['local_machine','approved_remote'].includes(destination))
+      return setNotice('Upstream location was not declared.','error');
+    try{
+      const response=await api('/api/model-policies',{method:'POST',
+        headers:{'content-type':'application/json'},
+        body:JSON.stringify({organizationId:state.organizationId,agent:cap.name,model:cap.model,
+          destination,region:cap.upstreamRegion,retention:cap.upstreamRetention,
+          approvedOrigin:destination==='approved_remote'?form.get('approvedOrigin'):null,
+          allowPrivate:form.get('reviewed')==='on'})
+      });
+      state.modelPolicies=[response.policy,...state.modelPolicies.filter(x=>!(x.agent===response.policy.agent&&x.model===response.policy.model))];
+      setNotice('Model grant recorded. Provider verification remains a separate release gate.','success');
+    }catch(error){setNotice(error.message,'error');}
+  };
+  document.querySelectorAll('[data-model-revoke]').forEach(el=>el.addEventListener('click',async()=>{
+    const [agent,model]=el.dataset.modelRevoke.split('|');el.disabled=true;
+    try{
+      const result=await api('/api/model-policies',{method:'DELETE',headers:{'content-type':'application/json'},
+        body:JSON.stringify({organizationId:state.organizationId,agent,model})});
+      state.modelPolicies=state.modelPolicies.map(p=>p.agent===agent&&p.model===model?result.policy:p);
+      setNotice('Model permission revoked. Future model turns are denied.','success');
+    }catch(error){el.disabled=false;setNotice(error.message,'error');}
+  }));
   const createProject=document.querySelector('#create-project');
   if(createProject)createProject.onsubmit=async event=>{
     event.preventDefault();const form=new FormData(createProject);

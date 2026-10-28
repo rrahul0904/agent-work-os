@@ -217,6 +217,37 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.ok((await allProjects.text()).includes(tenantProject.id));
 
 
+
+    // Wave 3 — tenant governance, CSRF and revocation. A policy grant is not
+    // proof of real provider residency; the daemon attests upstream separately.
+    const policyPath="/api/model-policies";
+    const policyRequest={organizationId:alphaId,agent:"model-chat",model:"local-ci-model",
+      destination:"local_machine",region:"local",retention:"zero",allowPrivate:true};
+    assert.equal((await api(owner.cookies,null,policyPath,{
+      method:"POST",body:policyRequest
+    })).status,403,"no CSRF model grant is refused");
+    const firstGrant=await api(owner.cookies,owner.body.csrfToken,policyPath,{
+      method:"POST",body:policyRequest
+    });
+    assert.equal(firstGrant.status,200);
+    assert.equal((await firstGrant.json()).policy.status,"approved");
+    assert.equal((await api(otherTenant.cookies,null,
+      policyPath+"?organizationId="+alphaId)).status,404);
+    const ownerPolicies=await api(owner.cookies,null,
+      policyPath+"?organizationId="+alphaId);
+    assert.equal(ownerPolicies.status,200);
+    assert.equal((await ownerPolicies.json()).policies.length,1);
+    const badRemote=await api(owner.cookies,owner.body.csrfToken,policyPath,{
+      method:"POST",body:{...policyRequest,model:"unsafe-remote",
+        destination:"approved_remote",region:"us-east-1",approvedOrigin:"http://evil.example"}
+    });
+    assert.equal(badRemote.status,400);
+    const revoke=await api(owner.cookies,owner.body.csrfToken,policyPath,{
+      method:"DELETE",body:{organizationId:alphaId,agent:"model-chat",model:"local-ci-model"}
+    });
+    assert.equal(revoke.status,200);
+    assert.equal((await revoke.json()).policy.status,"revoked");
+
     const noCsrf = await api(owner.cookies, null, "/api/work-items", {
       method: "POST", body: { id: createCanonicalId("work"), commandId: createCanonicalId("command"), organizationId: alphaId, title: "Denied without CSRF" }
     });

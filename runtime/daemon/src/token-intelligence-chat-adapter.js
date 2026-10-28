@@ -51,6 +51,16 @@ export class TokenIntelligenceChatAdapter {
     try {
       if (env.AGENT_WORK_OS_TI_ENABLED !== "true") return;
       this.model = env.AGENT_WORK_OS_TI_MODEL || "";
+      this.upstreamDestination = env.AGENT_WORK_OS_TI_UPSTREAM_DESTINATION || "";
+      this.upstreamRegion = env.AGENT_WORK_OS_TI_UPSTREAM_REGION || "";
+      this.upstreamRetention = env.AGENT_WORK_OS_TI_UPSTREAM_RETENTION || "";
+      if (!["local_machine", "approved_remote"].includes(this.upstreamDestination) ||
+          !/^[A-Za-z0-9._:/-]{2,120}$/.test(this.upstreamRegion) ||
+          !["zero", "bounded"].includes(this.upstreamRetention) ||
+          env.AGENT_WORK_OS_TI_PRIVATE_UPSTREAM_APPROVED !== "true") {
+        throw new Error("TI_GATEWAY_UPSTREAM_PRIVACY_ATTESTATION_REQUIRED");
+      }
+
       this.apiKey = env.AGENT_WORK_OS_TI_API_KEY || "";
       if (!/^[a-zA-Z0-9._:/-]{1,150}$/.test(this.model)) throw new Error("TI_GATEWAY_MODEL_REQUIRED");
       if (!this.apiKey || this.apiKey.length < 16 || this.apiKey.length > 512) throw new Error("TI_GATEWAY_SCOPED_API_KEY_REQUIRED");
@@ -76,7 +86,9 @@ export class TokenIntelligenceChatAdapter {
     if (!this.enabled || this.configError) return null;
     return { name: this.name, version: "token-intelligence-live/v1", model: this.model,
       mode: "chat_only_no_tools", quotaAuthority: "token_intelligence_postgres",
-      lane: this.endpoint.kind };
+      lane: this.endpoint.kind, upstreamDestination:this.upstreamDestination,
+      upstreamRegion:this.upstreamRegion, upstreamRetention:this.upstreamRetention,
+      upstreamTrust:"operator_declared_not_independently_verified" };
   }
 
   async run(request, emit) {
@@ -101,11 +113,11 @@ export class TokenIntelligenceChatAdapter {
         id: "token-intelligence-gateway", type: this.endpoint.kind, model: this.model,
         protocol: "chat_completions", health: "ready", verifiedAtMs: Date.now(),
         maxContextTokens: MAX_CONTEXT_BYTES, tools: false, permitsPrivate: true,
-        region: this.endpoint.region, runtimeRevision: "configured_gateway_unverified",
+        region: this.upstreamRegion, runtimeRevision: "upstream_operator_attested_unverified",
       }],
       policy: {
         allowedLaneTypes: [this.endpoint.kind], allowedModels: [this.model],
-        allowedRegions: [this.endpoint.region], maxHealthAgeMs: 60_000,
+        allowedRegions: [this.upstreamRegion], maxHealthAgeMs: 60_000,
       }
     });
     if (route.status !== "eligible") throw new Error("TI_GATEWAY_POLICY_DENIED");

@@ -47,7 +47,9 @@ const env = {
   AGENT_WORK_OS_COMPAT_CHAT_ENABLED: "true",
   AGENT_WORK_OS_COMPAT_CHAT_MODEL: "e2e-model",
   AGENT_WORK_OS_COMPAT_CHAT_BASE_URL: "http://127.0.0.1:" + providerPort + "/v1",
-  AGENT_WORK_OS_COMPAT_CHAT_API_KEY: "e2e-machine-local-key"
+  AGENT_WORK_OS_COMPAT_CHAT_API_KEY: "e2e-machine-local-key",
+  AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_REGION: "local",
+  AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_RETENTION: "zero"
 };
 const children = [];
 function spawnService(file) {
