@@ -22,6 +22,7 @@
     "check": "npm test && npm run acceptance",
     "ship": "node scripts/ship.mjs run",
     "ship:validate": "node scripts/ship.mjs validate",
-    "release:preflight": "node scripts/unified-release-preflight.mjs"
+    "release:preflight": "node scripts/unified-release-preflight.mjs",
+    "release:dossier": "node scripts/launch-dossier.mjs"
   }
 }
