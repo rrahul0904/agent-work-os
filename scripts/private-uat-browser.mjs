@@ -17,8 +17,17 @@ try {
   browser=await chromium.launch({headless:true});
   const owner=await browser.newContext({ignoreHTTPSErrors:true});
   const page=await owner.newPage();
-  page.on("pageerror",()=>errors.push("owner_page_js_error"));
-  await page.goto(url,{waitUntil:"domcontentloaded"});
+  page.on("pageerror",err=>errors.push("owner_js_"+String(err.message||"unknown").slice(0,120)));
+  const first=await page.goto(url,{waitUntil:"domcontentloaded"});
+  const bootstrapDiagnostic=await page.evaluate(async()=>{
+    const response=await fetch("/api/client-config",{credentials:"same-origin",cache:"no-store"});
+    const app=document.querySelector("#app");
+    return {title:document.title,bodySize:document.body?.textContent?.length||0,
+      appSample:app?.textContent?.slice(0,120)||null,
+      appChildren:app?.children?.length||0,configStatus:response.status};
+  });
+  console.log("PRIVATE_BROWSER_BOOTSTRAP_DIAGNOSTIC",JSON.stringify({
+    navigationStatus:first?.status(),...bootstrapDiagnostic,errors}));
   await page.locator("#account-login").waitFor();
   assert.equal(await page.locator("#toggle-auth").count(),0,"Public signup must be disabled");
   assert.equal(await page.locator("#toggle-invite").count(),1,"Private invitation signup must be visible");
