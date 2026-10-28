@@ -954,11 +954,11 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const sharedRead = await api(viewerResult.cookies, null, `/api/work-items/${workItemId}?organizationId=${encodeURIComponent(alphaId)}`);
       assert.equal(sharedRead.status, 200, "accepted invitation grants membership");
       const viewerSessionRead = await api(viewerResult.cookies, null, `/api/sessions/${encodeURIComponent(alphaSessionId)}?organizationId=${encodeURIComponent(alphaId)}`);
-      assert.equal(viewerSessionRead.status, 200, "viewer membership permits reading organization sessions");
+      assert.equal(viewerSessionRead.status, 404, "membership alone must not expose another user\'s private session");
       const viewerSessionWrite = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/sessions/${encodeURIComponent(alphaSessionId)}/messages`, {
         method: "POST", body: { text: "viewer cannot control session" }
       });
-      assert.equal(viewerSessionWrite.status, 403);
+      assert.equal(viewerSessionWrite.status, 404, "non-owner cannot write into another private session");
       const viewerWrite = await api(viewerResult.cookies, viewerResult.body.csrfToken, "/api/work-items", {
         method: "POST", body: { id: createCanonicalId("work"), commandId: createCanonicalId("command"), organizationId: alphaId, title: "Viewer cannot write" }
       });
