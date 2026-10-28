@@ -18,6 +18,7 @@ import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
 import { issueProductionApproval } from "./production-approval.js";
 import { TenantProjectRepository } from "./tenant-projects.js";
+import { TenantModelPolicyRepository, isModelUseApproved } from "./tenant-model-policy.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -53,6 +54,8 @@ export async function createControlPlane() {
   if (identities) await identities.initialize();
   const tenantProjects = store.pool ? new TenantProjectRepository(store.pool) : null;
   if (tenantProjects) await tenantProjects.initialize();
+  const tenantModelPolicies=store.pool ? new TenantModelPolicyRepository(store.pool):null;
+  if(tenantModelPolicies)await tenantModelPolicies.initialize();
   const capabilityRegistry = new TenantCapabilityRegistryRepository(store);
   await capabilityRegistry.initialize();
   const staleMachinesAtStartup = await store.initializeMachineSessionStore(machineStaleAfterMs);
@@ -544,6 +547,24 @@ export async function createControlPlane() {
         const runReceipts = runs.filter((run) => run.releaseReceipt).map((run) => ({ ...run.releaseReceipt, runId: run.runId, projectId: run.projectId, releaseVersion: run.releaseVersion, path: null, source: "runtime" }));
         return json(res, 200, buildProductSummary({ portfolio, runs, receipts: [...committedReceipts, ...runReceipts], machines, sessions }));
       }
+      if (url.pathname === "/api/model-policies" && principal.kind === "user" &&
+          ["GET","POST","DELETE"].includes(req.method)) {
+        const payload=req.method==="GET"?{}:await readJson(req);
+        const organizationId=req.method==="GET"?url.searchParams.get("organizationId"):payload.organizationId;
+        if(!organizationId)return json(res,400,{error:"organization_id_required"});
+        const membership=await identities.getMembership(principal.userId,organizationId);
+        if(!membership)return json(res,404,{error:"organization_not_found"});
+        if(req.method==="GET")return json(res,200,{policies:await tenantModelPolicies.list(organizationId)});
+        if(!["owner","admin"].includes(membership.role))return json(res,403,{error:"model_policy_admin_required"});
+        const policy=req.method==="POST"
+          ?await tenantModelPolicies.approve({organizationId,actorId:principal.userId,
+            agent:payload.agent,model:payload.model,destination:payload.destination,
+            region:payload.region,retention:payload.retention,allowPrivate:payload.allowPrivate,
+            approvedOrigin:payload.approvedOrigin})
+          :await tenantModelPolicies.revoke({organizationId,actorId:principal.userId,
+            agent:payload.agent,model:payload.model});
+        return policy?json(res,200,{policy}):json(res,404,{error:"model_policy_not_found"});
+      }
       if (url.pathname === "/api/projects" && principal.kind === "user" && ["GET","POST"].includes(req.method)) {
         const payload = req.method === "POST" ? await readJson(req) : {};
         const organizationId = req.method === "GET" ? url.searchParams.get("organizationId") : payload.organizationId;
@@ -784,6 +805,14 @@ export async function createControlPlane() {
         const machine = await store.getMachine(body.machineId);
         if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
         if (!machine.capabilities.some((capability) => capability.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
+        if (["model-chat","token-intelligence"].includes(body.agent)) {
+          const capability=machine.capabilities.find(cap=>cap.name===body.agent);
+          if (!capability?.model || (body.model && body.model!==capability.model))
+            return json(res,403,{error:"model_not_allowed_for_machine"});
+          const modelPolicy=await tenantModelPolicies.get(body.organizationId,body.agent,capability.model);
+          if (!isModelUseApproved(modelPolicy,capability))
+            return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+        }
         const now = new Date().toISOString();
         const session = {
           id: crypto.randomUUID(), organizationId: body.organizationId, createdBy: principal.userId, machineId: body.machineId,
@@ -822,6 +851,14 @@ export async function createControlPlane() {
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
         const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
+        if(["model-chat","token-intelligence"].includes(session.agent)){
+          const capability=machine.capabilities?.find(cap=>cap.name===session.agent);
+          const modelPolicy=capability?.model?
+            await tenantModelPolicies.get(session.organizationId,session.agent,capability.model):null;
+          if(!isModelUseApproved(modelPolicy,capability) ||
+              (session.model&&session.model!==capability.model))
+            return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+        }
         const body = await readJson(req); const message = body.text?.trim();
         if (!message) return json(res, 400, { error: "text is required" });
         const userMessage = { id: crypto.randomUUID(), role: "user", text: message, createdAt: new Date().toISOString() };
@@ -1014,6 +1051,7 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
     || pathname === "/api/state" || pathname === "/api/product" || pathname === "/api/shipping/contracts/validate"
     || pathname === "/api/projects" || /^\/api\/projects\/project_[0-9a-f-]{36}$/.test(pathname)
+    || pathname === "/api/model-policies"
     || pathname === "/api/capabilities" || /^\/api\/capabilities\/[^/]+$/.test(pathname)
     || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+(?:\/(?:approve|reject))?$/.test(pathname)
