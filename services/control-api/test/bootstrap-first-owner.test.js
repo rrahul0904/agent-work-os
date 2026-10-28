@@ -13,7 +13,7 @@ function setup(counts={organizations:0,users:0,memberships:0}){
   };
   const registrations=[];
   const identities={
-    async register(params){registrations.push(params);return {organization:{id:"org-test"},user:{id:"user-test"},session:{token:"NEVER_PRINT"}};}
+    async register(params, tx){assert.equal(tx,client,"registration must share the advisory-locked transaction");registrations.push(params);return {organization:{id:"org-test"},user:{id:"user-test"},session:{token:"NEVER_PRINT"}};}
   };
   return {events,registrations,pool:{async connect(){return client;}},identities};
 }
@@ -41,6 +41,17 @@ test("existing users or memberships permanently block another first-owner bootst
     assert.ok(f.events.includes("ROLLBACK"));
     assert.ok(f.events.includes("release"));
   }
+});
+test("first-owner registration uses the same SQL transaction, never its own pool connection",async()=>{
+  const f=setup();
+  // Set a sentinel connection for the sole top-level transaction. Any
+  // second connection would violate the single-winner/rollback boundary.
+  let connects=0;
+  const original=f.pool.connect;
+  f.pool.connect=async()=>{connects++;return original();};
+  // The existing mock assertion verifies the transaction client identity.
+  assert.equal((await bootstrapFirstOwner({...f,...details})).created,true);
+  assert.equal(connects,1);
 });
 test("account creation failure rolls back and never leaves an unclosed exclusive lock",async()=>{
   const f=setup();
