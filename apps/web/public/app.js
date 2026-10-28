@@ -1,5 +1,5 @@
 const state = {
-  page: 'overview', product: null, machines: [], sessions: [], shippingRuns: [],
+  page: 'overview', product: null, projects: [], machines: [], sessions: [], shippingRuns: [],
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
   connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
   authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
@@ -91,6 +91,7 @@ async function bootstrap() {
     state.sessions=tenantEntries(snapshot.sessions);
     state.shippingRuns=tenantEntries(snapshot.shippingRuns);
     state.product=product;
+    state.projects=state.authMode==='account'?(await api('/api/projects'+tenantQuery())).projects:[];
     state.contractText=JSON.stringify(example,null,2);
     connect();
   }catch(error){state.authError=error.message;}
@@ -210,7 +211,7 @@ async function logout(renderNow=true){
   const oldSocket=state.socket;state.socket=null;oldSocket?.close();
   token='';localStorage.removeItem('agentWorkOsToken');
   state.csrfToken=null;state.accountEmail=null;state.accountUserId=null;state.organizations=[];state.organizationId=null;
-  state.machines=[];state.sessions=[];state.shippingRuns=[];state.product=null;
+  state.machines=[];state.sessions=[];state.shippingRuns=[];state.projects=[];state.product=null;
   state.connected=false;state.lastCursor=null;state.seenEventTags.clear();
   if(renderNow)renderLogin();
 }
@@ -223,7 +224,7 @@ function render() {
   app.innerHTML = `<div class="product-shell">
     <aside class="sidebar">
       <div class="brand"><div class="mark">SO</div><div><strong>Shipping OS</strong><small>Agent Work OS</small></div></div>
-      <nav>${navButton('overview','Overview','⌂')}${navButton('portfolio','Portfolio','◆')}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
+      <nav>${navButton('overview','Overview','⌂')}${state.authMode==='account'?navButton('projects','Projects','◆'):navButton('portfolio','Portfolio','◆')}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
       <div class="sidebar-foot"><div class="connection"><i class="${state.connected?'online':'offline'}"></i>${state.connected?'Realtime connected':'Reconnecting'}</div><button class="ghost small" id="logout">Lock console</button></div>
     </aside>
     <div class="workspace">
@@ -236,9 +237,10 @@ function render() {
   wire();
 }
 function navButton(page,label,icon) { return `<button data-page="${page}" class="nav-item ${state.page===page?'active':''}"><span>${icon}</span>${label}</button>`; }
-function pageTitle() { return ({overview:'Factory overview',portfolio:'Portfolio queue',runs:'Shipping runs',receipts:'Release evidence',agents:'Local agent control'})[state.page]; }
+function pageTitle() { return ({overview:'Factory overview',portfolio:'Portfolio queue',projects:'Team projects',runs:'Shipping runs',receipts:'Release evidence',agents:'Local agent control'})[state.page]; }
 function pageHtml() {
   if (state.page === 'portfolio') return portfolioHtml();
+  if (state.page === 'projects') return projectsHtml();
   if (state.page === 'runs') return runsHtml();
   if (state.page === 'receipts') return receiptsHtml();
   if (state.page === 'agents') return agentsHtml();
@@ -277,6 +279,26 @@ function portfolioHtml() {
     <div class="evidence-row">${(project.evidence||[]).map(x=>`<span>✓ ${esc(x)}</span>`).join('')}</div></div></article>`).join('')}</section>`;
 }
 
+function projectsHtml() {
+  const role=state.organizations.find(x=>x.organizationId===state.organizationId)?.role||'viewer';
+  const editable=role!=='viewer';
+  return `<section class="section-head"><div><p class="eyebrow">ORGANIZATION-OWNED WORK</p><h2>${state.projects.length} team projects</h2></div></section>
+    ${editable?`<form class="panel" id="create-project" style="padding:20px;display:grid;gap:12px">
+       <strong>Create a project</strong><label>Name<input name="name" minlength="3" maxlength="120" required placeholder="Data pipeline modernization"></label>
+       <label>GitHub repository (optional)<input name="repository" placeholder="owner/repository"></label>
+       <label>Objective<textarea name="description" maxlength="2000" placeholder="What do your agents need to accomplish?"></textarea></label>
+       <button class="primary" type="submit">Add project</button>
+     </form>`:''}
+    <section class="portfolio-list">${state.projects.length?state.projects.map(project=>`<article class="project-card">
+       <div class="project-main"><div class="project-title"><div><h3>${esc(project.name)}</h3><small>${esc(project.repository||'Repository not attached')}</small></div>${statusBadge(project.status)}</div>
+       <p class="next-action">${esc(project.description||'No objective recorded')}</p>
+       <small>Version ${esc(project.version)} · Updated ${when(project.updatedAt)}</small>
+       ${editable&&project.status!=='archived'?`<div class="drawer-actions">
+         ${project.status==='draft'?`<button class="secondary compact" data-project-id="${esc(project.id)}" data-project-action="active">Activate</button>`:''}
+         <button class="danger compact" data-project-id="${esc(project.id)}" data-project-action="archived">Archive</button>
+       </div>`:''}
+       </div></article>`).join(''):'<article class="panel" style="padding:20px">No projects yet. Create one to start an evidence-backed task.</article>'}</section>`;
+}
 function runsHtml() {
   const runs = state.shippingRuns || [];
   const selected = runs.find(r=>r.runId===state.selectedRun) || runs[0]; if (selected) state.selectedRun=selected.runId;
@@ -361,6 +383,33 @@ function wire() {
   document.querySelector('#launch')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#launch-inline')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#refresh')?.addEventListener('click',()=>refreshProduct());
+  const createProject=document.querySelector('#create-project');
+  if(createProject)createProject.onsubmit=async event=>{
+    event.preventDefault();const form=new FormData(createProject);
+    const button=createProject.querySelector('[type="submit"]');button.disabled=true;
+    try{
+      const body=await api('/api/projects',{method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({organizationId:state.organizationId,name:form.get('name'),
+          description:form.get('description'),repository:form.get('repository')})});
+      state.projects=[body.project,...state.projects];setNotice('Project registered for this organization.','success');
+    }catch(error){button.disabled=false;setNotice(error.message,'error');}
+  };
+  document.querySelectorAll('[data-project-action]').forEach(el=>el.addEventListener('click',async()=>{
+    const project=state.projects.find(x=>x.id===el.dataset.projectId);
+    if(!project)return;
+    el.disabled=true;
+    try{
+      const response=await api('/api/projects/'+encodeURIComponent(project.id),{
+        method:'PATCH',headers:{'content-type':'application/json'},
+        body:JSON.stringify({organizationId:state.organizationId,expectedVersion:project.version,
+          status:el.dataset.projectAction})
+      });
+      state.projects=state.projects.filter(x=>x.id!==project.id);
+      if(response.project.status!=='archived')state.projects.unshift(response.project);
+      setNotice('Project updated.','success');
+    }catch(error){el.disabled=false;setNotice(error.message,'error');}
+  }));
+
   document.querySelector('#release-ack')?.addEventListener('change',event=>{
     const approve=document.querySelector('#release-approve');
     if(approve)approve.disabled=!event.currentTarget.checked;

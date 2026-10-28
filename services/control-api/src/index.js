@@ -17,6 +17,7 @@ import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
 import { issueProductionApproval } from "./production-approval.js";
+import { TenantProjectRepository } from "./tenant-projects.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -50,6 +51,8 @@ export async function createControlPlane() {
   if (isProduction && !store.pool) throw new Error("DATABASE_URL_required_in_production");
   const identities = store.pool ? new IdentityRepository(store.pool) : null;
   if (identities) await identities.initialize();
+  const tenantProjects = store.pool ? new TenantProjectRepository(store.pool) : null;
+  if (tenantProjects) await tenantProjects.initialize();
   const capabilityRegistry = new TenantCapabilityRegistryRepository(store);
   await capabilityRegistry.initialize();
   const staleMachinesAtStartup = await store.initializeMachineSessionStore(machineStaleAfterMs);
@@ -541,6 +544,42 @@ export async function createControlPlane() {
         const runReceipts = runs.filter((run) => run.releaseReceipt).map((run) => ({ ...run.releaseReceipt, runId: run.runId, projectId: run.projectId, releaseVersion: run.releaseVersion, path: null, source: "runtime" }));
         return json(res, 200, buildProductSummary({ portfolio, runs, receipts: [...committedReceipts, ...runReceipts], machines, sessions }));
       }
+      if (url.pathname === "/api/projects" && principal.kind === "user" && ["GET","POST"].includes(req.method)) {
+        const payload = req.method === "POST" ? await readJson(req) : {};
+        const organizationId = req.method === "GET" ? url.searchParams.get("organizationId") : payload.organizationId;
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        const membership = await identities.getMembership(principal.userId, organizationId);
+        if (!membership) return json(res, 404, { error: "organization_not_found" });
+        if (req.method === "GET") return json(res, 200, {
+          projects: await tenantProjects.list(organizationId, { includeArchived:url.searchParams.get("includeArchived")==="true" })
+        });
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const project = await tenantProjects.create({
+          organizationId, actorId:principal.userId, name:payload.name,
+          description:payload.description, repository:payload.repository
+        });
+        return json(res, 201, { project });
+      }
+      const projectMatch = url.pathname.match(/^\/api\/projects\/(project_[0-9a-f-]{36})$/);
+      if (projectMatch && principal.kind === "user" && ["GET","PATCH"].includes(req.method)) {
+        const payload = req.method === "PATCH" ? await readJson(req) : {};
+        const organizationId = req.method === "GET" ? url.searchParams.get("organizationId") : payload.organizationId;
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        const membership = await identities.getMembership(principal.userId, organizationId);
+        if (!membership) return json(res, 404, { error: "organization_not_found" });
+        if (req.method === "GET") {
+          const project = await tenantProjects.get(organizationId, projectMatch[1]);
+          return project ? json(res, 200, { project }) : json(res, 404, { error: "project_not_found" });
+        }
+        if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+        const project = await tenantProjects.update({
+          organizationId, actorId:principal.userId,id:projectMatch[1],
+          expectedVersion:payload.expectedVersion, name:payload.name,
+          description:payload.description, repository:payload.repository,status:payload.status
+        });
+        return project ? json(res, 200, { project }) : json(res, 404, { error: "project_not_found" });
+      }
+
       if (req.method === "GET" && url.pathname === "/api/portfolio") return json(res, 200, { projects: rankPortfolio(await loadPortfolio(portfolioPath)) });
       if (req.method === "GET" && url.pathname === "/api/receipts") return json(res, 200, { receipts: await listReceipts(receiptsRoot) });
       if (req.method === "GET" && url.pathname === "/api/shipping/example") return json(res, 200, JSON.parse(await readFile(exampleContractPath, "utf8")));
@@ -974,6 +1013,7 @@ function isUserScopedRoute(pathname) {
     || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
     || pathname === "/api/state" || pathname === "/api/product" || pathname === "/api/shipping/contracts/validate"
+    || pathname === "/api/projects" || /^\/api\/projects\/project_[0-9a-f-]{36}$/.test(pathname)
     || pathname === "/api/capabilities" || /^\/api\/capabilities\/[^/]+$/.test(pathname)
     || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+(?:\/(?:approve|reject))?$/.test(pathname)
