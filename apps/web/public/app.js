@@ -1,90 +1,220 @@
 const state = {
   page: 'overview', product: null, machines: [], sessions: [], shippingRuns: [],
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
-  connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set()
+  connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
+  authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
+  organizations: [], organizationId: null, socket: null, reconnectTimer: null
 };
 const app = document.querySelector('#app');
-let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('agentWorkOsToken') || '';
-if (new URLSearchParams(location.search).has('token')) {
-  localStorage.setItem('agentWorkOsToken', token);
-  history.replaceState({}, '', location.pathname + location.hash);
-}
+let token = '';
 
 function esc(value='') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function shortSha(value='') { return value ? String(value).slice(0, 9) : '—'; }
 function when(value) { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.valueOf()) ? esc(value) : d.toLocaleString(); }
 function statusClass(value='') { return `status-${String(value).toLowerCase().replaceAll('_','-')}`; }
-function authHeaders(extra={}) { return { ...extra, authorization: `Bearer ${token}` }; }
+function tenantQuery() { return state.authMode==='account' ? '?organizationId='+encodeURIComponent(state.organizationId) : ''; }
+function tenantEntries(items) { return state.authMode==='account' ? (items||[]).filter(x=>x.organizationId===state.organizationId) : (items||[]); }
+function authHeaders(extra={}, method='GET') {
+  if(state.authMode==='account'){
+    if(!['GET','HEAD','OPTIONS'].includes(method.toUpperCase())){
+      if(!state.csrfToken)throw new Error('Sign in again: missing CSRF token.');
+      return {...extra, 'x-csrf-token':state.csrfToken};
+    }
+    return {...extra};
+  }
+  return {...extra, ...(token?{authorization:'Bearer '+token}:{})};
+}
+function activateAccount(account) {
+  state.accountEmail=account.user?.email||null;
+  state.csrfToken=account.csrfToken;
+  state.organizations=Array.isArray(account.memberships)?account.memberships:[];
+  if(!state.organizations.some(org=>org.organizationId===state.organizationId))
+    state.organizationId=state.organizations[0]?.organizationId||null;
+  state.authError=null;
+}
+async function initialize() {
+  try {
+    const response=await fetch('/api/client-config',{credentials:'same-origin',cache:'no-store'});
+    if(!response.ok)throw new Error('Authentication mode could not be verified.');
+    const mode=(await response.json()).authentication;
+    if(!['account','local_token'].includes(mode))throw new Error('Unsupported authentication configuration.');
+    state.authMode=mode;
+    if(mode==='account'){
+      localStorage.removeItem('agentWorkOsToken');
+      const session=await fetch('/api/auth/me',{credentials:'same-origin',cache:'no-store'});
+      if(session.ok){activateAccount(await session.json());return bootstrap();}
+      if(session.status!==401)throw new Error('Account session validation failed.');
+      return renderLogin();
+    }
+    const params=new URLSearchParams(location.search);
+    token=params.get('token')||localStorage.getItem('agentWorkOsToken')||'';
+    if(params.has('token')){
+      localStorage.setItem('agentWorkOsToken',token);
+      history.replaceState({},'',location.pathname+location.hash);
+    }
+    if(token)return bootstrap();
+    renderLogin();
+  }catch(error){state.authError=error.message;renderLogin();}
+}
 async function api(url, options={}) {
-  const response = await fetch(url, { ...options, headers: authHeaders(options.headers || {}) });
-  const body = await response.json().catch(() => ({}));
-  if (response.status === 401) { logout(false); throw new Error('Control-plane token is invalid.'); }
-  if (!response.ok) throw new Error(body.message || body.error || `Request failed: ${response.status}`);
+  const response=await fetch(url,{
+    ...options, credentials:'same-origin',
+    headers:authHeaders(options.headers||{},options.method||'GET')
+  });
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401){
+    if(state.authMode==='account'){
+      state.accountEmail=null;state.csrfToken=null;state.organizations=[];state.organizationId=null;
+    }else {token='';localStorage.removeItem('agentWorkOsToken');}
+    state.socket?.close();state.socket=null;state.connected=false;
+    renderLogin();
+    throw new Error('Session expired or credentials invalid.');
+  }
+  if(!response.ok)throw new Error(body.message||body.error||'Request failed: '+response.status);
   return body;
 }
 function setNotice(message, kind='info') { state.notice = { message, kind }; render(); setTimeout(() => { if (state.notice?.message === message) { state.notice = null; render(); } }, 4500); }
 
 async function bootstrap() {
-  if (!token) return renderLogin();
-  state.loading = true; render();
-  try {
-    const [snapshot, product, example] = await Promise.all([api('/api/state'), api('/api/product'), api('/api/shipping/example')]);
-    state.machines = snapshot.machines || [];
-    state.sessions = snapshot.sessions || [];
-    state.shippingRuns = snapshot.shippingRuns || [];
-    state.product = product;
-    state.contractText = JSON.stringify(example, null, 2);
+  if(state.authMode==='account'&&!state.accountEmail)return renderLogin();
+  if(state.authMode==='local_token'&&!token)return renderLogin();
+  state.loading=true;render();
+  try{
+    const [snapshot,product,example]=await Promise.all([
+      api('/api/state'+tenantQuery()),api('/api/product'+tenantQuery()),api('/api/shipping/example')
+    ]);
+    state.machines=tenantEntries(snapshot.machines);
+    state.sessions=tenantEntries(snapshot.sessions);
+    state.shippingRuns=tenantEntries(snapshot.shippingRuns);
+    state.product=product;
+    state.contractText=JSON.stringify(example,null,2);
     connect();
-  } catch (error) {
-    if (token) setNotice(error.message, 'error');
-  } finally { state.loading = false; render(); }
+  }catch(error){state.authError=error.message;}
+  finally{state.loading=false;render();}
 }
 function connect() {
-  if (!token) return;
-  const url = new URL('/ws', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.searchParams.set('role', 'client'); url.searchParams.set('token', token);
-  if (typeof state.lastCursor === 'string') url.searchParams.set('cursor', state.lastCursor);
-  const ws = new WebSocket(url);
-  ws.onopen = () => { state.connected = true; render(); };
-  ws.onclose = () => { state.connected = false; render(); if (token) setTimeout(connect, 1800); };
-  ws.onmessage = async event => {
-    const msg = JSON.parse(event.data);
-    if (typeof msg.eventId === 'string') {
-      if (state.seenEventTags.has(msg.eventId)) return;
+  if(state.authMode==='account'&&!state.accountEmail)return;
+  if(state.authMode==='local_token'&&!token)return;
+  if(state.socket&&[WebSocket.OPEN,WebSocket.CONNECTING].includes(state.socket.readyState))return;
+  const url=new URL('/ws',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';
+  url.searchParams.set('role','client');
+  if(state.authMode==='local_token')url.searchParams.set('token',token);
+  if(typeof state.lastCursor==='string')url.searchParams.set('cursor',state.lastCursor);
+  const ws=new WebSocket(url);state.socket=ws;
+  ws.onopen=()=>{if(state.socket!==ws)return;state.connected=true;render();};
+  ws.onclose=()=>{
+    if(state.socket!==ws)return;
+    state.socket=null;state.connected=false;render();
+    if(state.authMode==='account'&&!state.accountEmail)return;
+    if(state.authMode==='local_token'&&!token)return;
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer=setTimeout(connect,1800);
+  };
+  ws.onmessage=async event=>{
+    if(state.socket!==ws)return;
+    const msg=JSON.parse(event.data);
+    if(typeof msg.eventId==='string'){
+      if(state.seenEventTags.has(msg.eventId))return;
       state.seenEventTags.add(msg.eventId);
-      if (state.seenEventTags.size > 256) state.seenEventTags.delete(state.seenEventTags.values().next().value);
+      if(state.seenEventTags.size>256)state.seenEventTags.delete(state.seenEventTags.values().next().value);
     }
-    if (typeof msg.cursor === 'string') state.lastCursor = msg.cursor;
-    if (msg.type === 'realtime.cursor') {
-      return;
+    if(typeof msg.cursor==='string')state.lastCursor=msg.cursor;
+    if(msg.type==='realtime.cursor')return;
+    if(msg.type==='state.snapshot'){
+      state.machines=tenantEntries(msg.machines);
+      state.sessions=tenantEntries(msg.sessions);
+      state.shippingRuns=tenantEntries(msg.shippingRuns);
     }
-    if (msg.type === 'state.snapshot') {
-      state.machines = msg.machines || []; state.sessions = msg.sessions || []; state.shippingRuns = msg.shippingRuns || [];
-      if (typeof msg.cursor === 'string') state.lastCursor = msg.cursor;
-    }
-    if (msg.type === 'machine.updated') state.machines = upsert(state.machines, msg.machine);
-    if (msg.type === 'session.updated') state.sessions = upsert(state.sessions, msg.session, true);
-    if (msg.type === 'shipping.run.updated') state.shippingRuns = upsert(state.shippingRuns, msg.run, true);
+    if(msg.type==='machine.updated'&&tenantEntries([msg.machine]).length)state.machines=upsert(state.machines,msg.machine);
+    if(msg.type==='session.updated'&&tenantEntries([msg.session]).length)state.sessions=upsert(state.sessions,msg.session,true);
+    if(msg.type==='shipping.run.updated'&&tenantEntries([msg.run]).length)state.shippingRuns=upsert(state.shippingRuns,msg.run,true);
     await refreshProduct(false);
     render();
   };
 }
 function upsert(items, item, front=false) { const rest = items.filter(x => (x.id || x.runId) !== (item.id || item.runId)); return front ? [item, ...rest] : [...rest, item]; }
-async function refreshProduct(withRender=true) { try { state.product = await api('/api/product'); } catch {} if (withRender) render(); }
+async function refreshProduct(withRender=true) { try { state.product = await api('/api/product'+tenantQuery()); } catch {} if (withRender) render(); }
 
-function renderLogin() {
-  app.innerHTML = `<div class="login-shell"><div class="login-card">
-    <div class="mark">SO</div><p class="eyebrow">SHIPPING OS</p><h1>Product factory control plane</h1>
-    <p class="muted">Use the control-plane token configured on the server. It stays in this browser and is sent only as a Bearer token to this host.</p>
-    <form id="login"><label>Control-plane token<input name="token" type="password" autocomplete="current-password" autofocus placeholder="Enter token"></label><button class="primary">Open console</button></form>
-    <div class="login-proof"><span>Receipt-gated</span><span>Exact-SHA</span><span>Repair loops</span><span>Local execution</span></div>
-  </div></div>`;
-  document.querySelector('#login').onsubmit = event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('token')?.trim(); if (!value) return; token = value; localStorage.setItem('agentWorkOsToken', token); bootstrap(); };
+function renderLogin(){
+  if(state.authMode==='loading'){
+    app.textContent='Verifying server authentication configuration…';
+    return;
+  }
+  const account=state.authMode==='account';
+  const creating=state.authView==='register';
+  const error=state.authError?'<p class="notice error" role="alert">'+esc(state.authError)+'</p>':'';
+  if(account){
+    app.innerHTML='<div class="login-shell"><div class="login-card">'+
+      '<div class="mark">AO</div><p class="eyebrow">UNIVERSAL AGENT OS</p>'+
+      '<h1>'+(creating?'Create workspace':'Sign in to your workspace')+'</h1>'+
+      '<p class="muted">Organization-scoped accounts, secure sessions and human approvals.</p>'+error+
+      '<form id="account-login">'+
+        '<label>Email<input name="email" type="email" autocomplete="username" required placeholder="you@company.com"></label>'+
+        '<label>Password<input name="password" type="password" autocomplete="'+(creating?'new-password':'current-password')+
+          '" required minlength="'+(creating?'12':'1')+'"></label>'+
+        (creating?'<label>Organization<input name="organizationName" maxlength="120" required placeholder="Company or team"></label>':'')+
+        '<button class="primary" type="submit">'+(creating?'Create workspace':'Sign in')+'</button>'+
+      '</form><button class="ghost small" id="toggle-auth" type="button">'+
+        (creating?'Already have an account? Sign in':'Create a workspace')+'</button>'+
+      '<div class="login-proof"><span>Tenant isolated</span><span>HttpOnly sessions</span><span>CSRF protected</span></div>'+
+      '</div></div>';
+    document.querySelector('#toggle-auth').onclick=()=>{
+      state.authView=creating?'login':'register';state.authError=null;renderLogin();
+    };
+    const form=document.querySelector('#account-login');
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      const data=new FormData(form);
+      const payload={email:String(data.get('email')||'').trim(),password:String(data.get('password')||'')};
+      if(creating)payload.organizationName=String(data.get('organizationName')||'').trim();
+      form.querySelector('button[type="submit"]').disabled=true;
+      try{
+        const response=await fetch(creating?'/api/auth/register':'/api/auth/login',{
+          method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(payload)
+        });
+        const body=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(body.error||body.message||'Authentication refused: '+response.status);
+        activateAccount(body);state.authView='login';
+        await bootstrap();
+      }catch(error){state.authError=error.message;renderLogin();}
+    };
+    return;
+  }
+  app.innerHTML='<div class="login-shell"><div class="login-card">'+
+    '<div class="mark">AO</div><p class="eyebrow">LOCAL DEVELOPMENT ONLY</p>'+
+    '<h1>Agent Work OS control plane</h1>'+
+    '<p class="muted">This development token is not accepted by the production account service.</p>'+error+
+    '<form id="login"><label>Local control-plane token<input name="token" type="password" required autocomplete="current-password"></label>'+
+    '<button class="primary">Open console</button></form></div></div>';
+  document.querySelector('#login').onsubmit=event=>{
+    event.preventDefault();
+    const value=new FormData(event.currentTarget).get('token')?.trim();
+    if(!value)return;token=value;localStorage.setItem('agentWorkOsToken',token);
+    state.authError=null;bootstrap();
+  };
 }
-function logout(renderNow=true) { token = ''; localStorage.removeItem('agentWorkOsToken'); state.connected = false; if (renderNow) renderLogin(); }
+async function logout(renderNow=true){
+  if(state.authMode==='account'&&state.csrfToken){
+    try{
+      const response=await fetch('/api/auth/logout',{
+        method:'POST',credentials:'same-origin',headers:{'x-csrf-token':state.csrfToken}
+      });
+      if(!response.ok)throw new Error('Sign-out failed: '+response.status);
+    }catch(error){state.authError=error.message;renderLogin();return;}
+  }
+  clearTimeout(state.reconnectTimer);
+  const oldSocket=state.socket;state.socket=null;oldSocket?.close();
+  token='';localStorage.removeItem('agentWorkOsToken');
+  state.csrfToken=null;state.accountEmail=null;state.organizations=[];state.organizationId=null;
+  state.machines=[];state.sessions=[];state.shippingRuns=[];state.product=null;
+  state.connected=false;state.lastCursor=null;state.seenEventTags.clear();
+  if(renderNow)renderLogin();
+}
 
 function render() {
-  if (!token) return renderLogin();
+  if(state.authMode==='account'&&!state.accountEmail)return renderLogin();
+  if(state.authMode==='local_token'&&!token)return renderLogin();
+  if(state.authMode==='loading')return renderLogin();
   const counts = state.product?.counts || {};
   app.innerHTML = `<div class="product-shell">
     <aside class="sidebar">
@@ -93,7 +223,7 @@ function render() {
       <div class="sidebar-foot"><div class="connection"><i class="${state.connected?'online':'offline'}"></i>${state.connected?'Realtime connected':'Reconnecting'}</div><button class="ghost small" id="logout">Lock console</button></div>
     </aside>
     <div class="workspace">
-      <header class="topbar"><div><p class="eyebrow">PRODUCT FACTORY</p><h1>${pageTitle()}</h1></div><div class="top-actions"><span class="health-pill"><i></i>${counts.activeRuns || 0} active run${counts.activeRuns===1?'':'s'}</span><button class="primary compact" id="launch">＋ Launch shipping run</button></div></header>
+      <header class="topbar"><div><p class="eyebrow">UNIVERSAL AGENT OS ${state.accountEmail?esc(state.accountEmail):' · LOCAL'}</p><h1>${pageTitle()}</h1></div><div class="top-actions">${state.authMode==='account'?`<label class="org-picker">Organization<select id="org-picker">${state.organizations.map(org=>`<option value="${esc(org.organizationId)}" ${org.organizationId===state.organizationId?'selected':''}>${esc(org.organizationName||org.organizationId)} (${esc(org.role)})</option>`).join('')}</select></label>`:''}<span class="health-pill"><i></i>${counts.activeRuns || 0} active run${counts.activeRuns===1?'':'s'}</span><button class="primary compact" id="launch">＋ Launch shipping run</button></div></header>
       ${state.notice ? `<div class="notice ${esc(state.notice.kind)}">${esc(state.notice.message)}</div>` : ''}
       <main class="content">${state.loading ? '<div class="loading">Loading factory state…</div>' : pageHtml()}</main>
     </div>
@@ -207,6 +337,16 @@ function statusBadge(status='UNKNOWN'){return `<span class="status ${statusClass
 
 function wire() {
   document.querySelector('#logout')?.addEventListener('click',()=>logout());
+  document.querySelector('#org-picker')?.addEventListener('change',async event=>{
+    const chosen=event.currentTarget.value;
+    if(!state.organizations.some(org=>org.organizationId===chosen))return setNotice('Organization not available.','error');
+    state.organizationId=chosen;
+    state.selectedSession=null;state.selectedRun=null;
+    state.lastCursor=null;state.seenEventTags.clear();
+    clearTimeout(state.reconnectTimer);
+    const oldSocket=state.socket;state.socket=null;oldSocket?.close();
+    await bootstrap();
+  });
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>{state.page=el.dataset.page;if(el.dataset.run)state.selectedRun=el.dataset.run;render();}));
   document.querySelector('#launch')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#launch-inline')?.addEventListener('click',()=>{state.launchOpen=true;render();});
@@ -217,7 +357,7 @@ function wire() {
   document.querySelector('#drawer-backdrop')?.addEventListener('click',e=>{if(e.target.id==='drawer-backdrop'){state.launchOpen=false;render();}});
   const shippingForm=document.querySelector('#shipping-form');
   document.querySelector('#validate-contract')?.addEventListener('click',async()=>{try{const contract=JSON.parse(new FormData(shippingForm).get('contract'));await api('/api/shipping/contracts/validate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contract})});setNotice('Shipping Contract is valid.','success');}catch(error){setNotice(error.message,'error');}});
-  if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
+  if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract,...(state.authMode==='account'?{organizationId:state.organizationId}:{})})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
   const newSession=document.querySelector('#new-session');
   // Agent capabilities belong to the selected machine, not the first online machine.
   if(newSession){
@@ -233,7 +373,7 @@ function wire() {
       }));
     });
   }
-  if(newSession)newSession.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(newSession);const session=await api('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(f))});state.selectedSession=session.id;state.sessions=upsert(state.sessions,session,true);render();}catch(error){setNotice(error.message,'error');}};
+  if(newSession)newSession.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(newSession);const session=await api('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...Object.fromEntries(f),...(state.authMode==='account'?{organizationId:state.organizationId}:{})})});state.selectedSession=session.id;state.sessions=upsert(state.sessions,session,true);render();}catch(error){setNotice(error.message,'error');}};
   const follow=document.querySelector('#follow');
   const selected=state.sessions.find(s=>s.id===state.selectedSession)||state.sessions[0];
   if(follow&&selected)follow.onsubmit=async e=>{e.preventDefault();const text=new FormData(follow).get('text');try{await api(`/api/sessions/${selected.id}/messages`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text})});follow.reset();}catch(error){setNotice(error.message,'error');}};
@@ -255,4 +395,4 @@ function wire() {
   document.querySelector('#interrupt')?.addEventListener('click',()=>selected&&api(`/api/sessions/${selected.id}/interrupt`,{method:'POST'}).catch(e=>setNotice(e.message,'error')));
 }
 
-bootstrap();
+initialize();
