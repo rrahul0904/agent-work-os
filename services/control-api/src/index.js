@@ -558,7 +558,8 @@ export async function createControlPlane() {
             ...run.releaseReceipt, runId: run.runId, projectId: run.projectId,
             releaseVersion: run.releaseVersion, path: null, source: "tenant_runtime"
           }));
-          return json(res, 200, buildProductSummary({ portfolio: [], runs, receipts, machines, sessions }));
+          return json(res, 200, buildProductSummary({ portfolio: [], runs, receipts, machines,
+            sessions: sessions.filter(session => isSessionOwnedBy(principal, session)) }));
         }
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
         const [runs, machines, sessions] = await Promise.all([Promise.resolve(store.listShippingRuns()), store.listMachines(), store.listSessions()]);
