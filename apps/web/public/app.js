@@ -135,19 +135,86 @@ function connect() {
 function upsert(items, item, front=false) { const rest = items.filter(x => (x.id || x.runId) !== (item.id || item.runId)); return front ? [item, ...rest] : [...rest, item]; }
 async function refreshProduct(withRender=true) { try { state.product = await api('/api/product'+tenantQuery()); } catch {} if (withRender) render(); }
 
-function renderLogin() {
-  app.innerHTML = `<div class="login-shell"><div class="login-card">
-    <div class="mark">SO</div><p class="eyebrow">SHIPPING OS</p><h1>Product factory control plane</h1>
-    <p class="muted">Use the control-plane token configured on the server. It stays in this browser and is sent only as a Bearer token to this host.</p>
-    <form id="login"><label>Control-plane token<input name="token" type="password" autocomplete="current-password" autofocus placeholder="Enter token"></label><button class="primary">Open console</button></form>
-    <div class="login-proof"><span>Receipt-gated</span><span>Exact-SHA</span><span>Repair loops</span><span>Local execution</span></div>
-  </div></div>`;
-  document.querySelector('#login').onsubmit = event => { event.preventDefault(); const value = new FormData(event.currentTarget).get('token')?.trim(); if (!value) return; token = value; localStorage.setItem('agentWorkOsToken', token); bootstrap(); };
+function renderLogin(){
+  if(state.authMode==='loading'){
+    app.textContent='Verifying server authentication configuration…';
+    return;
+  }
+  const account=state.authMode==='account';
+  const creating=state.authView==='register';
+  const error=state.authError?'<p class="notice error" role="alert">'+esc(state.authError)+'</p>':'';
+  if(account){
+    app.innerHTML='<div class="login-shell"><div class="login-card">'+
+      '<div class="mark">AO</div><p class="eyebrow">UNIVERSAL AGENT OS</p>'+
+      '<h1>'+(creating?'Create workspace':'Sign in to your workspace')+'</h1>'+
+      '<p class="muted">Organization-scoped accounts, secure sessions and human approvals.</p>'+error+
+      '<form id="account-login">'+
+        '<label>Email<input name="email" type="email" autocomplete="username" required placeholder="you@company.com"></label>'+
+        '<label>Password<input name="password" type="password" autocomplete="'+(creating?'new-password':'current-password')+
+          '" required minlength="'+(creating?'12':'1')+'"></label>'+
+        (creating?'<label>Organization<input name="organizationName" maxlength="120" required placeholder="Company or team"></label>':'')+
+        '<button class="primary" type="submit">'+(creating?'Create workspace':'Sign in')+'</button>'+
+      '</form><button class="ghost small" id="toggle-auth" type="button">'+
+        (creating?'Already have an account? Sign in':'Create a workspace')+'</button>'+
+      '<div class="login-proof"><span>Tenant isolated</span><span>HttpOnly sessions</span><span>CSRF protected</span></div>'+
+      '</div></div>';
+    document.querySelector('#toggle-auth').onclick=()=>{
+      state.authView=creating?'login':'register';state.authError=null;renderLogin();
+    };
+    const form=document.querySelector('#account-login');
+    form.onsubmit=async event=>{
+      event.preventDefault();
+      const data=new FormData(form);
+      const payload={email:String(data.get('email')||'').trim(),password:String(data.get('password')||'')};
+      if(creating)payload.organizationName=String(data.get('organizationName')||'').trim();
+      form.querySelector('button[type="submit"]').disabled=true;
+      try{
+        const response=await fetch(creating?'/api/auth/register':'/api/auth/login',{
+          method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(payload)
+        });
+        const body=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(body.error||body.message||'Authentication refused: '+response.status);
+        activateAccount(body);state.authView='login';
+        await bootstrap();
+      }catch(error){state.authError=error.message;renderLogin();}
+    };
+    return;
+  }
+  app.innerHTML='<div class="login-shell"><div class="login-card">'+
+    '<div class="mark">AO</div><p class="eyebrow">LOCAL DEVELOPMENT ONLY</p>'+
+    '<h1>Agent Work OS control plane</h1>'+
+    '<p class="muted">This development token is not accepted by the production account service.</p>'+error+
+    '<form id="login"><label>Local control-plane token<input name="token" type="password" required autocomplete="current-password"></label>'+
+    '<button class="primary">Open console</button></form></div></div>';
+  document.querySelector('#login').onsubmit=event=>{
+    event.preventDefault();
+    const value=new FormData(event.currentTarget).get('token')?.trim();
+    if(!value)return;token=value;localStorage.setItem('agentWorkOsToken',token);
+    state.authError=null;bootstrap();
+  };
 }
-function logout(renderNow=true) { token = ''; localStorage.removeItem('agentWorkOsToken'); state.connected = false; if (renderNow) renderLogin(); }
+async function logout(renderNow=true){
+  if(state.authMode==='account'&&state.csrfToken){
+    try{
+      const response=await fetch('/api/auth/logout',{
+        method:'POST',credentials:'same-origin',headers:{'x-csrf-token':state.csrfToken}
+      });
+      if(!response.ok)throw new Error('Sign-out failed: '+response.status);
+    }catch(error){state.authError=error.message;renderLogin();return;}
+  }
+  clearTimeout(state.reconnectTimer);
+  const oldSocket=state.socket;state.socket=null;oldSocket?.close();
+  token='';localStorage.removeItem('agentWorkOsToken');
+  state.csrfToken=null;state.accountEmail=null;state.organizations=[];state.organizationId=null;
+  state.machines=[];state.sessions=[];state.shippingRuns=[];state.product=null;
+  state.connected=false;state.lastCursor=null;state.seenEventTags.clear();
+  if(renderNow)renderLogin();
+}
 
 function render() {
-  if (!token) return renderLogin();
+  if(state.authMode==='account'&&!state.accountEmail)return renderLogin();
+  if(state.authMode==='local_token'&&!token)return renderLogin();
+  if(state.authMode==='loading')return renderLogin();
   const counts = state.product?.counts || {};
   app.innerHTML = `<div class="product-shell">
     <aside class="sidebar">
@@ -156,7 +223,7 @@ function render() {
       <div class="sidebar-foot"><div class="connection"><i class="${state.connected?'online':'offline'}"></i>${state.connected?'Realtime connected':'Reconnecting'}</div><button class="ghost small" id="logout">Lock console</button></div>
     </aside>
     <div class="workspace">
-      <header class="topbar"><div><p class="eyebrow">PRODUCT FACTORY</p><h1>${pageTitle()}</h1></div><div class="top-actions"><span class="health-pill"><i></i>${counts.activeRuns || 0} active run${counts.activeRuns===1?'':'s'}</span><button class="primary compact" id="launch">＋ Launch shipping run</button></div></header>
+      <header class="topbar"><div><p class="eyebrow">UNIVERSAL AGENT OS ${state.accountEmail?esc(state.accountEmail):' · LOCAL'}</p><h1>${pageTitle()}</h1></div><div class="top-actions">${state.authMode==='account'?`<label class="org-picker">Organization<select id="org-picker">${state.organizations.map(org=>`<option value="${esc(org.organizationId)}" ${org.organizationId===state.organizationId?'selected':''}>${esc(org.organizationName||org.organizationId)} (${esc(org.role)})</option>`).join('')}</select></label>`:''}<span class="health-pill"><i></i>${counts.activeRuns || 0} active run${counts.activeRuns===1?'':'s'}</span><button class="primary compact" id="launch">＋ Launch shipping run</button></div></header>
       ${state.notice ? `<div class="notice ${esc(state.notice.kind)}">${esc(state.notice.message)}</div>` : ''}
       <main class="content">${state.loading ? '<div class="loading">Loading factory state…</div>' : pageHtml()}</main>
     </div>
