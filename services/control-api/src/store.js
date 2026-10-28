@@ -567,6 +567,12 @@ export class JsonStore {
         await client.query("COMMIT");
         return null;
       }
+      // The daemon can attest only its own build/deploy/uat actions.
+      // It is not the independent human release inspector or owner.
+      if(machineReported && (run.state==="SHIPPED" || run.releaseReceipt)) {
+        await client.query("COMMIT");
+        return null;
+      }
       // A connected machine must never be able to preempt or counterfeit a
       // human production approval by submitting a fabricated run event.
       if (machineReported && selected.rows[0]?.record?.state === "AWAITING_APPROVAL") {
