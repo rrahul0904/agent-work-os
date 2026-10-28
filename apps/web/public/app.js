@@ -1,76 +1,139 @@
 const state = {
   page: 'overview', product: null, machines: [], sessions: [], shippingRuns: [],
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
-  connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set()
+  connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
+  authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
+  organizations: [], organizationId: null, socket: null, reconnectTimer: null
 };
 const app = document.querySelector('#app');
-let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('agentWorkOsToken') || '';
-if (new URLSearchParams(location.search).has('token')) {
-  localStorage.setItem('agentWorkOsToken', token);
-  history.replaceState({}, '', location.pathname + location.hash);
-}
+let token = '';
 
 function esc(value='') { return String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function shortSha(value='') { return value ? String(value).slice(0, 9) : '—'; }
 function when(value) { if (!value) return '—'; const d = new Date(value); return Number.isNaN(d.valueOf()) ? esc(value) : d.toLocaleString(); }
 function statusClass(value='') { return `status-${String(value).toLowerCase().replaceAll('_','-')}`; }
-function authHeaders(extra={}) { return { ...extra, authorization: `Bearer ${token}` }; }
+function tenantQuery() { return state.authMode==='account' ? '?organizationId='+encodeURIComponent(state.organizationId) : ''; }
+function tenantEntries(items) { return state.authMode==='account' ? (items||[]).filter(x=>x.organizationId===state.organizationId) : (items||[]); }
+function authHeaders(extra={}, method='GET') {
+  if(state.authMode==='account'){
+    if(!['GET','HEAD','OPTIONS'].includes(method.toUpperCase())){
+      if(!state.csrfToken)throw new Error('Sign in again: missing CSRF token.');
+      return {...extra, 'x-csrf-token':state.csrfToken};
+    }
+    return {...extra};
+  }
+  return {...extra, ...(token?{authorization:'Bearer '+token}:{})};
+}
+function activateAccount(account) {
+  state.accountEmail=account.user?.email||null;
+  state.csrfToken=account.csrfToken;
+  state.organizations=Array.isArray(account.memberships)?account.memberships:[];
+  if(!state.organizations.some(org=>org.organizationId===state.organizationId))
+    state.organizationId=state.organizations[0]?.organizationId||null;
+  state.authError=null;
+}
+async function initialize() {
+  try {
+    const response=await fetch('/api/client-config',{credentials:'same-origin',cache:'no-store'});
+    if(!response.ok)throw new Error('Authentication mode could not be verified.');
+    const mode=(await response.json()).authentication;
+    if(!['account','local_token'].includes(mode))throw new Error('Unsupported authentication configuration.');
+    state.authMode=mode;
+    if(mode==='account'){
+      localStorage.removeItem('agentWorkOsToken');
+      const session=await fetch('/api/auth/me',{credentials:'same-origin',cache:'no-store'});
+      if(session.ok){activateAccount(await session.json());return bootstrap();}
+      if(session.status!==401)throw new Error('Account session validation failed.');
+      return renderLogin();
+    }
+    const params=new URLSearchParams(location.search);
+    token=params.get('token')||localStorage.getItem('agentWorkOsToken')||'';
+    if(params.has('token')){
+      localStorage.setItem('agentWorkOsToken',token);
+      history.replaceState({},'',location.pathname+location.hash);
+    }
+    if(token)return bootstrap();
+    renderLogin();
+  }catch(error){state.authError=error.message;renderLogin();}
+}
 async function api(url, options={}) {
-  const response = await fetch(url, { ...options, headers: authHeaders(options.headers || {}) });
-  const body = await response.json().catch(() => ({}));
-  if (response.status === 401) { logout(false); throw new Error('Control-plane token is invalid.'); }
-  if (!response.ok) throw new Error(body.message || body.error || `Request failed: ${response.status}`);
+  const response=await fetch(url,{
+    ...options, credentials:'same-origin',
+    headers:authHeaders(options.headers||{},options.method||'GET')
+  });
+  const body=await response.json().catch(()=>({}));
+  if(response.status===401){
+    if(state.authMode==='account'){
+      state.accountEmail=null;state.csrfToken=null;state.organizations=[];state.organizationId=null;
+    }else {token='';localStorage.removeItem('agentWorkOsToken');}
+    state.socket?.close();state.socket=null;state.connected=false;
+    renderLogin();
+    throw new Error('Session expired or credentials invalid.');
+  }
+  if(!response.ok)throw new Error(body.message||body.error||'Request failed: '+response.status);
   return body;
 }
 function setNotice(message, kind='info') { state.notice = { message, kind }; render(); setTimeout(() => { if (state.notice?.message === message) { state.notice = null; render(); } }, 4500); }
 
 async function bootstrap() {
-  if (!token) return renderLogin();
-  state.loading = true; render();
-  try {
-    const [snapshot, product, example] = await Promise.all([api('/api/state'), api('/api/product'), api('/api/shipping/example')]);
-    state.machines = snapshot.machines || [];
-    state.sessions = snapshot.sessions || [];
-    state.shippingRuns = snapshot.shippingRuns || [];
-    state.product = product;
-    state.contractText = JSON.stringify(example, null, 2);
+  if(state.authMode==='account'&&!state.accountEmail)return renderLogin();
+  if(state.authMode==='local_token'&&!token)return renderLogin();
+  state.loading=true;render();
+  try{
+    const [snapshot,product,example]=await Promise.all([
+      api('/api/state'+tenantQuery()),api('/api/product'+tenantQuery()),api('/api/shipping/example')
+    ]);
+    state.machines=tenantEntries(snapshot.machines);
+    state.sessions=tenantEntries(snapshot.sessions);
+    state.shippingRuns=tenantEntries(snapshot.shippingRuns);
+    state.product=product;
+    state.contractText=JSON.stringify(example,null,2);
     connect();
-  } catch (error) {
-    if (token) setNotice(error.message, 'error');
-  } finally { state.loading = false; render(); }
+  }catch(error){state.authError=error.message;}
+  finally{state.loading=false;render();}
 }
 function connect() {
-  if (!token) return;
-  const url = new URL('/ws', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.searchParams.set('role', 'client'); url.searchParams.set('token', token);
-  if (typeof state.lastCursor === 'string') url.searchParams.set('cursor', state.lastCursor);
-  const ws = new WebSocket(url);
-  ws.onopen = () => { state.connected = true; render(); };
-  ws.onclose = () => { state.connected = false; render(); if (token) setTimeout(connect, 1800); };
-  ws.onmessage = async event => {
-    const msg = JSON.parse(event.data);
-    if (typeof msg.eventId === 'string') {
-      if (state.seenEventTags.has(msg.eventId)) return;
+  if(state.authMode==='account'&&!state.accountEmail)return;
+  if(state.authMode==='local_token'&&!token)return;
+  if(state.socket&&[WebSocket.OPEN,WebSocket.CONNECTING].includes(state.socket.readyState))return;
+  const url=new URL('/ws',location.href);url.protocol=location.protocol==='https:'?'wss:':'ws:';
+  url.searchParams.set('role','client');
+  if(state.authMode==='local_token')url.searchParams.set('token',token);
+  if(typeof state.lastCursor==='string')url.searchParams.set('cursor',state.lastCursor);
+  const ws=new WebSocket(url);state.socket=ws;
+  ws.onopen=()=>{if(state.socket!==ws)return;state.connected=true;render();};
+  ws.onclose=()=>{
+    if(state.socket!==ws)return;
+    state.socket=null;state.connected=false;render();
+    if(state.authMode==='account'&&!state.accountEmail)return;
+    if(state.authMode==='local_token'&&!token)return;
+    clearTimeout(state.reconnectTimer);
+    state.reconnectTimer=setTimeout(connect,1800);
+  };
+  ws.onmessage=async event=>{
+    if(state.socket!==ws)return;
+    const msg=JSON.parse(event.data);
+    if(typeof msg.eventId==='string'){
+      if(state.seenEventTags.has(msg.eventId))return;
       state.seenEventTags.add(msg.eventId);
-      if (state.seenEventTags.size > 256) state.seenEventTags.delete(state.seenEventTags.values().next().value);
+      if(state.seenEventTags.size>256)state.seenEventTags.delete(state.seenEventTags.values().next().value);
     }
-    if (typeof msg.cursor === 'string') state.lastCursor = msg.cursor;
-    if (msg.type === 'realtime.cursor') {
-      return;
+    if(typeof msg.cursor==='string')state.lastCursor=msg.cursor;
+    if(msg.type==='realtime.cursor')return;
+    if(msg.type==='state.snapshot'){
+      state.machines=tenantEntries(msg.machines);
+      state.sessions=tenantEntries(msg.sessions);
+      state.shippingRuns=tenantEntries(msg.shippingRuns);
     }
-    if (msg.type === 'state.snapshot') {
-      state.machines = msg.machines || []; state.sessions = msg.sessions || []; state.shippingRuns = msg.shippingRuns || [];
-      if (typeof msg.cursor === 'string') state.lastCursor = msg.cursor;
-    }
-    if (msg.type === 'machine.updated') state.machines = upsert(state.machines, msg.machine);
-    if (msg.type === 'session.updated') state.sessions = upsert(state.sessions, msg.session, true);
-    if (msg.type === 'shipping.run.updated') state.shippingRuns = upsert(state.shippingRuns, msg.run, true);
+    if(msg.type==='machine.updated'&&tenantEntries([msg.machine]).length)state.machines=upsert(state.machines,msg.machine);
+    if(msg.type==='session.updated'&&tenantEntries([msg.session]).length)state.sessions=upsert(state.sessions,msg.session,true);
+    if(msg.type==='shipping.run.updated'&&tenantEntries([msg.run]).length)state.shippingRuns=upsert(state.shippingRuns,msg.run,true);
     await refreshProduct(false);
     render();
   };
 }
 function upsert(items, item, front=false) { const rest = items.filter(x => (x.id || x.runId) !== (item.id || item.runId)); return front ? [item, ...rest] : [...rest, item]; }
-async function refreshProduct(withRender=true) { try { state.product = await api('/api/product'); } catch {} if (withRender) render(); }
+async function refreshProduct(withRender=true) { try { state.product = await api('/api/product'+tenantQuery()); } catch {} if (withRender) render(); }
 
 function renderLogin() {
   app.innerHTML = `<div class="login-shell"><div class="login-card">
@@ -255,4 +318,4 @@ function wire() {
   document.querySelector('#interrupt')?.addEventListener('click',()=>selected&&api(`/api/sessions/${selected.id}/interrupt`,{method:'POST'}).catch(e=>setNotice(e.message,'error')));
 }
 
-bootstrap();
+initialize();
