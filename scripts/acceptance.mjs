@@ -100,16 +100,17 @@ try {
   const shipBody = await shipResponse.json();
   assert.equal(shipResponse.status,202,JSON.stringify(shipBody));
   const queued = shipBody;
-  const shipped = await waitFor(async()=>{
+  const verified = await waitFor(async()=>{
     const r=await fetch(`http://127.0.0.1:${port}/api/shipping/runs/${queued.runId}`,{headers});
     if(!r.ok)return null;
     const run=await r.json();
-    return run.state==='SHIPPED'?run:null;
-  },12000,'receipt-gated shipping run');
-  assert.ok(shipped.testedSha);
-  assert.equal(shipped.testedSha,shipped.deployedSha);
-  assert.equal(shipped.releaseReceipt.goldenPath[0].status,'PASS');
-  console.log('[acceptance] PASS: canonical WorkItem API + one-command product -> local agent + Shipping Supervisor -> exact-SHA SHIPPED receipt');
+    return run.state==='VERIFIED_ONLY'?run:null;
+  },12000,'verified-only local build (no deployment)');
+  assert.ok(verified.testedSha);
+  assert.equal(verified.deployedSha,null);
+  assert.equal(verified.releaseReceipt,undefined);
+  assert.ok(verified.events.some(event=>event.type==='release.verified_without_deployment'));
+  console.log('[acceptance] PASS: canonical WorkItem API + one-command product -> local agent + Shipping Supervisor -> evidence-verified local candidate (not SHIPPED)');
 } finally {
   for(const child of children.reverse()) child.kill('SIGTERM');
   await new Promise(r=>setTimeout(r,220));
