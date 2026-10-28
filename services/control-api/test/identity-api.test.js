@@ -169,12 +169,12 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     // Token-only invite registration works for a *new* user without opening
     // public organization registration; it is single-use and role-scoped.
     const inviteEmail=`invite-only-${emailTag}@example.test`;
-    const invitationResponse=await api(owner.cookies,owner.body.csrfToken,
+    const invitedUserInvitationResponse=await api(owner.cookies,owner.body.csrfToken,
       `/api/organizations/${alphaId}/invitations`,{
         method:"POST",body:{email:inviteEmail,role:"viewer"}
       });
-    assert.equal(invitationResponse.status,201);
-    const inviteToken=(await invitationResponse.json()).invitation.token;
+    assert.equal(invitedUserInvitationResponse.status,201);
+    const inviteToken=(await invitedUserInvitationResponse.json()).invitation.token;
     const inviteSignup="/api/auth/register-invited";
     const wrongEmailSignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
       body:JSON.stringify({email:"different-"+inviteEmail,password:"correct horse battery staple",
