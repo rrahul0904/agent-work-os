@@ -76,13 +76,14 @@ export function isModelUseApproved(record,capability){
   if(!record||record.status!=="approved"||record.allowPrivate!==true||
     !capability||capability.name!==record.agent||capability.model!==record.model)return false;
   if(!DESTINATIONS.has(record.destination)||!RETENTION.has(record.retention))return false;
-  if(capability.lane!==record.destination)return false;
-  // A loopback Token Intelligence gateway may forward to a hosted provider.
-  // The daemon's registered/attested upstream must match the tenant policy.
+  // A local gateway may forward to a remote model: actual upstream is the
+  // authority input, not the gateway's loopback network address.
   if(record.agent==="token-intelligence"){
-    if(capability.upstreamDestination!==record.destination ||
-       capability.upstreamRegion!==record.region ||
-       capability.upstreamRetention!==record.retention)return false;
+    return capability.upstreamDestination===record.destination &&
+      capability.upstreamRegion===record.region &&
+      capability.upstreamRetention===record.retention;
   }
-  return true;
+  return capability.lane===record.destination &&
+    capability.upstreamRegion===record.region &&
+    capability.upstreamRetention===record.retention;
 }
