@@ -280,6 +280,18 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         const body = await response.json();
         return response.ok && body.machines.some((machine) => machine.id === machineId && machine.organizationId === alphaId);
       }, 3_000, "organization-bound machine authentication");
+      // A repository-review mission internally calls both model lanes. Its
+      // end-user must have both tenant grants, not just mission approval.
+      const deniedModel = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
+        method:"POST",body:{organizationId:alphaId,machineId,cwd:"/tmp",
+          agent:"model-chat",prompt:"private request without model approval"}
+      });
+      assert.equal(deniedModel.status,403,"revoked model grant blocks direct inference");
+      const deniedReview = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
+        method:"POST",body:{organizationId:alphaId,machineId,cwd:"/tmp",
+          agent:"repository-review",prompt:"investigate the private repository"}
+      });
+      assert.equal(deniedReview.status,403,"repository-review cannot bypass missing reviewer model grant");
       await stopReplica();
       await startReplica();
       const machineAfterReplicaRestart = await api(owner.cookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
@@ -947,7 +959,12 @@ async function openMachineSocket(port, machineCredential, machineId) {
   });
   socket.send(encodeMessage({
     type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machineCredential,
-    machine: { id: machineId, name: "Test executor", capabilities: [{ name: "echo" }], shipping: { enabled: true } }
+    machine: { id: machineId, name: "Test executor", capabilities: [
+      { name: "echo" },
+      { name:"model-chat",model:"local-ci-model",lane:"local_machine",upstreamRegion:"local",upstreamRetention:"zero" },
+      { name:"token-intelligence",model:"ti-local",lane:"local_machine",upstreamDestination:"local_machine",upstreamRegion:"local",upstreamRetention:"zero" },
+      { name:"repository-review",modelIds:["local-ci-model","ti-local"] }
+    ], shipping: { enabled: true } }
   }));
   return {
     readMessage(timeoutMs = 2_000) {
