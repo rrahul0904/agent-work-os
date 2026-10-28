@@ -166,6 +166,35 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.equal(ownerOrgsResponse.status, 200);
     const alphaId = owner.body.organization.id;
     assert.equal(ownerOrgs.organizations[0].organizationId, alphaId);
+    // Token-only invite registration works for a *new* user without opening
+    // public organization registration; it is single-use and role-scoped.
+    const inviteEmail=`invite-only-${emailTag}@example.test`;
+    const invitationResponse=await api(owner.cookies,owner.body.csrfToken,
+      `/api/organizations/${alphaId}/invitations`,{
+        method:"POST",body:{email:inviteEmail,role:"viewer"}
+      });
+    assert.equal(invitationResponse.status,201);
+    const inviteToken=(await invitationResponse.json()).invitation.token;
+    const inviteSignup="/api/auth/register-invited";
+    const wrongEmailSignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
+      body:JSON.stringify({email:"different-"+inviteEmail,password:"correct horse battery staple",
+        invitationToken:inviteToken})});
+    assert.equal(wrongEmailSignup.status,404,"invitation must match exact email");
+    const invitedSignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
+      body:JSON.stringify({email:inviteEmail,password:"correct horse battery staple",
+        invitationToken:inviteToken})});
+    assert.equal(invitedSignup.status,201);
+    const invitedBody=await invitedSignup.json(),invitedCookie=getCookies(invitedSignup);
+    assert.equal(invitedBody.memberships[0].organizationId,alphaId);
+    assert.equal(invitedBody.memberships[0].role,"viewer");
+    assert.equal((await api(invitedCookie,invitedBody.csrfToken,"/api/projects",{
+      method:"POST",body:{organizationId:alphaId,name:"Forbidden from viewer"}
+    })).status,403);
+    const replaySignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
+      body:JSON.stringify({email:inviteEmail,password:"correct horse battery staple",
+        invitationToken:inviteToken})});
+    assert.equal(replaySignup.status,404,"invitation token must be consumed exactly once");
+
     // Wave 2: actual browser-facing tenant project lifecycle backed by SQL.
     const createProjectPath="/api/projects";
     const createProjectBody={organizationId:alphaId,name:"Data Warehouse Modernization",
