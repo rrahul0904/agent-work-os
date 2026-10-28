@@ -1,5 +1,5 @@
 # Disposable HTTPS-only browser UAT. Never expose publicly.
-https://127.0.0.1:8443 {
+localhost:8443 {
     tls internal
     reverse_proxy control-api:8787
     header {
