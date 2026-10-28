@@ -554,6 +554,18 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       });
       assert.equal(verifiedPermit.approvedBy, releaseReviewer.body.user.id);
       assert.equal(verifiedPermit.requestedBy, owner.body.user.id);
+      // Even after two-person authorization, daemon self-report is NOT
+      // independent live release certification.
+      machineSocket.sendMessage({type:"daemon.shipping.run",machineId,run:{
+        ...approved,state:"SHIPPED",releaseReceipt:{status:"fabricated",receiptDigest:"fake"},
+        updatedAt:"2099-01-01T00:00:00.000Z"
+      }});
+      await new Promise(resolve=>setTimeout(resolve,150));
+      const uncertified=await api(owner.cookies,null,
+        "/api/shipping/runs/"+protectedRunId+"?organizationId="+encodeURIComponent(alphaId));
+      assert.equal((await uncertified.json()).state,"QUEUED",
+        "daemon cannot escalate reviewed production attempt to SHIPPED");
+
       const approvedRows = await databaseInspector.query(
         "SELECT count(*)::int AS count FROM agent_work_os_daemon_commands_v1 WHERE payload->>'action' = 'shipping.start' AND payload->'payload'->>'runId' = $1",
         [protectedRunId]
