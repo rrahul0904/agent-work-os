@@ -593,6 +593,15 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const ownerSessionRead=await api(owner.cookies,null,
         "/api/sessions/"+alphaSessionId+"?organizationId="+alphaId);
       assert.equal(ownerSessionRead.status,200);
+      const sameOrgAdminSocket=openClientSocket(port,releaseReviewer.cookies);
+      try {
+        const sameOrgSnapshot=await readUntilMessage(sameOrgAdminSocket,
+          msg=>msg.type==="state.snapshot",3_000);
+        assert.ok(sameOrgSnapshot.sessions.every(row=>row.createdBy===releaseReviewer.body.user.id),
+          "WebSocket snapshot must never include another user's session transcripts");
+        assert.ok(!JSON.stringify(sameOrgSnapshot).includes(alphaSessionId));
+      }finally{sameOrgAdminSocket.close();}
+
 
 
       const productionContract = structuredClone(shippingContractForOutboxRollback);
