@@ -30,6 +30,13 @@ jobs:
           docker run --rm -v "${{ github.workspace }}:/repo"
           zricethezav/gitleaks:v8.24.3 detect
           --source=/repo --redact --exit-code=2 --log-opts="--all"
+          --report-format=json --report-path=/repo/.ci-gitleaks-report.json
+      - name: Report safe rule/commit triage metadata (not secret values)
+        if: failure()
+        run: node scripts/security-print-redacted-triage.mjs .ci-gitleaks-report.json
+      - name: Remove redacted scanner report from workspace
+        if: always()
+        run: rm -f .ci-gitleaks-report.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
