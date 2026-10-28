@@ -167,9 +167,37 @@ function agentsHtml() {
   return `<section class="agents-layout"><div class="panel"><div class="panel-head"><div><p class="eyebrow">EXECUTORS</p><h2>${state.machines.length} machines</h2></div></div>${state.machines.length?state.machines.map(machineCard).join(''):'<div class="empty">No local daemon connected.</div>'}<div class="panel-head sub"><div><p class="eyebrow">AGENT SESSIONS</p><h2>${state.sessions.length} sessions</h2></div></div>${state.sessions.map(s=>`<button class="session-select ${selected?.id===s.id?'active':''}" data-session="${s.id}"><strong>${esc(s.agent)}</strong><span>${esc(s.status)}</span><small>${esc(s.cwd)}</small></button>`).join('')||'<div class="empty">No sessions.</div>'}</div><div class="panel session-panel">${selected?sessionHtml(selected):agentWelcome()}</div><div class="panel">${newSessionHtml()}</div></section>`;
 }
 function machineCard(m){return `<article class="machine-card"><div><i class="${m.status==='online'?'online':'offline'}"></i><strong>${esc(m.name)}</strong></div><small>${esc(m.platform)}/${esc(m.arch)}</small><div class="chips">${(m.capabilities||[]).map(c=>`<span>${esc(c.name)}</span>`).join('')}${m.shipping?.enabled?'<span class="shipping-chip">shipping</span>':''}</div></article>`;}
-function sessionHtml(s){return `<div class="panel-head"><div><p class="eyebrow">${esc(s.agent)} SESSION</p><h2>${esc(s.cwd)}</h2></div><button class="danger compact" id="interrupt">Interrupt</button></div><div class="messages">${(s.messages||[]).map(m=>`<div class="msg ${m.role}"><small>${esc(m.role)}</small><pre>${esc(m.text)}</pre></div>`).join('')}</div><form id="follow" class="follow"><textarea name="text" placeholder="Send a follow-up…"></textarea><button class="primary">Send</button></form>`;}
+function missionApproval(s) {
+  if(s.agent!=='repository-review')return '';
+  // The approval comes from the daemon and is bound to a session-specific SHA-256.
+  // Never render raw model text as HTML or infer approval from an arbitrary chat answer.
+  const messages=(s.messages||[]).filter(m=>m.role!=='user');
+  let proposal=null,terminal=false;
+  for(const m of messages){
+    try{
+      const item=JSON.parse(m.text);
+      if(item.type==='mission.approval_required'&&/^[a-f0-9]{64}$/.test(item.approvalHash)&&
+        item.plan?.sessionId===s.id)proposal=item;
+      if(['mission.review_complete','mission.rejected'].includes(item.type))terminal=true;
+    }catch{}
+  }
+  if(!proposal||terminal)return '';
+  const plan=proposal.plan;
+  return `<section class="blocker-banner mission-review-approval" aria-label="Human approval required">
+    <strong>HUMAN APPROVAL REQUIRED · Read-only cross-model review</strong>
+    <p>Symbol: <code>${esc(plan.symbol)}</code> · Git revision: <code>${esc(String(plan.revision||'').slice(0,12))}</code></p>
+    <p>Two model calls will receive sanitized symbol metadata (not source files). The provider destinations must be reviewed by your operator. No code writes, tests, push or deploy.</p>
+    <p>Analyst: <strong>${esc(plan.analystModel)}</strong> · Reviewer: <strong>${esc(plan.reviewerModel)}</strong></p>
+    <code class="mission-digest">${esc(proposal.approvalHash)}</code>
+    <div class="drawer-actions">
+      <button class="primary compact" id="mission-approve" data-approval="${esc(proposal.approvalHash)}">Approve context transfer</button>
+      <button class="secondary compact" id="mission-reject" data-approval="${esc(proposal.approvalHash)}">Reject</button>
+    </div>
+  </section>`;
+}
+function sessionHtml(s){return `<div class="panel-head"><div><p class="eyebrow">${esc(s.agent)} SESSION</p><h2>${esc(s.cwd)}</h2></div><button class="danger compact" id="interrupt">Interrupt</button></div>${missionApproval(s)}<div class="messages">${(s.messages||[]).map(m=>`<div class="msg ${m.role}"><small>${esc(m.role)}</small><pre>${esc(m.text)}</pre></div>`).join('')}</div><form id="follow" class="follow"><textarea name="text" placeholder="Send a follow-up…"></textarea><button class="primary">Send</button></form>`;}
 function agentWelcome(){return `<div class="empty big"><strong>Local execution, remote control.</strong><p>Connect the daemon on your workstation to run Codex without moving source or credentials into the control plane.</p></div>`;}
-function newSessionHtml(){const online=state.machines.filter(m=>m.status==='online');return `<form id="new-session" class="stack"><div class="panel-head"><div><p class="eyebrow">NEW AGENT SESSION</p><h2>Delegate work</h2></div></div><label>Machine<select name="machineId">${online.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label><label>Agent<select name="agent">${(online[0]?.capabilities||[]).map(c=>`<option value="${esc(c.name)}">${esc(c.name)}${c.mode==='chat_only_no_tools'?' (chat only — no tools)':''}</option>`).join('')}</select></label><label>Working directory<input name="cwd" placeholder="/path/to/repo"></label><label>Model<input name="model" placeholder="optional"></label><label>Prompt<textarea name="prompt" placeholder="Implement the next verified change…"></textarea></label><p class="muted">Coding agents can modify your repository according to their local permissions. model-chat only sends text to an explicitly configured model API; it does not execute commands or tools.</p><button class="primary" ${online.length?'':'disabled'}>Start local agent</button></form>`;}
+function newSessionHtml(){const online=state.machines.filter(m=>m.status==='online');return `<form id="new-session" class="stack"><div class="panel-head"><div><p class="eyebrow">NEW AGENT SESSION</p><h2>Delegate work</h2></div></div><label>Machine<select name="machineId">${online.map(m=>`<option value="${m.id}">${esc(m.name)}</option>`).join('')}</select></label><label>Agent<select name="agent">${(online[0]?.capabilities||[]).map(c=>`<option value="${esc(c.name)}">${esc(c.name)}${c.mode==='chat_only_no_tools'?' (chat only — no tools)':''}</option>`).join('')}</select></label><label>Working directory<input name="cwd" placeholder="/path/to/repo"></label><label>Model<input name="model" placeholder="optional"></label><label>Prompt<textarea name="prompt" placeholder="For repository-review: investigate process_orders | Why are duplicate events possible?"></textarea></label><p class="muted">repository-review first prepares a read-only three-agent plan, then waits for your signed-in session approval before exporting sanitized CodeAtlas metadata to both models. Other coding agents may edit code according to local permissions; model-chat does not run tools.</p><button class="primary" ${online.length?'':'disabled'}>Start local agent</button></form>`;}
 
 function launchDrawer() {
   const shippingMachines=state.machines.filter(m=>m.status==='online'&&m.shipping?.enabled);
@@ -209,6 +237,21 @@ function wire() {
   const follow=document.querySelector('#follow');
   const selected=state.sessions.find(s=>s.id===state.selectedSession)||state.sessions[0];
   if(follow&&selected)follow.onsubmit=async e=>{e.preventDefault();const text=new FormData(follow).get('text');try{await api(`/api/sessions/${selected.id}/messages`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text})});follow.reset();}catch(error){setNotice(error.message,'error');}};
+  // The button sends only the digest emitted by this session's daemon approval event.
+  for(const decision of ['approve','reject']){
+    const button=document.querySelector('#mission-'+decision);
+    button?.addEventListener('click',async()=>{
+      if(!selected||selected.agent!=='repository-review')return;
+      const digest=button.dataset.approval;
+      if(!/^[a-f0-9]{64}$/.test(digest||''))return setNotice('Invalid mission approval digest.','error');
+      button.disabled=true;
+      try{
+        await api(`/api/sessions/${selected.id}/messages`,{method:'POST',headers:{'content-type':'application/json'},
+          body:JSON.stringify({text:decision+' '+digest})});
+        setNotice(decision==='approve'?'Approval submitted to local daemon.':'Mission rejected.','success');
+      }catch(error){button.disabled=false;setNotice(error.message,'error');}
+    });
+  }
   document.querySelector('#interrupt')?.addEventListener('click',()=>selected&&api(`/api/sessions/${selected.id}/interrupt`,{method:'POST'}).catch(e=>setNotice(e.message,'error')));
 }
 
