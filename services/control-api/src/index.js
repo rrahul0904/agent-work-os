@@ -250,7 +250,7 @@ export async function createControlPlane() {
         const ready = !eventFanout || eventFanout.ready;
         return json(res, ready ? 200 : 503, { ok: ready, database: store.pool ? "ready" : "local", eventFanout: eventFanout ? (ready ? "ready" : "connecting") : "local" });
       }
-      const isPublicAuthRoute = req.method === "POST" && ["/api/auth/register", "/api/auth/login"].includes(url.pathname);
+      const isPublicAuthRoute = req.method === "POST" && ["/api/auth/register", "/api/auth/register-invited", "/api/auth/login"].includes(url.pathname);
       let principal = null;
       if (url.pathname.startsWith("/api/") && !isPublicAuthRoute) {
         principal = identities ? await authenticateSession(req, identities) : null;
@@ -273,6 +273,21 @@ export async function createControlPlane() {
         const account = await identities.register({ email: body.email, password: body.password, organizationName: body.organizationName });
         setAuthCookies(res, account.session);
         return json(res, 201, { user: account.user, organization: account.organization, memberships: account.memberships, csrfToken: account.session.csrfToken });
+      }
+      if (req.method === "POST" && url.pathname === "/api/auth/register-invited") {
+        if (!identities) return json(res, 503, { error: "identity_requires_postgres" });
+        const body = await readJson(req);
+        await identities.consumeAuthAttempt(`invited-register-ip:${clientAddress(req)}`,
+          { limit: 12, windowMs: 15 * 60 * 1000 });
+        const emailKey=typeof body.email==="string"?body.email.trim().toLowerCase():"invalid-email";
+        await identities.consumeAuthAttempt(`invited-register-email:${emailKey}`,
+          { limit: 8, windowMs: 15 * 60 * 1000 });
+        const account=await identities.registerInvited({
+          email:body.email,password:body.password,invitationToken:body.invitationToken
+        });
+        setAuthCookies(res,account.session);
+        return json(res,201,{user:account.user,memberships:account.memberships,
+          csrfToken:account.session.csrfToken});
       }
       if (req.method === "POST" && url.pathname === "/api/auth/login") {
         if (!identities) return json(res, 503, { error: "identity_requires_postgres" });
@@ -1048,7 +1063,7 @@ async function authenticateSession(req, identities) {
   return identities.authenticate(readCookie(req, sessionCookieName));
 }
 function isPublicAuthRoute(pathname) {
-  return ["/api/auth/register", "/api/auth/login"].includes(pathname);
+  return ["/api/auth/register", "/api/auth/register-invited", "/api/auth/login"].includes(pathname);
 }
 function isUserScopedRoute(pathname) {
   return pathname === "/api/auth/me" || pathname === "/api/auth/logout" || pathname === "/api/auth/accept-invitation"
