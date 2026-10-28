@@ -332,6 +332,9 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
 
       const shippingContractResponse = await api(owner.cookies, null, "/api/shipping/example");
       const shippingContractForOutboxRollback = await shippingContractResponse.json();
+      // Existing daemon-outbox rollback scenario tests ordinary (non-production)
+      // dispatch; production-intent now intentionally waits for a second actor.
+      shippingContractForOutboxRollback.production = { required: false };
       const outboxRollbackPrompt = `outbox rollback ${crypto.randomUUID()}`;
       const outboxRollbackRunId = `outbox-rollback-${crypto.randomUUID()}`;
       await databaseInspector.query(`
