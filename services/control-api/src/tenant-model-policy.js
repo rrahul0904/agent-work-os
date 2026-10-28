@@ -81,9 +81,11 @@ export function isModelUseApproved(record,capability){
   if(record.agent==="token-intelligence"){
     return capability.upstreamDestination===record.destination &&
       capability.upstreamRegion===record.region &&
-      capability.upstreamRetention===record.retention;
+      capability.upstreamRetention===record.retention &&
+      (record.destination!=="approved_remote" || capability.upstreamOrigin===record.approvedOrigin);
   }
   return capability.lane===record.destination &&
     capability.upstreamRegion===record.region &&
-    capability.upstreamRetention===record.retention;
+    capability.upstreamRetention===record.retention &&
+    (record.destination!=="approved_remote" || capability.upstreamOrigin===record.approvedOrigin);
 }
