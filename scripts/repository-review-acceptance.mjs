@@ -109,6 +109,8 @@ try {
     AGENT_WORK_OS_COMPAT_CHAT_ENABLED: "true",
     AGENT_WORK_OS_COMPAT_CHAT_BASE_URL: "http://127.0.0.1:" + analystServer.address().port + "/v1",
     AGENT_WORK_OS_COMPAT_CHAT_MODEL: "mission-analyst-fixture",
+    AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_REGION: "local",
+    AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_RETENTION: "zero",
     AGENT_WORK_OS_TI_ENABLED: "true",
     AGENT_WORK_OS_TI_ENDPOINT: "http://127.0.0.1:" + reviewServer.address().port + "/api/v1/inference/chat-completions",
     AGENT_WORK_OS_TI_API_KEY: gatewayKey,
