@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { assertKnownBlocker, assertShippingContract, digestShippingContract } from "./shipping-contract.js";
-import { appendShippingEvent, buildReleaseReceipt, createShippingRun } from "./shipping-receipts.js";
+import { appendShippingEvent, createShippingRun } from "./shipping-receipts.js";
 import { GitWorktreeManager, ShellRunner } from "./shipping-adapters.js";
 import { ShippingStore } from "./shipping-store.js";
 import { verifyProductionApproval } from "./production-approval.js";
@@ -180,15 +180,14 @@ export class ShippingSupervisor {
       if (contract.worktree.cleanupOnSuccess) await this.worktrees.remove({ repoPath: worktree.repoPath, worktreePath: worktree.worktreePath });
       return run;
     }
-    run = await this.event(run, { type: "sha.verified", state: "PRODUCTION_VERIFIED", evidence: { testedSha: run.testedSha, deployedSha: run.deployedSha } });
-    run = await this.event(run, { type: "release.shipped", state: "SHIPPED", evidence: { goldenPath: contract.goldenPath.map((item) => item.id) } });
-    const receipt = buildReleaseReceipt(run, { goldenPath: contract.goldenPath });
-    const receiptFile = path.join(runDir, "release-receipt.json");
-    await fs.writeFile(receiptFile, `${JSON.stringify(receipt, null, 2)}\n`, { mode: 0o600 });
-    run.releaseReceipt = receipt;
-    run.receiptFile = receiptFile;
-    await this.persist(run);
-
+    // A test/UAT command returning exit code zero cannot independently certify
+    // the live production release. Never emit SHIPPED or self-sign its receipt.
+    run = await this.event(run, {
+      type: "release.awaiting_external_certification",
+      state: "AWAITING_EXTERNAL_CERTIFICATION",
+      evidence: { testedSha: run.testedSha, deployedSha: run.deployedSha,
+        productionCommandsSucceeded: true, independentReviewerRequired: true }
+    });
     if (contract.worktree.cleanupOnSuccess) await this.worktrees.remove({ repoPath: worktree.repoPath, worktreePath: worktree.worktreePath });
     return run;
   }
