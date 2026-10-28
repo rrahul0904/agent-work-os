@@ -8,7 +8,9 @@ const good = () => ({
   sourceSha: exact, testedSha: exact, deployedSha: exact,
   evidence: {
     exactSha: true, unitTests: true, integrationTests: true, browserUat: true,
-    securityReview: true, dependencyAudit: true, realModelProvider: true,
+    securityReview: true, dependencyAudit: true, fullHistorySecretScan: true,
+    gatewayDependencyAudit: true, mcpTenantIsolation: true, runtimeSandbox: true,
+    humanApprovalReplay: true, incidentResponse: true, realModelProvider: true,
     globalQuota: true, tenantIsolation: true, authRbac: true,
     credentialVault: true, privacyRights: true, backupRestore: true, rollback: true,
     operatorUat: true, independentReview: true, ownerApproval: true, liveVerification: true
@@ -70,4 +72,15 @@ test("rejects missing HTTPS live URL regardless of purported QA receipts", () =>
   const report = evaluateUnifiedReleasePreflight({ ...good(), productionUrl: "http://example.com" });
   assert.equal(report.verdict, "NO_GO");
   assert.ok(report.blockers.includes("PRODUCTION_TLS_REQUIRED"));
+});
+
+test("Agent OS cannot self-certify a gateway with unresolved historical secrets or MCP isolation", () => {
+  const manifest = good();
+  for(const check of ["fullHistorySecretScan","gatewayDependencyAudit","mcpTenantIsolation","humanApprovalReplay"]){
+    const payload = structuredClone(manifest);
+    payload.evidence[check]=false;
+    const report=evaluateUnifiedReleasePreflight(payload);
+    assert.equal(report.verdict,"NO_GO");
+    assert.ok(report.blockers.length>0);
+  }
 });

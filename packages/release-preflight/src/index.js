@@ -11,6 +11,14 @@ const CHECKS = [
   ["browserUat", "BROWSER_UAT_NOT_VERIFIED"],
   ["securityReview", "SECURITY_REVIEW_NOT_VERIFIED"],
   ["dependencyAudit", "DEPENDENCY_AUDIT_NOT_CLEAN"],
+  // P0 closure is cross-repository; a clean Agent Work OS test run is not
+  // evidence that the Token Intelligence gateway or historical secrets passed.
+  ["fullHistorySecretScan", "FULL_HISTORY_SECRET_SCAN_NOT_CLEAN"],
+  ["gatewayDependencyAudit", "GATEWAY_DEPENDENCY_AUDIT_NOT_CLEAN"],
+  ["mcpTenantIsolation", "MCP_TENANT_ISOLATION_NOT_VERIFIED"],
+  ["runtimeSandbox", "RUNTIME_SANDBOX_NOT_VERIFIED"],
+  ["humanApprovalReplay", "HUMAN_APPROVAL_REPLAY_NOT_VERIFIED"],
+  ["incidentResponse", "INCIDENT_RESPONSE_NOT_VERIFIED"],
   ["realModelProvider", "REAL_PROVIDER_NOT_VERIFIED"],
   ["globalQuota", "GLOBAL_QUOTA_NOT_VERIFIED"],
   ["tenantIsolation", "TENANT_ISOLATION_NOT_VERIFIED"],
