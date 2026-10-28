@@ -573,6 +573,36 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const acceptedReleaseReviewer = await api(releaseReviewer.cookies, releaseReviewer.body.csrfToken,
         "/api/auth/accept-invitation", { method: "POST", body: { token: invite.invitation.token } });
       assert.equal(acceptedReleaseReviewer.status, 200);
+      // A same-organization Admin may review deployment requests but cannot
+      // inspect or mutate another person's private agent transcripts.
+      const peerState=await api(releaseReviewer.cookies,null,"/api/state?organizationId="+alphaId);
+      assert.equal(peerState.status,200);
+      const peerSnapshot=await peerState.json();
+      assert.ok(peerSnapshot.sessions.every(row=>row.createdBy===releaseReviewer.body.user.id));
+      assert.ok(!JSON.stringify(peerSnapshot).includes(alphaSessionId));
+      assert.equal((await api(releaseReviewer.cookies,null,
+        "/api/sessions/"+alphaSessionId+"?organizationId="+alphaId)).status,404,
+        "admin cannot read a teammate's private session by ID");
+      assert.equal((await api(releaseReviewer.cookies,releaseReviewer.body.csrfToken,
+        "/api/sessions/"+alphaSessionId+"/messages",{method:"POST",body:{
+          text:"injected command from another team member"
+        }})).status,404,"same-org admin cannot inject a follow-up into another user's session");
+      assert.equal((await api(releaseReviewer.cookies,releaseReviewer.body.csrfToken,
+        "/api/sessions/"+alphaSessionId+"/interrupt",{method:"POST"})).status,404,
+        "same-org admin cannot interrupt another user's private agent without explicit delegation");
+      const ownerSessionRead=await api(owner.cookies,null,
+        "/api/sessions/"+alphaSessionId+"?organizationId="+alphaId);
+      assert.equal(ownerSessionRead.status,200);
+      const sameOrgAdminSocket=openClientSocket(port,releaseReviewer.cookies);
+      try {
+        const sameOrgSnapshot=await readUntilMessage(sameOrgAdminSocket,
+          msg=>msg.type==="state.snapshot",3_000);
+        assert.ok(sameOrgSnapshot.sessions.every(row=>row.createdBy===releaseReviewer.body.user.id),
+          "WebSocket snapshot must never include another user's session transcripts");
+        assert.ok(!JSON.stringify(sameOrgSnapshot).includes(alphaSessionId));
+      }finally{sameOrgAdminSocket.close();}
+
+
 
       const productionContract = structuredClone(shippingContractForOutboxRollback);
       productionContract.worktree.baseRef = "c".repeat(40);
@@ -924,11 +954,11 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const sharedRead = await api(viewerResult.cookies, null, `/api/work-items/${workItemId}?organizationId=${encodeURIComponent(alphaId)}`);
       assert.equal(sharedRead.status, 200, "accepted invitation grants membership");
       const viewerSessionRead = await api(viewerResult.cookies, null, `/api/sessions/${encodeURIComponent(alphaSessionId)}?organizationId=${encodeURIComponent(alphaId)}`);
-      assert.equal(viewerSessionRead.status, 200, "viewer membership permits reading organization sessions");
+      assert.equal(viewerSessionRead.status, 404, "membership alone must not expose another user\'s private session");
       const viewerSessionWrite = await api(viewerResult.cookies, viewerResult.body.csrfToken, `/api/sessions/${encodeURIComponent(alphaSessionId)}/messages`, {
         method: "POST", body: { text: "viewer cannot control session" }
       });
-      assert.equal(viewerSessionWrite.status, 403);
+      assert.equal(viewerSessionWrite.status, 404, "non-owner cannot write into another private session");
       const viewerWrite = await api(viewerResult.cookies, viewerResult.body.csrfToken, "/api/work-items", {
         method: "POST", body: { id: createCanonicalId("work"), commandId: createCanonicalId("command"), organizationId: alphaId, title: "Viewer cannot write" }
       });

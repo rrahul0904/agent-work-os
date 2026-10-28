@@ -19,6 +19,7 @@ import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
 import { issueProductionApproval } from "./production-approval.js";
 import { TenantProjectRepository } from "./tenant-projects.js";
 import { TenantModelPolicyRepository, isModelUseApproved } from "./tenant-model-policy.js";
+import { isSessionOwnedBy, canReceiveClientEvent } from "./session-visibility.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -74,7 +75,7 @@ export async function createControlPlane() {
         cursor,
         sequenceCursor,
         machines: (await Promise.all(principal.organizationIds.map((organizationId) => store.listMachinesByOrganization(organizationId)))).flat(),
-        sessions: (await Promise.all(principal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat(),
+        sessions: (await Promise.all(principal.organizationIds.map((organizationId) => store.listSessionsByOrganization(organizationId)))).flat().filter(session => isSessionOwnedBy(principal,session)),
         shippingRuns: (await Promise.all(principal.organizationIds.map((organizationId) => store.listShippingRunsByOrganization(organizationId)))).flat(),
         workItems: (await Promise.all(principal.organizationIds.map((organizationId) => workItems.listByOrganization(organizationId)))).flat(),
         capabilityVerificationRuns: (await Promise.all(principal.organizationIds.map((organizationId) => capabilityVerifications.listByOrganization(organizationId)))).flat()
@@ -131,7 +132,7 @@ export async function createControlPlane() {
     for (const [peer, state] of clientSockets) {
       const principal = state.principal;
       const organizationId = event.workItem?.organizationId ?? event.capabilityVerification?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
-      if (principal.kind === "legacy" || (organizationId && principal.organizationIds?.includes(organizationId))) {
+      if (canReceiveClientEvent(principal, event)) {
         if (eventId !== null && state.lastSentEventId !== null && eventId <= state.lastSentEventId) continue;
         if (state.resyncing) {
           state.pendingEvents.push({ eventId, encoded });
@@ -188,7 +189,7 @@ export async function createControlPlane() {
       }
       for (const { eventId, event } of history.rows) {
         const organizationId = event.workItem?.organizationId ?? event.capabilityVerification?.organizationId ?? event.run?.organizationId ?? event.session?.organizationId ?? event.machine?.organizationId;
-        if (state.principal.kind === "legacy" || (organizationId && state.principal.organizationIds?.includes(organizationId))) {
+        if (canReceiveClientEvent(state.principal, event)) {
           if (eventId <= state.lastSentEventId) continue;
           peer.send(encodeMessage({ ...event, eventId: cursorCodec.eventTag(eventId), cursor: cursorCodec.encode(eventId) }));
           state.lastSentEventId = eventId;
@@ -368,7 +369,9 @@ export async function createControlPlane() {
             store.listSessionsByOrganization(organizationId),
             store.listShippingRunsByOrganization(organizationId)
           ]);
-          return json(res, 200, { machines, sessions, shippingRuns });
+          return json(res, 200, {
+            machines, sessions: sessions.filter(session => isSessionOwnedBy(principal, session)), shippingRuns
+          });
         }
         return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
       }
@@ -555,7 +558,8 @@ export async function createControlPlane() {
             ...run.releaseReceipt, runId: run.runId, projectId: run.projectId,
             releaseVersion: run.releaseVersion, path: null, source: "tenant_runtime"
           }));
-          return json(res, 200, buildProductSummary({ portfolio: [], runs, receipts, machines, sessions }));
+          return json(res, 200, buildProductSummary({ portfolio: [], runs, receipts, machines,
+            sessions: sessions.filter(session => isSessionOwnedBy(principal, session)) }));
         }
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
         const [runs, machines, sessions] = await Promise.all([Promise.resolve(store.listShippingRuns()), store.listMachines(), store.listSessions()]);
@@ -858,7 +862,8 @@ export async function createControlPlane() {
         if (principal.kind === "user") {
           const organizationId = url.searchParams.get("organizationId");
           if (!organizationId || !(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "session_not_found" });
-          return session?.organizationId === organizationId ? json(res, 200, session) : json(res, 404, { error: "session_not_found" });
+          return session?.organizationId === organizationId && isSessionOwnedBy(principal,session)
+            ? json(res, 200, session) : json(res, 404, { error: "session_not_found" });
         }
       }
       const sessionMessageMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)\/messages$/);
@@ -866,6 +871,7 @@ export async function createControlPlane() {
         const session = await store.getSession(decodeURIComponent(sessionMessageMatch[1]));
         if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
         const membership = await identities.getMembership(principal.userId, session.organizationId);
+        if (!isSessionOwnedBy(principal,session)) return json(res, 404, { error: "session_not_found" });
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
         const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
@@ -897,6 +903,7 @@ export async function createControlPlane() {
         const session = await store.getSession(decodeURIComponent(sessionInterruptMatch[1]));
         if (!session || !(await identities.getMembership(principal.userId, session.organizationId))) return json(res, 404, { error: "session_not_found" });
         const membership = await identities.getMembership(principal.userId, session.organizationId);
+        if (!isSessionOwnedBy(principal,session)) return json(res, 404, { error: "session_not_found" });
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
         const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
