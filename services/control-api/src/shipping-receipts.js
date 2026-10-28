@@ -99,7 +99,7 @@ export function verifyShippingRun(run) {
 }
 
 export function reconcileShippingRunOnStartup(run, { at = new Date().toISOString() } = {}) {
-  const terminal = new Set(["SHIPPED", "FAILED", "BLOCKED", "CANCELLED"]);
+  const terminal = new Set(["SHIPPED", "VERIFIED_ONLY", "FAILED", "BLOCKED", "CANCELLED"]);
   if (terminal.has(run.state)) return structuredClone(run);
   return appendShippingEvent(run, {
     type: "run.reconciled",

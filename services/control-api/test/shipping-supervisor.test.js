@@ -47,7 +47,7 @@ test("happy path reaches SHIPPED only after exact SHA and UAT evidence", async (
     { ok: true }, { ok: true }, { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }
   ]);
   const store = new ShippingStore(path.join(root, "state"));
-  const supervisor = new ShippingSupervisor({ runner, worktrees: new FakeWorktrees(path.join(root, "wt")), store });
+  const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", runner, worktrees: new FakeWorktrees(path.join(root, "wt")), store });
   const run = await supervisor.run(contract(), { runId: "happy" });
   assert.equal(run.state, "SHIPPED", JSON.stringify(run));
   assert.equal(run.testedSha, SHA);
@@ -87,10 +87,40 @@ test("shipping evidence stays outside a worktree so cleanup succeeds after SHIPP
 
   const run = await supervisor.run(input, { runId: "cleanup-evidence" });
 
-  assert.equal(run.state, "SHIPPED", JSON.stringify(run));
-  assert.ok(run.receiptFile.startsWith(stateRoot));
-  await fs.access(run.receiptFile);
+  assert.equal(run.state, "VERIFIED_ONLY", JSON.stringify(run));
+  assert.equal(run.deployedSha, null);
+  assert.equal(run.releaseReceipt, undefined);
+  assert.equal(run.receiptFile, undefined);
+  assert.ok(run.testedSha);
   await assert.rejects(() => fs.access(run.worktreePath));
+});
+
+test("production deploy is denied before shell or worktree without explicit operator opt-in", async () => {
+  let invoked = false;
+  const worktrees = { async create() { invoked = true; throw new Error("should not run"); } };
+  const supervisor = new ShippingSupervisor({
+    runner: new FakeRunner([]), worktrees, allowProductionDeployment: false
+  });
+  const run = await supervisor.run(contract(), { runId: "denied-prod" });
+  assert.equal(run.state, "BLOCKED");
+  assert.equal(run.blocker.code, "BLOCKED_IRREVERSIBLE_ACTION");
+  assert.equal(invoked, false);
+  assert.equal(run.releaseReceipt, undefined);
+});
+
+test("operator opt-in still denies production when preview or exact-SHA verification is absent", async () => {
+  let invoked = false;
+  const supervisor = new ShippingSupervisor({
+    runner: new FakeRunner([]),
+    worktrees: { async create() { invoked = true; throw new Error("unapproved"); } },
+    allowProductionDeployment: true, productionHostingTarget: "onprem"
+  });
+  const unsafe = contract();
+  unsafe.preview = { required: false };
+  const run = await supervisor.run(unsafe, { runId: "no-preview" });
+  assert.equal(run.state, "BLOCKED");
+  assert.equal(run.blocker.code, "BLOCKED_PRODUCT_DECISION");
+  assert.equal(invoked, false);
 });
 
 test("failed verification triggers repair and re-verification", async () => {
@@ -99,7 +129,7 @@ test("failed verification triggers repair and re-verification", async () => {
     { ok: true }, { ok: false, stderr: "test failed" }, { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` },
     { ok: true }, { ok: true }, { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }
   ]);
-  const supervisor = new ShippingSupervisor({ runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
+  const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
   const run = await supervisor.run(contract(), { runId: "repair" });
   assert.equal(run.state, "SHIPPED");
   assert.equal(runner.calls.filter((call) => call.command === "repair").length, 1);
@@ -111,7 +141,7 @@ test("repair budget exhaustion is FAILED and cannot masquerade as shipped", asyn
   const input = contract();
   input.builder.maxRepairAttempts = 1;
   const runner = new FakeRunner([{ ok: true }, { ok: false, stderr: "bad" }, { ok: true }, { ok: false, stderr: "still bad" }]);
-  const supervisor = new ShippingSupervisor({ runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
+  const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
   const run = await supervisor.run(input, { runId: "fail" });
   assert.equal(run.state, "FAILED");
   assert.equal(run.releaseReceipt, undefined);
@@ -127,7 +157,7 @@ test("persistent deployed SHA mismatch exhausts release repair budget and refuse
     { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }, { ok: true }, { ok: true }, { ok: true }, { ok: true }, { ok: true, stdout: `${otherSha}\n` },
     { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }, { ok: true }, { ok: true }, { ok: true }, { ok: true }, { ok: true, stdout: `${otherSha}\n` }
   ]);
-  const supervisor = new ShippingSupervisor({ runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
+  const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
   const run = await supervisor.run(input, { runId: "sha-mismatch" });
   assert.equal(run.state, "FAILED");
   assert.equal(runner.calls.filter((call) => call.command === "repair").length, 1);
@@ -141,7 +171,7 @@ test("preview UAT failure repairs, re-verifies, and retries the release pipeline
     { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }, { ok: true }, { ok: false, stderr: "preview broken" },
     { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }, { ok: true }, { ok: true }, { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` }
   ]);
-  const supervisor = new ShippingSupervisor({ runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
+  const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
   const run = await supervisor.run(contract(), { runId: "preview-repair" });
   assert.equal(run.state, "SHIPPED");
   assert.equal(runner.calls.filter((call) => call.command === "repair").length, 1);
@@ -150,7 +180,8 @@ test("preview UAT failure repairs, re-verifies, and retries the release pipeline
 
 test("worktree creation failure maps to explicit source blocker", async () => {
   const worktrees = { async create() { throw new Error("missing-ref"); } };
-  const supervisor = new ShippingSupervisor({ runner: new FakeRunner([]), worktrees });
+  const supervisor = new ShippingSupervisor({ runner: new FakeRunner([]), worktrees,
+    allowProductionDeployment: true, productionHostingTarget: "onprem" });
   const run = await supervisor.run(contract(), { runId: "blocked" });
   assert.equal(run.state, "BLOCKED");
   assert.equal(run.blocker.code, "BLOCKED_SOURCE_UNKNOWN");

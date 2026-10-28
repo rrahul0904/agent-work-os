@@ -8,11 +8,15 @@ import { GitWorktreeManager, ShellRunner } from "./shipping-adapters.js";
 import { ShippingStore } from "./shipping-store.js";
 
 export class ShippingSupervisor {
-  constructor({ runner, worktrees, store, now = () => new Date().toISOString() } = {}) {
+  constructor({ runner, worktrees, store, now = () => new Date().toISOString(),
+    allowProductionDeployment = process.env.AGENT_WORK_OS_ALLOW_PRODUCTION_DEPLOYMENT === "true",
+    productionHostingTarget = process.env.AGENT_WORK_OS_PRODUCTION_HOSTING_TARGET || "" } = {}) {
     this.runner = runner ?? new ShellRunner();
     this.worktrees = worktrees ?? new GitWorktreeManager({ runner: this.runner });
     this.store = store ?? null;
     this.now = now;
+    this.allowProductionDeployment = allowProductionDeployment === true;
+    this.productionHostingTarget = productionHostingTarget;
   }
 
   async run(contractInput, { runId = `ship-${crypto.randomUUID()}` } = {}) {
@@ -26,6 +30,17 @@ export class ShippingSupervisor {
       at: this.now()
     });
     run = await this.event(run, { type: "contract.accepted", state: "CONTRACT_ACCEPTED", evidence: { contractDigest } });
+    // Production deployment is a protected action. Merely submitting a valid
+    // shipping contract cannot authorize a production shell command.
+    if (contract.production.required && (!this.allowProductionDeployment ||
+        !["aws", "oci", "onprem"].includes(this.productionHostingTarget))) {
+      return await this.block(run, "BLOCKED_IRREVERSIBLE_ACTION",
+        "production_deployment_requires_explicit_operator_opt_in_and_approved_host");
+    }
+    if (contract.production.required && (!contract.preview.required || !contract.exactSha.required)) {
+      return await this.block(run, "BLOCKED_PRODUCT_DECISION",
+        "production_requires_preview_uat_and_exact_test_deploy_sha");
+    }
 
     let worktree;
     try {
@@ -119,6 +134,15 @@ export class ShippingSupervisor {
     }
 
     if (releaseFailure) return await this.fail(run, "release_failed");
+    if (!contract.production.required) {
+      // Even a complete build and test suite is not a deployment. The old
+      // path incorrectly emitted SHIPPED and a release receipt here.
+      run.deployedSha = null;
+      run = await this.event(run, { type: "release.verified_without_deployment",
+        state: "VERIFIED_ONLY", evidence: { testedSha: run.testedSha, productionDeployed: false } });
+      if (contract.worktree.cleanupOnSuccess) await this.worktrees.remove({ repoPath: worktree.repoPath, worktreePath: worktree.worktreePath });
+      return run;
+    }
     run = await this.event(run, { type: "sha.verified", state: "PRODUCTION_VERIFIED", evidence: { testedSha: run.testedSha, deployedSha: run.deployedSha } });
     run = await this.event(run, { type: "release.shipped", state: "SHIPPED", evidence: { goldenPath: contract.goldenPath.map((item) => item.id) } });
     const receipt = buildReleaseReceipt(run, { goldenPath: contract.goldenPath });

@@ -32,6 +32,7 @@ test("tenant capability registry API resolves immutable versions into verificati
     env: {
       ...process.env,
       NODE_ENV: "production",
+      AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED: "true", // disposable provisioning only
       PORT: String(port),
       AGENT_WORK_OS_HOST: "127.0.0.1",
       AGENT_WORK_OS_TOKEN: "",
