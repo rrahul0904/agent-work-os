@@ -46,6 +46,21 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Real HTTPS browser UAT — account, project, invitations and RBAC
         run: npm run test:private-browser
+      - name: Disposable PostgreSQL backup and isolated restore drill
+        run: |
+          docker compose -f infra/uat/compose.yml exec -T postgres sh -euc '
+            umask 077
+            export PGPASSWORD="$POSTGRES_PASSWORD"
+            trap "rm -f /tmp/awos-uat-test.dump" EXIT
+            pg_dump -h localhost -U awos_uat -d awos_uat -Fc --file /tmp/awos-uat-test.dump
+            createdb -h localhost -U awos_uat -T template0 awos_uat_restore
+            pg_restore -h localhost -U awos_uat -d awos_uat_restore --no-owner --no-acl --exit-on-error /tmp/awos-uat-test.dump
+            test "$(psql -h localhost -U awos_uat -d awos_uat_restore -At -c "SELECT COUNT(*) FROM agent_work_os_tenant_projects_v1")" -ge 2
+            test "$(psql -h localhost -U awos_uat -d awos_uat_restore -At -c "SELECT COUNT(*) FROM agent_work_os_users_v1")" -ge 2
+            test "$(psql -h localhost -U awos_uat -d awos_uat_restore -At -c "SELECT COUNT(*) FROM agent_work_os_memberships_v1")" -ge 2
+            dropdb -h localhost -U awos_uat awos_uat_restore
+          '
+          echo "PRIVATE_UAT_BACKUP_RESTORE_PASS: logical PostgreSQL snapshot restored into a separate disposable database"
       - name: Restart application container and verify persistence
         run: |
           docker compose -f infra/uat/compose.yml restart control-api
