@@ -162,7 +162,7 @@ test("human-approved base SHA mismatch blocks before build and deploy", async ()
 test("changed tested SHA after approved build never reaches production deploy", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(),"ship-changing-source-"));
   const runner = new FakeRunner([
-    {ok:true}, {ok:true}, {ok:true,stdout:"f".repeat(40)+"\\n"},
+    {ok:true}, {ok:true}, {ok:true,stdout:"f".repeat(40)+String.fromCharCode(10)},
     {ok:true},{ok:true}
   ]);
   const supervisor = new ShippingSupervisor({
