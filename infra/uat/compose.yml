@@ -37,6 +37,7 @@ services:
     environment:
       NODE_ENV: production
       AGENT_WORK_OS_HOST: 0.0.0.0
+      AGENT_WORK_OS_TRUST_PROXY: "true" # private Caddy TLS termination only
       DATABASE_URL: postgres://awos_uat:${AWOS_DATABASE_PASSWORD:?required}@postgres:5432/awos_uat
       AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED: "false"
       AGENT_WORK_OS_ALLOW_PRODUCTION_DEPLOYMENT: "false"
