@@ -3,6 +3,22 @@ on:
   push:
   pull_request:
 jobs:
+  dependency_security:
+    name: Independent production dependency CVE audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Reproducible package install without lifecycle hooks
+        run: npm ci --ignore-scripts --no-fund --no-audit
+      - name: Fail on high/critical production advisories
+        run: npm audit --omit=dev --audit-level=high
   verify:
     runs-on: ubuntu-latest
     services:
