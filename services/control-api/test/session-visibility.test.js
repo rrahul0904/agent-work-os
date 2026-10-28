@@ -33,3 +33,21 @@ test("other shared team metadata remains organization-scoped without leaking ses
   assert.equal(canReceiveClientEvent(owner,{type:"session.updated",session:{...session,organizationId:undefined}}),false);
   assert.equal(canReceiveClientEvent(owner,{type:"unknown"}),false);
 });
+
+test("mixed-tenant envelopes cannot bypass routing by providing an authorized first organization",()=>{
+  const mixedWorkAndRun={type:"run.updated",workItem:{organizationId:"org-alpha"},run:{organizationId:"org-beta"}};
+  assert.equal(canReceiveClientEvent(owner,mixedWorkAndRun),false);
+  assert.equal(canReceiveClientEvent({...owner,organizationIds:["org-alpha","org-beta"]},mixedWorkAndRun),false);
+  const mixedSession={type:"session.updated",workItem:{organizationId:"org-alpha"},session:{...session,organizationId:"org-beta"}};
+  assert.equal(canReceiveClientEvent(owner,mixedSession),false);
+  assert.equal(canReceiveClientEvent({...owner,organizationIds:["org-alpha","org-beta"]},mixedSession),false);
+  assert.equal(canReceiveClientEvent(owner,{type:"machine.updated",workItem:{organizationId:"org-alpha"},machine:{organizationId:"org-alpha"}}),true);
+});
+
+test("malformed or non-array tenant memberships are rejected",()=>{
+  const event={type:"machine.updated",machine:{organizationId:"org-alpha"}};
+  assert.equal(canReceiveClientEvent({...owner,organizationIds:"org-alpha"},event),false);
+  assert.equal(canReceiveClientEvent({...owner,organizationIds:null},event),false);
+  assert.equal(canReceiveClientEvent(owner,{type:"machine.updated",machine:{organizationId:""}}),false);
+  assert.equal(canReceiveClientEvent(owner,{type:"machine.updated",machine:{organizationId:0}}),false);
+});
