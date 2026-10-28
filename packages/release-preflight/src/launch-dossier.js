@@ -20,6 +20,9 @@ const ISO=/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?Z$/;
 export function assessLaunchDossier(input,{now=Date.now()}={}){
   const m=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
   const blockers=[];
+  // Retain every Wave1 security and deployment preflight requirement.
+  const preflight=evaluateUnifiedReleasePreflight(m);
+  if(!preflight.readyForOwnerReview)blockers.push(...preflight.blockers);
   const sha=typeof m.sourceSha==="string"?m.sourceSha:"";
   if(!fullSha.test(sha)||m.testedSha!==sha||m.deployedSha!==sha)
     blockers.push("SOURCE_TEST_DEPLOY_SHA_MISMATCH");
@@ -47,7 +50,7 @@ export function assessLaunchDossier(input,{now=Date.now()}={}){
        !fresh||typeof r.artifactUrl!=="string"||
        !/^https:\/\/(github\.com|api\.github\.com|[^/\s]+)\//.test(r.artifactUrl)||
        typeof r.reviewerId!=="string"||!r.reviewerId||
-       r.reviewerId===m.ownerId)
+       r.reviewerId===m.ownerId || r.reviewerId!==m.independentReviewerId)
       blockers.push("RECEIPT_NOT_INDEPENDENT_OR_FRESH:"+kind);
   }
   // A correctly SHAPED dossier still has not been checked against real
