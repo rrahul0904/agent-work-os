@@ -6,7 +6,11 @@ const baseEnv = () => ({
   AGENT_WORK_OS_TI_ENABLED: "true",
   AGENT_WORK_OS_TI_ENDPOINT: "http://127.0.0.1:8000/api/v1/inference/chat-completions",
   AGENT_WORK_OS_TI_MODEL: "ti-live-test-qwen",
-  AGENT_WORK_OS_TI_API_KEY: "ti_key_local_test_nonproduction"
+  AGENT_WORK_OS_TI_API_KEY: "ti_key_local_test_nonproduction",
+  AGENT_WORK_OS_TI_UPSTREAM_DESTINATION: "local_machine",
+  AGENT_WORK_OS_TI_UPSTREAM_REGION: "local",
+  AGENT_WORK_OS_TI_UPSTREAM_RETENTION: "zero",
+  AGENT_WORK_OS_TI_PRIVATE_UPSTREAM_APPROVED: "true"
 });
 const receipt = (output = "Verified via gateway") => Response.json({
   id: "fixture-model", model: "ti-live-test-qwen", billing_state: "not_billed",
