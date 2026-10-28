@@ -53,6 +53,15 @@ export class TokenIntelligenceChatAdapter {
       this.model = env.AGENT_WORK_OS_TI_MODEL || "";
       this.upstreamDestination = env.AGENT_WORK_OS_TI_UPSTREAM_DESTINATION || "";
       this.upstreamRegion = env.AGENT_WORK_OS_TI_UPSTREAM_REGION || "";
+      this.upstreamOrigin = env.AGENT_WORK_OS_TI_UPSTREAM_ORIGIN || null;
+      if (this.upstreamDestination === "approved_remote") {
+        let upstream;
+        try { upstream = new URL(this.upstreamOrigin); }
+        catch { throw new Error("TI_GATEWAY_UPSTREAM_REMOTE_ORIGIN_REQUIRED"); }
+        if (upstream.origin !== this.upstreamOrigin || upstream.protocol !== "https:" || upstream.username || upstream.password || upstream.hash || upstream.search) {
+          throw new Error("TI_GATEWAY_UPSTREAM_REMOTE_ORIGIN_INVALID");
+        }
+      } else if (this.upstreamOrigin !== null) throw new Error("TI_GATEWAY_LOCAL_UPSTREAM_ORIGIN_FORBIDDEN");
       this.upstreamRetention = env.AGENT_WORK_OS_TI_UPSTREAM_RETENTION || "";
       if (!["local_machine", "approved_remote"].includes(this.upstreamDestination) ||
           !/^[A-Za-z0-9._:/-]{2,120}$/.test(this.upstreamRegion) ||
@@ -88,6 +97,7 @@ export class TokenIntelligenceChatAdapter {
       mode: "chat_only_no_tools", quotaAuthority: "token_intelligence_postgres",
       lane: this.endpoint.kind, upstreamDestination:this.upstreamDestination,
       upstreamRegion:this.upstreamRegion, upstreamRetention:this.upstreamRetention,
+      upstreamOrigin:this.upstreamOrigin,
       upstreamTrust:"operator_declared_not_independently_verified" };
   }
 
