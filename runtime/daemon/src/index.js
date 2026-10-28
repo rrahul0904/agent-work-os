@@ -95,7 +95,7 @@ function connect() {
         if (!p?.contract || !p?.runId) throw new Error("shipping.start requires contract and runId");
         if (shippingRuns.has(p.runId)) throw new Error(`Shipping run ${p.runId} is already active`);
         shippingRuns.add(p.runId); ack(true);
-        void runShipping(p.runId, p.contract).finally(() => shippingRuns.delete(p.runId));
+        void runShipping(p.runId, p.contract, p.approvalPermit, p.organizationId).finally(() => shippingRuns.delete(p.runId));
         return;
       }
       if (command.action === "session.start") {
@@ -130,7 +130,7 @@ function connect() {
   ws.addEventListener("error", () => {});
 }
 
-async function runShipping(runId, contract) {
+async function runShipping(runId, contract, approvalPermit = null, organizationId = null) {
   const store = new ShippingStore(shippingStateRoot);
   const supervisor = createDefaultShippingSupervisor({ stateRoot: shippingStateRoot, timeoutMs: Number(process.env.AGENT_WORK_OS_COMMAND_TIMEOUT_MS ?? 600000) });
   let lastDigest = "";
@@ -146,7 +146,13 @@ async function runShipping(runId, contract) {
   const timer = setInterval(() => void publish(), 500);
   timer.unref?.();
   try {
-    const run = await supervisor.run(contract, { runId });
+    // Durable local run ID is one-use: an old approved command must not be
+    // replayable into a second production execution after daemon reconnect.
+    let prior = null;
+    try { prior = await store.load(runId); }
+    catch (error) { if (error.code !== "ENOENT") throw error; }
+    if (prior) throw new Error("shipping_run_replay_refused");
+    const run = await supervisor.run(contract, { runId, approvalPermit, organizationId, machineId });
     if (ws?.readyState === WebSocket.OPEN) ws.send(encodeMessage({ type: "daemon.shipping.run", machineId, run }));
   } catch (error) {
     const failed = { runId, machineId, projectId: contract?.project?.id ?? "unknown", releaseVersion: contract?.release?.version ?? "unknown", state: "FAILED", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), blocker: null, fatalError: error.message, events: [] };

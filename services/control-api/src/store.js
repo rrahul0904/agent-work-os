@@ -434,6 +434,82 @@ export class JsonStore {
     }
     const s = this.#session(id); s.status = status; s.updatedAt = new Date().toISOString(); await this.#persist(); return s;
   }
+  /**
+   * Durable, single-winner production-approval transition. The run row and
+   * execution command are written atomically under one PostgreSQL row lock.
+   * Duplicate/concurrent decisions fail closed; the signed permit never
+   * appears in the browser-facing run record.
+   */
+  async decidePendingProductionRun({ runId, organizationId, actorId, decision,
+    expectedContractDigest, approvalPermit = null, approvalClaims = null } = {}) {
+    if (!this.pool) throw new Error("production_approval_requires_postgres");
+    if (!["approve", "reject"].includes(decision)) throw new Error("production_approval_decision_invalid");
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `SELECT record, machine_id FROM agent_work_os_shipping_runs_v1
+         WHERE run_id = $1 AND organization_id = $2 FOR UPDATE`,
+        [runId, organizationId]
+      );
+      const current = result.rows[0]?.record;
+      if (!current) {
+        await client.query("ROLLBACK");
+        return null;
+      }
+      if (current.state !== "AWAITING_APPROVAL" ||
+          current.contractDigest !== expectedContractDigest ||
+          !current.pendingContract?.production?.required) {
+        throw Object.assign(new Error("production_approval_not_pending"), { statusCode: 409 });
+      }
+      if (current.createdBy === actorId) {
+        throw Object.assign(new Error("production_self_approval_denied"), { statusCode: 403 });
+      }
+      const now = new Date().toISOString();
+      const next = {
+        ...current, state: decision === "approve" ? "QUEUED" : "BLOCKED",
+        updatedAt: now, approval: {
+          decision, decidedBy: actorId, decidedAt: now,
+          contractDigest: current.contractDigest,
+          sourceSha: current.pendingContract.worktree.baseRef,
+          ...(decision === "approve" ? { expiresAt: new Date(approvalClaims.expiresAt).toISOString() } : {})
+        }
+      };
+      delete next.pendingContract;
+      if (decision === "reject") next.blocker = {
+        code: "BLOCKED_IRREVERSIBLE_ACTION",
+        message: "second_person_rejected_production_intent", at: now
+      };
+      if (decision === "approve") {
+        if (!approvalPermit || approvalClaims?.runId !== runId ||
+            approvalClaims.organizationId !== organizationId ||
+            approvalClaims.machineId !== current.machineId ||
+            approvalClaims.contractDigest !== current.contractDigest ||
+            approvalClaims.requestedBy !== current.createdBy ||
+            approvalClaims.approvedBy !== actorId ||
+            approvalClaims.sourceSha !== current.pendingContract.worktree.baseRef) {
+          throw Object.assign(new Error("production_approval_invalid_claims"), { statusCode: 400 });
+        }
+        const command = {
+          type: "server.command", commandId: crypto.randomUUID(),
+          sessionId: "shipping:" + runId, action: "shipping.start",
+          payload: { runId, contract: current.pendingContract, organizationId, approvalPermit }
+        };
+        await insertDaemonCommand(client, current.machineId, command);
+      }
+      await client.query(
+        `UPDATE agent_work_os_shipping_runs_v1 SET status = $1, record = $2::jsonb,
+           updated_at = clock_timestamp() WHERE run_id = $3 AND organization_id = $4`,
+        [next.state, JSON.stringify(next), runId, organizationId]
+      );
+      await client.query("COMMIT");
+      return next;
+    } catch (error) {
+      try { await client.query("ROLLBACK"); } catch {}
+      throw error;
+    } finally { client.release(); }
+  }
+
   async upsertShippingRun(run) {
     if (!run?.runId) throw new Error("shipping_run_id_required");
     if (this.pool && run.organizationId) return this.#upsertTenantShippingRun(run);
@@ -470,10 +546,10 @@ export class JsonStore {
       if (!current || current.organizationId !== run.organizationId || current.machineId !== run.machineId) return null;
       return this.upsertShippingRun(run);
     }
-    return this.#upsertTenantShippingRun(run, { allowInsert: false });
+    return this.#upsertTenantShippingRun(run, { allowInsert: false, machineReported: true });
   }
 
-  async #upsertTenantShippingRun(run, { allowInsert = true, command = null } = {}) {
+  async #upsertTenantShippingRun(run, { allowInsert = true, command = null, machineReported = false } = {}) {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
@@ -488,6 +564,12 @@ export class JsonStore {
         throw Object.assign(new Error("shipping_run_machine_mismatch"), { code: "shipping_run_machine_mismatch", statusCode: 409 });
       }
       if (!selected.rows[0] && !allowInsert) {
+        await client.query("COMMIT");
+        return null;
+      }
+      // A connected machine must never be able to preempt or counterfeit a
+      // human production approval by submitting a fabricated run event.
+      if (machineReported && selected.rows[0]?.record?.state === "AWAITING_APPROVAL") {
         await client.query("COMMIT");
         return null;
       }
@@ -507,6 +589,7 @@ export class JsonStore {
             projectId: currentRun.projectId,
             releaseVersion: currentRun.releaseVersion,
             contractDigest: currentRun.contractDigest,
+            ...(allowInsert === false ? { approval: currentRun.approval, pendingContract: currentRun.pendingContract } : {}),
             updatedAt
           }
         : { ...run, updatedAt };
