@@ -194,6 +194,51 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       body:JSON.stringify({email:inviteEmail,password:"correct horse battery staple",
         invitationToken:inviteToken})});
     assert.equal(replaySignup.status,404,"invitation token must be consumed exactly once");
+    // A second production-like API replica with public signup *disabled*
+    // still permits only an invited new user, not arbitrary registrations.
+    const privatePort=await getAvailablePort();
+    const privateOrigin=`http://127.0.0.1:${privatePort}`;
+    const inviteOnly=spawn(process.execPath,["services/control-api/src/index.js"],{
+      cwd:root,
+      env:{...serverEnv,PORT:String(privatePort),
+        AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED:"false",
+        AGENT_WORK_OS_STATE_PATH:path.join(temp,"invite-only-state.json")},
+      stdio:["ignore","pipe","pipe"]
+    });
+    inviteOnly.stdout.on("data",data=>logs.push(String(data)));
+    inviteOnly.stderr.on("data",data=>logs.push(String(data)));
+    try{
+      await waitFor(async()=>{try{return (await fetch(privateOrigin+"/readyz")).ok;}catch{return false;}},15000,"invite-only API");
+      const config=await (await fetch(privateOrigin+"/api/client-config")).json();
+      assert.equal(config.registrationEnabled,false);
+      assert.equal((await fetch(privateOrigin+"/api/auth/register",{
+        method:"POST",headers:authHeaders,body:JSON.stringify({
+          email:`forbidden-${emailTag}@example.test`,password:"correct horse battery staple",
+          organizationName:"Unauthorized Org"})
+      })).status,403,"production private org sign-up remains disabled");
+      const privateEmail=`private-invite-${emailTag}@example.test`;
+      const newInvite=await api(owner.cookies,owner.body.csrfToken,
+        `/api/organizations/${alphaId}/invitations`,{
+          method:"POST",body:{email:privateEmail,role:"member"}
+        });
+      assert.equal(newInvite.status,201);
+      const privateToken=(await newInvite.json()).invitation.token;
+      const privateSignup=await fetch(privateOrigin+"/api/auth/register-invited",{
+        method:"POST",headers:authHeaders,body:JSON.stringify({
+          email:privateEmail,password:"correct horse battery staple",invitationToken:privateToken
+        })
+      });
+      assert.equal(privateSignup.status,201,"private deployment supports invited first-time signup");
+      assert.equal((await privateSignup.json()).memberships[0].role,"member");
+    }finally{
+      inviteOnly.kill("SIGTERM");
+      await Promise.race([
+        new Promise(resolve=>inviteOnly.once("exit",resolve)),
+        new Promise(resolve=>setTimeout(resolve,1500))
+      ]);
+      if(inviteOnly.exitCode===null)inviteOnly.kill("SIGKILL");
+    }
+
 
     // Wave 2: actual browser-facing tenant project lifecycle backed by SQL.
     const createProjectPath="/api/projects";
