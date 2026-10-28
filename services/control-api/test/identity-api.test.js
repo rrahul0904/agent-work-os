@@ -573,6 +573,27 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const acceptedReleaseReviewer = await api(releaseReviewer.cookies, releaseReviewer.body.csrfToken,
         "/api/auth/accept-invitation", { method: "POST", body: { token: invite.invitation.token } });
       assert.equal(acceptedReleaseReviewer.status, 200);
+      // A same-organization Admin may review deployment requests but cannot
+      // inspect or mutate another person's private agent transcripts.
+      const peerState=await api(releaseReviewer.cookies,null,"/api/state?organizationId="+alphaId);
+      assert.equal(peerState.status,200);
+      const peerSnapshot=await peerState.json();
+      assert.ok(peerSnapshot.sessions.every(row=>row.createdBy===releaseReviewer.body.user.id));
+      assert.ok(!JSON.stringify(peerSnapshot).includes(alphaSessionId));
+      assert.equal((await api(releaseReviewer.cookies,null,
+        "/api/sessions/"+alphaSessionId+"?organizationId="+alphaId)).status,404,
+        "admin cannot read a teammate's private session by ID");
+      assert.equal((await api(releaseReviewer.cookies,releaseReviewer.body.csrfToken,
+        "/api/sessions/"+alphaSessionId+"/messages",{method:"POST",body:{
+          text:"injected command from another team member"
+        }})).status,404,"same-org admin cannot inject a follow-up into another user's session");
+      assert.equal((await api(releaseReviewer.cookies,releaseReviewer.body.csrfToken,
+        "/api/sessions/"+alphaSessionId+"/interrupt",{method:"POST"})).status,404,
+        "same-org admin cannot interrupt another user's private agent without explicit delegation");
+      const ownerSessionRead=await api(owner.cookies,null,
+        "/api/sessions/"+alphaSessionId+"?organizationId="+alphaId);
+      assert.equal(ownerSessionRead.status,200);
+
 
       const productionContract = structuredClone(shippingContractForOutboxRollback);
       productionContract.worktree.baseRef = "c".repeat(40);
