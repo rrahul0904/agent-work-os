@@ -289,7 +289,7 @@ function runDetail(run) { const events=run.events||[]; return `<div class="panel
   ${run.state==='AWAITING_APPROVAL'?'<div class="blocker-banner"><strong>SECOND-PERSON APPROVAL REQUIRED</strong><p>Production execution is paused. An independent organization Owner/Admin must review the exact contract and pinned source revision before any daemon command is dispatched.</p><p>Contract digest: <code>'+esc(run.contractDigest)+'</code></p><p>Source: <code>'+esc(run.pendingContract?.worktree?.baseRef||'')+'</code></p><p>Requested by: '+esc(run.createdBy||'unknown')+'</p>'+(
     state.authMode==='account' && state.accountUserId!==run.createdBy &&
     ['owner','admin'].includes(state.organizations.find(o=>o.organizationId===state.organizationId)?.role)
-    ?'<div class="drawer-actions"><button class="primary compact" id="release-approve">Approve run</button><button class="secondary compact" id="release-reject">Reject run</button></div>'
+    ?'<details class="contract-review"><summary>Review the complete immutable Shipping Contract</summary><pre>'+esc(JSON.stringify(run.pendingContract||{},null,2))+'</pre></details><label><input id="release-ack" type="checkbox"> I reviewed this exact contract, source SHA, machine and destination.</label><div class="drawer-actions"><button class="primary compact" id="release-approve" disabled>Approve run</button><button class="secondary compact" id="release-reject">Reject run</button></div>'
     :'<p class="muted">Review is restricted to another Owner/Admin in this organization.</p>'
   )+'</div>':''}
   <div class="timeline">${events.length?events.slice().reverse().map(e=>`<article><i class="${statusClass(e.state)}"></i><div><strong>${esc(e.type)}</strong><span>${esc(e.state)}</span><small>${when(e.at)}</small>${e.message?`<p>${esc(e.message)}</p>`:''}</div></article>`).join(''):'<div class="empty">Waiting for the local executor to report the first gate.</div>'}</div>`; }
@@ -361,6 +361,10 @@ function wire() {
   document.querySelector('#launch')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#launch-inline')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#refresh')?.addEventListener('click',()=>refreshProduct());
+  document.querySelector('#release-ack')?.addEventListener('change',event=>{
+    const approve=document.querySelector('#release-approve');
+    if(approve)approve.disabled=!event.currentTarget.checked;
+  });
   const pendingRun=state.shippingRuns.find(run=>run.runId===state.selectedRun);
   for(const decision of ['approve','reject']){
     document.querySelector('#release-'+decision)?.addEventListener('click',async event=>{
