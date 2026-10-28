@@ -180,7 +180,8 @@ test("preview UAT failure repairs, re-verifies, and retries the release pipeline
 
 test("worktree creation failure maps to explicit source blocker", async () => {
   const worktrees = { async create() { throw new Error("missing-ref"); } };
-  const supervisor = new ShippingSupervisor({ runner: new FakeRunner([]), worktrees });
+  const supervisor = new ShippingSupervisor({ runner: new FakeRunner([]), worktrees,
+    allowProductionDeployment: true, productionHostingTarget: "onprem" });
   const run = await supervisor.run(contract(), { runId: "blocked" });
   assert.equal(run.state, "BLOCKED");
   assert.equal(run.blocker.code, "BLOCKED_SOURCE_UNKNOWN");
