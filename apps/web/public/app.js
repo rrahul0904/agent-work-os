@@ -233,7 +233,7 @@ function render() {
   app.innerHTML = `<div class="product-shell">
     <aside class="sidebar">
       <div class="brand"><div class="mark">SO</div><div><strong>Shipping OS</strong><small>Agent Work OS</small></div></div>
-      <nav>${navButton('overview','Overview','⌂')}${state.authMode==='account'?navButton('projects','Projects','◆'):navButton('portfolio','Portfolio','◆')}${state.authMode==='account'?navButton('models','Model policies','◎'):''}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
+      <nav>${navButton('overview','Overview','⌂')}${state.authMode==='account'?navButton('projects','Projects','◆'):navButton('portfolio','Portfolio','◆')}${state.authMode==='account'?navButton('models','Model policies','◎'):''}${state.authMode==='account'?navButton('team','Team & invites','♧'):''}${navButton('runs','Shipping runs','↗')}${navButton('receipts','Evidence','✓')}${navButton('agents','Local agents','◎')}</nav>
       <div class="sidebar-foot"><div class="connection"><i class="${state.connected?'online':'offline'}"></i>${state.connected?'Realtime connected':'Reconnecting'}</div><button class="ghost small" id="logout">Lock console</button></div>
     </aside>
     <div class="workspace">
@@ -246,11 +246,12 @@ function render() {
   wire();
 }
 function navButton(page,label,icon) { return `<button data-page="${page}" class="nav-item ${state.page===page?'active':''}"><span>${icon}</span>${label}</button>`; }
-function pageTitle() { return ({overview:'Factory overview',portfolio:'Portfolio queue',projects:'Team projects',models:'Model permissions',runs:'Shipping runs',receipts:'Release evidence',agents:'Local agent control'})[state.page]; }
+function pageTitle() { return ({overview:'Factory overview',portfolio:'Portfolio queue',projects:'Team projects',models:'Model permissions',team:'Team invitations',runs:'Shipping runs',receipts:'Release evidence',agents:'Local agent control'})[state.page]; }
 function pageHtml() {
   if (state.page === 'portfolio') return portfolioHtml();
   if (state.page === 'projects') return projectsHtml();
   if (state.page === 'models') return modelPoliciesHtml();
+  if (state.page === 'team') return teamHtml();
   if (state.page === 'runs') return runsHtml();
   if (state.page === 'receipts') return receiptsHtml();
   if (state.page === 'agents') return agentsHtml();
@@ -333,6 +334,25 @@ function modelPoliciesHtml(){
       ${manager&&p.status==='approved'?`<div class="drawer-actions"><button class="danger compact" data-model-revoke="${esc(p.agent)}|${esc(p.model)}">Revoke grant</button></div>`:''}
     </div></article>`).join(''):'<article class="panel" style="padding:20px">No approved models. Tenant chat is denied until an Owner/Admin grants one.</article>'}</section>`;
 }
+function teamHtml(){
+  const role=state.organizations.find(org=>org.organizationId===state.organizationId)?.role||'viewer';
+  const admin=['owner','admin'].includes(role);
+  return `<section class="section-head"><div><p class="eyebrow">PRIVATE TEAM ONBOARDING</p>
+     <h2>Invitation-only access</h2><p class="muted">Public registration remains disabled. New members can create accounts only using an unexpired organization invitation.</p></div></section>
+     ${admin?`<form class="panel" id="team-invite" style="padding:20px;display:grid;gap:12px">
+       <strong>Issue a team invitation</strong>
+       <label>Email<input name="email" type="email" required autocomplete="off" placeholder="teammate@company.com"></label>
+       <label>Role<select name="role"><option value="member">Member</option><option value="viewer">Viewer</option>
+         ${role==='owner'?'<option value="admin">Administrator</option>':''}</select></label>
+       <button class="primary" type="submit">Create secure invitation</button>
+     </form>`:'<article class="panel" style="padding:20px">Only organization Owners and Admins can invite teammates.</article>'}
+     ${state.latestInvite&&state.latestInvite.organizationId===state.organizationId?
+        `<article class="panel" style="padding:20px"><h3>One-time invitation token</h3>
+          <p>Share through an approved secure channel. Do not post this token in a public issue or chat.</p>
+          <code id="invite-token">${esc(state.latestInvite.token)}</code>
+          <div class="drawer-actions"><button class="secondary" id="invite-copy">Copy invitation</button>
+          <button class="secondary" id="invite-clear">Clear token</button></div></article>`:''}`;
+}
 function runsHtml() {
   const runs = state.shippingRuns || [];
   const selected = runs.find(r=>r.runId===state.selectedRun) || runs[0]; if (selected) state.selectedRun=selected.runId;
@@ -407,7 +427,7 @@ function wire() {
     const chosen=event.currentTarget.value;
     if(!state.organizations.some(org=>org.organizationId===chosen))return setNotice('Organization not available.','error');
     state.organizationId=chosen;
-    state.selectedSession=null;state.selectedRun=null;
+    state.selectedSession=null;state.selectedRun=null;state.latestInvite=null;
     state.lastCursor=null;state.seenEventTags.clear();
     clearTimeout(state.reconnectTimer);
     const oldSocket=state.socket;state.socket=null;oldSocket?.close();
@@ -450,6 +470,23 @@ function wire() {
       setNotice('Model permission revoked. Future model turns are denied.','success');
     }catch(error){el.disabled=false;setNotice(error.message,'error');}
   }));
+  document.querySelector('#team-invite')?.addEventListener('submit',async event=>{
+    event.preventDefault();const form=event.currentTarget,data=new FormData(form);
+    form.querySelector('[type="submit"]').disabled=true;
+    try{
+      const response=await api('/api/organizations/'+encodeURIComponent(state.organizationId)+'/invitations',{
+        method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({email:String(data.get('email')).trim(),role:String(data.get('role'))})
+      });
+      state.latestInvite={...response.invitation,organizationId:state.organizationId};
+      setNotice('Invitation created; share the token securely.','success');
+    }catch(error){setNotice(error.message,'error');}
+  });
+  document.querySelector('#invite-copy')?.addEventListener('click',async()=>{
+    if(state.latestInvite?.token)await navigator.clipboard.writeText(state.latestInvite.token);
+    setNotice('Invitation token copied to clipboard.','success');
+  });
+  document.querySelector('#invite-clear')?.addEventListener('click',()=>{state.latestInvite=null;render();});
   const createProject=document.querySelector('#create-project');
   if(createProject)createProject.onsubmit=async event=>{
     event.preventDefault();const form=new FormData(createProject);
