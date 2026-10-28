@@ -570,6 +570,9 @@ export async function createControlPlane() {
           const membership = await identities.getMembership(principal.userId, organizationId);
           if (!membership) return json(res, 404, { error: "organization_not_found" });
           if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
+          if (body.contract?.production?.required === true && !["owner", "admin"].includes(membership.role)) {
+            return json(res, 403, { error: "production_requires_owner_or_admin" });
+          }
         }
         const machine = await store.getMachine(body.machineId);
         if (organizationId && (!machine || machine.organizationId !== organizationId)) return json(res, 404, { error: "machine_not_found" });
