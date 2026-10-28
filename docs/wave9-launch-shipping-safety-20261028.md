@@ -13,6 +13,10 @@ The existing local acceptance contract set `preview.required=false` and `product
 
 This is a **minimum protection against accidental production execution**, not blanket permission to deploy. An operator environment variable is a coarse-grained authorization control; it is **not** equivalent to per-run human approval, signed release evidence, or independent QA. Do not set it in a public deployment before implementing those controls.
 
+## Account signup safety
+
+Production public registration is **disabled by default**. Provision initial trusted accounts only when a security operator deliberately enables `AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED=true`, then turn it back off; the browser hides its signup control when registration is disabled. This is not a replacement for invitation-based onboarding, email verification, password recovery, anti-bot controls and SSO. Do not enable public registration for a general launch without those controls.
+
 ## Outstanding launch gates — NO-GO
 
 1. Build a true per-run human production-approval service with explicit actor identity, exact SHA, expiry, authorization policy, revocation and tamper-evident database audit. Protect the action at the executor, not just the browser.
