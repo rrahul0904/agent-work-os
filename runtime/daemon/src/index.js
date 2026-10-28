@@ -12,6 +12,7 @@ import { AgentDockReadOnlyAdapter } from "./agentdock-readonly-adapter.js";
 import { CodeAtlasSearchAdapter } from "./codeatlas-search-adapter.js";
 import { CoworkReadOnlyFilesAdapter } from "./cowork-files-adapter.js";
 import { TokenIntelligenceChatAdapter } from "./token-intelligence-chat-adapter.js";
+import { RepositoryReviewMissionAdapter } from "./repository-review-mission-adapter.js";
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
@@ -46,6 +47,8 @@ const coworkFiles = new CoworkReadOnlyFilesAdapter();
 if (coworkFiles.capability()) adapters.set("cowork-files", coworkFiles);
 const tokenIntelligence = new TokenIntelligenceChatAdapter();
 if (tokenIntelligence.capability()) adapters.set("token-intelligence", tokenIntelligence);
+const repositoryReview = new RepositoryReviewMissionAdapter({ codeAtlas, analyst: modelChat, reviewer: tokenIntelligence });
+if (repositoryReview.capability()) adapters.set("repository-review", repositoryReview);
 const capabilityVerification = new CapabilityVerificationAdapter(codex, claudeCode, openCode, cursor);
 if (capabilityVerification.capability()) adapters.set("capability-verify", capabilityVerification);
 
