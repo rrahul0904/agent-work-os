@@ -25,6 +25,7 @@ const port = Number(process.env.PORT ?? process.env.AGENT_WORK_OS_PORT ?? 8787);
 const machineStaleAfterMs = Number(process.env.AGENT_WORK_OS_MACHINE_STALE_AFTER_MS ?? 45_000);
 const token = process.env.AGENT_WORK_OS_TOKEN ?? (process.env.NODE_ENV === "production" ? "" : "dev-token");
 const isProduction = process.env.NODE_ENV === "production";
+const publicRegistrationEnabled = !isProduction || process.env.AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED === "true";
 const sessionCookieName = "awos_session";
 const csrfCookieName = "awos_csrf";
 const cookieSameSite = process.env.AGENT_WORK_OS_COOKIE_SAME_SITE ?? "Strict";
@@ -235,7 +236,7 @@ export async function createControlPlane() {
       // Public UI bootstrap metadata ONLY, never tenant identifiers or credentials.
       if (req.method === "GET" && url.pathname === "/api/client-config") {
         return json(res, 200, { authentication: identities ? "account" : "local_token",
-          production: isProduction });
+          production: isProduction, registrationEnabled: Boolean(identities && publicRegistrationEnabled) });
       }
       if (req.method === "GET" && url.pathname === "/readyz") {
         if (store.pool) await store.pool.query("SELECT 1");
@@ -259,6 +260,7 @@ export async function createControlPlane() {
 
       if (req.method === "POST" && url.pathname === "/api/auth/register") {
         if (!identities) return json(res, 503, { error: "identity_requires_postgres" });
+        if (!publicRegistrationEnabled) return json(res, 403, { error: "public_registration_disabled" });
         await identities.consumeAuthAttempt(`register:${clientAddress(req)}`, { limit: 10, windowMs: 15 * 60 * 1000 });
         const body = await readJson(req);
         const account = await identities.register({ email: body.email, password: body.password, organizationName: body.organizationName });
