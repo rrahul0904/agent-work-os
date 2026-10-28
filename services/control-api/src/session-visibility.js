@@ -13,12 +13,24 @@ export function isSessionOwnedBy(principal, session) {
 
 export function canReceiveClientEvent(principal, event) {
   if (principal?.kind === "legacy") return true;
-  if (principal?.kind !== "user") return false;
-  const organizationId = event?.workItem?.organizationId ??
-    event?.capabilityVerification?.organizationId ??
-    event?.run?.organizationId ?? event?.session?.organizationId ??
-    event?.machine?.organizationId;
-  if (!organizationId || !principal.organizationIds?.includes(organizationId)) return false;
-  if (event.session && !isSessionOwnedBy(principal,event.session)) return false;
+  if (principal?.kind !== "user" || !Array.isArray(principal.organizationIds)) return false;
+
+  // An event envelope can contain multiple independent records. Checking
+  // only the first organization allows mixed-tenant payloads to cross the
+  // WebSocket/replay boundary. Reject disagreement even when the recipient
+  // belongs to both organizations: one event must have exactly one tenant.
+  const organizationIds = [
+    event?.workItem?.organizationId,
+    event?.capabilityVerification?.organizationId,
+    event?.run?.organizationId,
+    event?.session?.organizationId,
+    event?.machine?.organizationId
+  ].filter((id) => id !== undefined && id !== null);
+  if (organizationIds.length === 0) return false;
+  const organizationId = organizationIds[0];
+  if (typeof organizationId !== "string" || !organizationId ||
+      !principal.organizationIds.includes(organizationId) ||
+      organizationIds.some((id) => id !== organizationId)) return false;
+  if (event.session && !isSessionOwnedBy(principal, event.session)) return false;
   return true;
 }
