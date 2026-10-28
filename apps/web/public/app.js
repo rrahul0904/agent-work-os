@@ -3,7 +3,7 @@ const state = {
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
   connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
   authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
-  registrationEnabled: false, accountUserId: null,
+  registrationEnabled: false, accountUserId: null, latestInvite: null,
   organizations: [], organizationId: null, socket: null, reconnectTimer: null
 };
 const app = document.querySelector('#app');
@@ -148,22 +148,29 @@ function renderLogin(){
   }
   const account=state.authMode==='account';
   const creating=state.authView==='register';
+  const joining=state.authView==='invited';
   const error=state.authError?'<p class="notice error" role="alert">'+esc(state.authError)+'</p>':'';
   if(account){
     app.innerHTML='<div class="login-shell"><div class="login-card">'+
       '<div class="mark">AO</div><p class="eyebrow">UNIVERSAL AGENT OS</p>'+
-      '<h1>'+(creating?'Create workspace':'Sign in to your workspace')+'</h1>'+
+      '<h1>'+(creating?'Create workspace':joining?'Join invited organization':'Sign in to your workspace')+'</h1>'+
       '<p class="muted">Organization-scoped accounts, secure sessions and human approvals.</p>'+error+
       '<form id="account-login">'+
         '<label>Email<input name="email" type="email" autocomplete="username" required placeholder="you@company.com"></label>'+
-        '<label>Password<input name="password" type="password" autocomplete="'+(creating?'new-password':'current-password')+
-          '" required minlength="'+(creating?'12':'1')+'"></label>'+
+        '<label>Password<input name="password" type="password" autocomplete="'+((creating||joining)?'new-password':'current-password')+
+          '" required minlength="'+((creating||joining)?'12':'1')+'"></label>'+
         (creating?'<label>Organization<input name="organizationName" maxlength="120" required placeholder="Company or team"></label>':'')+
-        '<button class="primary" type="submit">'+(creating?'Create workspace':'Sign in')+'</button>'+
+        (joining?'<label>Invitation token<input name="invitationToken" pattern="[0-9a-f]{64}" maxlength="64" autocomplete="off" required placeholder="Paste the token from your team owner"></label>':'')+
+        '<button class="primary" type="submit">'+(creating?'Create workspace':joining?'Join team':'Sign in')+'</button>'+
       '</form>'+(state.registrationEnabled?'<button class="ghost small" id="toggle-auth" type="button">'+
         (creating?'Already have an account? Sign in':'Create a workspace')+'</button>':'')+
+      '<button class="ghost small" id="toggle-invite" type="button">'+
+        (joining?'Already registered? Sign in':'Have an invitation? Join your team')+'</button>'+
       '<div class="login-proof"><span>Tenant isolated</span><span>HttpOnly sessions</span><span>CSRF protected</span></div>'+
       '</div></div>';
+    document.querySelector('#toggle-invite').onclick=()=>{
+      state.authView=joining?'login':'invited';state.authError=null;renderLogin();
+    };
     if(document.querySelector('#toggle-auth'))document.querySelector('#toggle-auth').onclick=()=>{
       state.authView=creating?'login':'register';state.authError=null;renderLogin();
     };
@@ -173,9 +180,10 @@ function renderLogin(){
       const data=new FormData(form);
       const payload={email:String(data.get('email')||'').trim(),password:String(data.get('password')||'')};
       if(creating)payload.organizationName=String(data.get('organizationName')||'').trim();
+      if(joining)payload.invitationToken=String(data.get('invitationToken')||'').trim();
       form.querySelector('button[type="submit"]').disabled=true;
       try{
-        const response=await fetch(creating?'/api/auth/register':'/api/auth/login',{
+        const response=await fetch(creating?'/api/auth/register':joining?'/api/auth/register-invited':'/api/auth/login',{
           method:'POST',credentials:'same-origin',headers:{'content-type':'application/json'},body:JSON.stringify(payload)
         });
         const body=await response.json().catch(()=>({}));
