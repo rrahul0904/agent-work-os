@@ -31,6 +31,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
   const serverEnv = {
     ...process.env,
     NODE_ENV: "production",
+    AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED: "true", // explicit test tenant provisioning only
     PORT: String(port),
     AGENT_WORK_OS_HOST: "127.0.0.1",
     AGENT_WORK_OS_TOKEN: "",
@@ -138,7 +139,7 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     const clientConfig = await fetch(origin + "/api/client-config");
     assert.equal(clientConfig.status, 200);
     const authMode = await clientConfig.json();
-    assert.deepEqual(authMode, { authentication: "account", production: true });
+    assert.deepEqual(authMode, { authentication: "account", production: true, registrationEnabled: true });
     assert.ok(!JSON.stringify(authMode).includes(ownerEmail), "public client config cannot reveal user details");
 
     const ownerSetCookies = owner.response.headers.getSetCookie().join("\n");
