@@ -16,6 +16,7 @@ import { handleCapabilityRegistryRequest, resolveVerificationCapabilitySpec } fr
 import { IdentityError, IdentityRepository } from "./identity-store.js";
 import { createOpaqueCursorCodec, PostgresEventFanout } from "./realtime-events.js";
 import { PostgresDaemonCommandRouter } from "./daemon-command-router.js";
+import { issueProductionApproval } from "./production-approval.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "../../..");
@@ -583,6 +584,17 @@ export async function createControlPlane() {
         const validation = validateShippingContract(body.contract);
         if (!validation.valid) return json(res, 400, { error: "shipping_contract_invalid", details: validation.errors });
         const runId = body.runId?.trim() || `ship-${crypto.randomUUID()}`;
+        if (!/^[A-Za-z0-9._-]{3,180}$/.test(runId)) return json(res, 400, { error: "shipping_run_id_invalid" });
+        const productionIntent = body.contract.production.required === true;
+        if (productionIntent) {
+          if (principal.kind !== "user") return json(res, 403, { error: "production_requires_account_identity" });
+          if (!/^[a-f0-9]{40}$/.test(body.contract.worktree.baseRef)) {
+            return json(res, 400, { error: "production_requires_full_pinned_source_sha" });
+          }
+          if (!body.contract.preview.required || !body.contract.exactSha.required) {
+            return json(res, 400, { error: "production_requires_preview_and_exact_sha" });
+          }
+        }
         if (await store.getShippingRun(runId)) return json(res, 409, { error: "shipping_run_exists" });
         const now = new Date().toISOString();
         let queued = {
@@ -593,7 +605,8 @@ export async function createControlPlane() {
           projectId: body.contract.project.id,
           releaseVersion: body.contract.release.version,
           contractDigest: digestShippingContract(body.contract),
-          state: "QUEUED",
+          state: productionIntent ? "AWAITING_APPROVAL" : "QUEUED",
+          ...(productionIntent ? { pendingContract: body.contract } : {}),
           blocker: null,
           createdAt: now,
           updatedAt: now,
@@ -601,6 +614,11 @@ export async function createControlPlane() {
           deployedSha: null,
           events: []
         };
+        if (productionIntent) {
+          queued = await store.upsertShippingRun(queued);
+          broadcast({ type: "shipping.run.updated", run: queued });
+          return json(res, 202, queued); // No command or outbox entry before a second human approves.
+        }
         const command = { type: "server.command", commandId: crypto.randomUUID(), sessionId: `shipping:${runId}`, action: "shipping.start", payload: { runId, contract: body.contract } };
         if (commandRouter) queued = await store.upsertShippingRunWithCommand(queued, command);
         else {
@@ -614,6 +632,48 @@ export async function createControlPlane() {
         }
         broadcast({ type: "shipping.run.updated", run: queued });
         return json(res, 202, queued);
+      }
+
+      // Two-person, digest-specific production approval. This endpoint never
+      // accepts client-supplied signed permits or a caller-selected endpoint.
+      const approvalMatch = url.pathname.match(/^\/api\/shipping\/runs\/([^/]+)\/(approve|reject)$/);
+      if (approvalMatch && req.method === "POST" && principal.kind === "user") {
+        const runId = decodeURIComponent(approvalMatch[1]);
+        const decision = approvalMatch[2];
+        const body = await readJson(req);
+        const organizationId = body.organizationId;
+        if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+        const membership = await identities.getMembership(principal.userId, organizationId);
+        if (!membership) return json(res, 404, { error: "organization_not_found" });
+        if (!["owner", "admin"].includes(membership.role)) return json(res, 403, { error: "production_approval_role_denied" });
+        const pending = await store.getShippingRun(runId, organizationId);
+        if (!pending) return json(res, 404, { error: "shipping_run_not_found" });
+        if (pending.createdBy === principal.userId) return json(res, 403, { error: "production_self_approval_denied" });
+        if (!pending.pendingContract || pending.state !== "AWAITING_APPROVAL" ||
+            body.expectedContractDigest !== pending.contractDigest) {
+          return json(res, 409, { error: "production_approval_stale_or_not_pending" });
+        }
+        let signed = null;
+        if (decision === "approve") {
+          const target = process.env.AGENT_WORK_OS_PRODUCTION_HOSTING_TARGET || "";
+          if (!["aws", "oci", "onprem"].includes(target)) return json(res, 409, { error: "production_host_not_approved" });
+          try {
+            signed = issueProductionApproval({
+              runId, organizationId, machineId: pending.machineId,
+              requestedBy: pending.createdBy, approvedBy: principal.userId,
+              contractDigest: pending.contractDigest, sourceSha: pending.pendingContract.worktree.baseRef,
+              hostingTarget: target, signingKey: process.env.AGENT_WORK_OS_PRODUCTION_APPROVAL_KEY || ""
+            });
+          } catch { return json(res, 409, { error: "production_approval_signing_not_configured" }); }
+        }
+        const updated = await store.decidePendingProductionRun({
+          runId, organizationId, actorId: principal.userId, decision,
+          expectedContractDigest: body.expectedContractDigest,
+          ...(signed ? { approvalPermit: signed.permit, approvalClaims: signed.claims } : {})
+        });
+        if (!updated) return json(res, 404, { error: "shipping_run_not_found" });
+        broadcast({ type: "shipping.run.updated", run: updated });
+        return json(res, 200, updated);
       }
 
       const sessionMatch = url.pathname.match(/^\/api\/sessions\/([^/]+)$/);
@@ -916,7 +976,7 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/state" || pathname === "/api/product" || pathname === "/api/shipping/contracts/validate"
     || pathname === "/api/capabilities" || /^\/api\/capabilities\/[^/]+$/.test(pathname)
     || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
-    || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
+    || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+(?:\/(?:approve|reject))?$/.test(pathname)
     || pathname === "/api/work-items" || /^\/api\/work-items\/[^/]+(?:\/events|\/transitions)?$/.test(pathname);
 }
 function isMachineScopedRoute(method, pathname) {
