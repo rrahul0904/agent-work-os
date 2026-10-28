@@ -15,6 +15,16 @@ services:
       timeout: 3s
       retries: 15
     restart: unless-stopped
+  browser-tls:
+    image: caddy:2.10-alpine
+    depends_on:
+      control-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
   control-api:
     build:
       context: ../..
