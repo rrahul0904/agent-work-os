@@ -232,6 +232,11 @@ export async function createControlPlane() {
       if (req.method === "OPTIONS") return end(res, 204);
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
       if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, product: "agent-work-os", protocolVersion: PROTOCOL_VERSION });
+      // Public UI bootstrap metadata ONLY, never tenant identifiers or credentials.
+      if (req.method === "GET" && url.pathname === "/api/client-config") {
+        return json(res, 200, { authentication: identities ? "account" : "local_token",
+          production: isProduction });
+      }
       if (req.method === "GET" && url.pathname === "/readyz") {
         if (store.pool) await store.pool.query("SELECT 1");
         const ready = !eventFanout || eventFanout.ready;
@@ -329,7 +334,20 @@ export async function createControlPlane() {
         return json(res, 200, { membership });
       }
 
-      if (req.method === "GET" && url.pathname === "/api/state") return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
+      if (req.method === "GET" && url.pathname === "/api/state") {
+        if (principal.kind === "user") {
+          const organizationId = url.searchParams.get("organizationId");
+          if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+          if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+          const [machines, sessions, shippingRuns] = await Promise.all([
+            store.listMachinesByOrganization(organizationId),
+            store.listSessionsByOrganization(organizationId),
+            store.listShippingRunsByOrganization(organizationId)
+          ]);
+          return json(res, 200, { machines, sessions, shippingRuns });
+        }
+        return json(res, 200, { machines: await store.listMachines(), sessions: await store.listSessions(), shippingRuns: await store.listShippingRuns() });
+      }
       if (await handleCapabilityRegistryRequest({ req, res, url, principal, identities, registry: capabilityRegistry, readJson, json })) return;
       if (req.method === "GET" && url.pathname === "/api/capability-verifications" && principal.kind === "user") {
         const organizationId = url.searchParams.get("organizationId");
@@ -498,6 +516,23 @@ export async function createControlPlane() {
         return item ? json(res, 200, item) : json(res, 404, { error: "work_item_not_found" });
       }
       if (req.method === "GET" && url.pathname === "/api/product") {
+        if (principal.kind === "user") {
+          const organizationId = url.searchParams.get("organizationId");
+          if (!organizationId) return json(res, 400, { error: "organization_id_required" });
+          if (!(await identities.getMembership(principal.userId, organizationId))) return json(res, 404, { error: "organization_not_found" });
+          const [runs, machines, sessions] = await Promise.all([
+            store.listShippingRunsByOrganization(organizationId),
+            store.listMachinesByOrganization(organizationId),
+            store.listSessionsByOrganization(organizationId)
+          ]);
+          // Never expose the operator's global portfolio, filesystem receipt
+          // paths, or another tenant's runs to a signed-in customer.
+          const receipts = runs.filter((run) => run.releaseReceipt).map((run) => ({
+            ...run.releaseReceipt, runId: run.runId, projectId: run.projectId,
+            releaseVersion: run.releaseVersion, path: null, source: "tenant_runtime"
+          }));
+          return json(res, 200, buildProductSummary({ portfolio: [], runs, receipts, machines, sessions }));
+        }
         const [portfolio, committedReceipts] = await Promise.all([loadPortfolio(portfolioPath), listReceipts(receiptsRoot)]);
         const [runs, machines, sessions] = await Promise.all([Promise.resolve(store.listShippingRuns()), store.listMachines(), store.listSessions()]);
         const runReceipts = runs.filter((run) => run.releaseReceipt).map((run) => ({ ...run.releaseReceipt, runId: run.runId, projectId: run.projectId, releaseVersion: run.releaseVersion, path: null, source: "runtime" }));
@@ -873,6 +908,7 @@ function isUserScopedRoute(pathname) {
     || pathname === "/api/organizations" || /^\/api\/organizations\/[^/]+\/invitations$/.test(pathname)
     || /^\/api\/organizations\/[^/]+\/machine-credentials(?:\/[^/]+(?:\/rotate)?)?$/.test(pathname)
     || pathname === "/api/machines" || pathname === "/api/sessions" || /^\/api\/sessions\/[^/]+(?:\/messages|\/interrupt)?$/.test(pathname)
+    || pathname === "/api/state" || pathname === "/api/product" || pathname === "/api/shipping/contracts/validate"
     || pathname === "/api/capabilities" || /^\/api\/capabilities\/[^/]+$/.test(pathname)
     || pathname === "/api/capability-verifications" || /^\/api\/capability-verifications\/[^/]+(?:\/interrupt)?$/.test(pathname)
     || pathname === "/api/shipping/example" || pathname === "/api/shipping/runs" || /^\/api\/shipping\/runs\/[^/]+$/.test(pathname)
