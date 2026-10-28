@@ -28,6 +28,13 @@ jobs:
           echo "AGENT_WORK_OS_BOOTSTRAP_EMAIL=owner-ci@invalid.test" >> "$GITHUB_ENV"
       - name: Build and start localhost-only test services
         run: docker compose -f infra/uat/compose.yml up --build --wait -d
+      - name: Verify private HTTPS TLS proxy and API readiness
+        run: |
+          if ! curl --fail --silent --show-error --insecure --retry 12 --retry-delay 1 --retry-connrefused https://localhost:8443/readyz > /tmp/awos-https-ready.json; then
+            docker compose -f infra/uat/compose.yml logs --no-color browser-tls | tail -60
+            exit 1
+          fi
+          node -e "const x=require('/tmp/awos-https-ready.json'); if(!x.ok)process.exit(1)"
       - name: Provision one private first-owner account
         run: |
           docker compose -f infra/uat/compose.yml exec -T             -e AGENT_WORK_OS_BOOTSTRAP_EMAIL="$AGENT_WORK_OS_BOOTSTRAP_EMAIL"             -e AGENT_WORK_OS_BOOTSTRAP_ORGANIZATION="Disposable UAT Team"             -e AGENT_WORK_OS_BOOTSTRAP_APPROVAL="YES_CREATE_FIRST_OWNER"             -e AGENT_WORK_OS_BOOTSTRAP_PASSWORD="$AGENT_WORK_OS_BOOTSTRAP_PASSWORD"             control-api node scripts/bootstrap-first-owner.mjs
