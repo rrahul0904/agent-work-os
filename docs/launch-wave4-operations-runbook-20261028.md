@@ -51,3 +51,30 @@ npm run release:dossier -- /absolute/path/to/launch-dossier.json
 ## Four supervisor handoff
 
 Portfolio supervisor owns owner GO, product scope and budget. REA supervisor owns evidence rights/receipts. Engineering supervisor owns code, tests and UAT preparation. Independent security supervisor independently verifies real systems and records a signed review. If an external reviewer or live environment is unavailable, `NO-GO` remains the only defensible decision.
+
+## First Owner and invitation-only team activation — implemented 2026-10-28
+
+The private control plane defaults `AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED=false`; no unauthenticated public sign-up is required or permitted. A trusted infrastructure operator provisions the first owner **exactly once**, with an empty identity database. Use a private file (`chmod 600`), not a command-line password argument:
+
+```sh
+export DATABASE_URL='<approved-private-postgres-connection>'
+export AGENT_WORK_OS_BOOTSTRAP_EMAIL='owner@yourcompany.example'
+export AGENT_WORK_OS_BOOTSTRAP_ORGANIZATION='Your Team'
+export AGENT_WORK_OS_BOOTSTRAP_PASSWORD_FILE='/secure/operator/password-file'
+export AGENT_WORK_OS_BOOTSTRAP_APPROVAL=YES_CREATE_FIRST_OWNER
+npm run bootstrap:first-owner
+```
+
+The command uses PostgreSQL advisory locking, refuses any populated user/organization/membership tables and never prints the password/session. Do not put credentials, connection strings or invitation tokens into Git, CI logs or issue descriptions. The operator must supply approved secure runtime access and use the container's private network if running Compose. The CLI is for new instances only, not account recovery.
+
+The owner can then open **Team & invites** and issue an invitation. New teammates choose **Have an invitation? Join your team**, provide the exactly matching email and one-time token, then create their own password. The server transaction locks and consumes the invitation atomically. Viewer accounts can read permitted resources but cannot execute or mutate projects. Invitations currently require manual secure out-of-band delivery; automated email/recovery and enterprise SSO are not certified.
+
+## Workstation filesystem permissions
+
+Production daemon requires `AGENT_WORK_OS_ALLOWED_WORKSPACE_ROOTS` set to a platform-delimited list of **absolute pre-created directories**. Runtime resolves real paths and denies symlink escapes and global filesystem-root grants. Coding agents, CodeAtlas, Cowork, repository-review and Shipping contracts must remain within locally approved roots. A chat-only model lane without filesystem tools may run without local repo access after separate tenant model approval.
+
+All shipping execution, including preview, additionally requires `AGENT_WORK_OS_SHIPPING_EXECUTION_APPROVED=true` **on the workstation**. Production deployment still requires `AGENT_WORK_OS_ALLOW_PRODUCTION_DEPLOYMENT=true`, an approved hosting target, second-person signed run permit and exact SHA. Never enable these without a scoped operator authorization.
+
+## Mandatory security incident status
+
+Agent Work OS full-history gitleaks found two unresolved generic-api-key findings. The redacted scanner now emits rule and commit prefixes but not secret values; preserve release failure and investigate in a protected operator system. Token Intelligence has its own separate historical findings. A passing diagnostic workflow does not override either.
