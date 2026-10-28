@@ -805,13 +805,16 @@ export async function createControlPlane() {
         const machine = await store.getMachine(body.machineId);
         if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
         if (!machine.capabilities.some((capability) => capability.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
-        if (["model-chat","token-intelligence"].includes(body.agent)) {
-          const capability=machine.capabilities.find(cap=>cap.name===body.agent);
-          if (!capability?.model || (body.model && body.model!==capability.model))
-            return json(res,403,{error:"model_not_allowed_for_machine"});
-          const modelPolicy=await tenantModelPolicies.get(body.organizationId,body.agent,capability.model);
-          if (!isModelUseApproved(modelPolicy,capability))
-            return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+        if (["model-chat","token-intelligence","repository-review"].includes(body.agent)) {
+          const lanes=body.agent==="repository-review"?["model-chat","token-intelligence"]:[body.agent];
+          for (const agent of lanes) {
+            const capability=machine.capabilities.find(cap=>cap.name===agent);
+            if (!capability?.model || (agent===body.agent && body.model && body.model!==capability.model))
+              return json(res,403,{error:"model_not_allowed_for_machine"});
+            const modelPolicy=await tenantModelPolicies.get(body.organizationId,agent,capability.model);
+            if (!isModelUseApproved(modelPolicy,capability))
+              return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+          }
         }
         const now = new Date().toISOString();
         const session = {
@@ -851,13 +854,16 @@ export async function createControlPlane() {
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
         const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
-        if(["model-chat","token-intelligence"].includes(session.agent)){
-          const capability=machine.capabilities?.find(cap=>cap.name===session.agent);
-          const modelPolicy=capability?.model?
-            await tenantModelPolicies.get(session.organizationId,session.agent,capability.model):null;
-          if(!isModelUseApproved(modelPolicy,capability) ||
-              (session.model&&session.model!==capability.model))
-            return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+        if(["model-chat","token-intelligence","repository-review"].includes(session.agent)){
+          const lanes=session.agent==="repository-review"?["model-chat","token-intelligence"]:[session.agent];
+          for(const agent of lanes){
+            const capability=machine.capabilities?.find(cap=>cap.name===agent);
+            const modelPolicy=capability?.model?
+              await tenantModelPolicies.get(session.organizationId,agent,capability.model):null;
+            if(!isModelUseApproved(modelPolicy,capability) ||
+                (agent===session.agent&&session.model&&session.model!==capability.model))
+              return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+          }
         }
         const body = await readJson(req); const message = body.text?.trim();
         if (!message) return json(res, 400, { error: "text is required" });
