@@ -337,6 +337,16 @@ function statusBadge(status='UNKNOWN'){return `<span class="status ${statusClass
 
 function wire() {
   document.querySelector('#logout')?.addEventListener('click',()=>logout());
+  document.querySelector('#org-picker')?.addEventListener('change',async event=>{
+    const chosen=event.currentTarget.value;
+    if(!state.organizations.some(org=>org.organizationId===chosen))return setNotice('Organization not available.','error');
+    state.organizationId=chosen;
+    state.selectedSession=null;state.selectedRun=null;
+    state.lastCursor=null;state.seenEventTags.clear();
+    clearTimeout(state.reconnectTimer);
+    const oldSocket=state.socket;state.socket=null;oldSocket?.close();
+    await bootstrap();
+  });
   document.querySelectorAll('[data-page]').forEach(el=>el.addEventListener('click',()=>{state.page=el.dataset.page;if(el.dataset.run)state.selectedRun=el.dataset.run;render();}));
   document.querySelector('#launch')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#launch-inline')?.addEventListener('click',()=>{state.launchOpen=true;render();});
@@ -347,7 +357,7 @@ function wire() {
   document.querySelector('#drawer-backdrop')?.addEventListener('click',e=>{if(e.target.id==='drawer-backdrop'){state.launchOpen=false;render();}});
   const shippingForm=document.querySelector('#shipping-form');
   document.querySelector('#validate-contract')?.addEventListener('click',async()=>{try{const contract=JSON.parse(new FormData(shippingForm).get('contract'));await api('/api/shipping/contracts/validate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contract})});setNotice('Shipping Contract is valid.','success');}catch(error){setNotice(error.message,'error');}});
-  if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
+  if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract,...(state.authMode==='account'?{organizationId:state.organizationId}:{})})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
   const newSession=document.querySelector('#new-session');
   // Agent capabilities belong to the selected machine, not the first online machine.
   if(newSession){
@@ -363,7 +373,7 @@ function wire() {
       }));
     });
   }
-  if(newSession)newSession.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(newSession);const session=await api('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(Object.fromEntries(f))});state.selectedSession=session.id;state.sessions=upsert(state.sessions,session,true);render();}catch(error){setNotice(error.message,'error');}};
+  if(newSession)newSession.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(newSession);const session=await api('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({...Object.fromEntries(f),...(state.authMode==='account'?{organizationId:state.organizationId}:{})})});state.selectedSession=session.id;state.sessions=upsert(state.sessions,session,true);render();}catch(error){setNotice(error.message,'error');}};
   const follow=document.querySelector('#follow');
   const selected=state.sessions.find(s=>s.id===state.selectedSession)||state.sessions[0];
   if(follow&&selected)follow.onsubmit=async e=>{e.preventDefault();const text=new FormData(follow).get('text');try{await api(`/api/sessions/${selected.id}/messages`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({text})});follow.reset();}catch(error){setNotice(error.message,'error');}};
