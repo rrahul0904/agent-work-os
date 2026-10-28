@@ -10,6 +10,7 @@ import test from "node:test";
 import pg from "pg";
 import { createCanonicalId } from "../../../packages/domain/src/index.js";
 import { PROTOCOL_VERSION, encodeMessage } from "../../../packages/protocol/src/index.js";
+import { verifyProductionApproval } from "../src/production-approval.js";
 
 const { Pool } = pg;
 const databaseUrl = process.env.AGENT_WORK_OS_TEST_DATABASE_URL;
@@ -32,6 +33,8 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     ...process.env,
     NODE_ENV: "production",
     AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED: "true", // explicit test tenant provisioning only
+    AGENT_WORK_OS_PRODUCTION_HOSTING_TARGET: "onprem",
+    AGENT_WORK_OS_PRODUCTION_APPROVAL_KEY: "ab".repeat(32),
     PORT: String(port),
     AGENT_WORK_OS_HOST: "127.0.0.1",
     AGENT_WORK_OS_TOKEN: "",
@@ -385,6 +388,107 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         await databaseInspector.query("DROP TRIGGER IF EXISTS awos_test_reject_selected_outbox_command ON agent_work_os_daemon_commands_v1");
         await databaseInspector.query("DROP FUNCTION IF EXISTS awos_test_reject_selected_outbox_command()");
       }
+
+
+      // Real PostgreSQL API approval path. A production contract must create
+      // only a persisted request, not an executable daemon/outbox command.
+      const releaseReviewer = await register(`release-reviewer-${emailTag}@example.test`, "Reviewer Account");
+      assert.equal(releaseReviewer.response.status, 201);
+      const inviteResponse = await api(owner.cookies, owner.body.csrfToken,
+        `/api/organizations/${alphaId}/invitations`, {
+          method: "POST", body: { email: releaseReviewer.body.user.email, role: "admin" }
+        });
+      assert.equal(inviteResponse.status, 201);
+      const invite = await inviteResponse.json();
+      const acceptedReleaseReviewer = await api(releaseReviewer.cookies, releaseReviewer.body.csrfToken,
+        "/api/auth/accept-invitation", { method: "POST", body: { token: invite.invitation.token } });
+      assert.equal(acceptedReleaseReviewer.status, 200);
+
+      const productionContract = structuredClone(shippingContractForOutboxRollback);
+      productionContract.worktree.baseRef = "c".repeat(40);
+      productionContract.preview = { required: true,
+        deployCommand: { command: "true" }, uat: [{ command: "true" }] };
+      productionContract.production = { required: true,
+        deployCommand: { command: "true" }, uat: [{ command: "true" }] };
+      productionContract.exactSha = { required: true,
+        testedShaCommand: { command: "git rev-parse HEAD" },
+        deployedShaCommand: { command: "git rev-parse HEAD" } };
+
+      const protectedRunId = "approval-" + crypto.randomUUID();
+      const pendingResponse = await api(owner.cookies, owner.body.csrfToken, "/api/shipping/runs", {
+        method: "POST", body: { organizationId: alphaId, machineId, runId: protectedRunId, contract: productionContract }
+      });
+      assert.equal(pendingResponse.status, 202);
+      const pending = await pendingResponse.json();
+      assert.equal(pending.state, "AWAITING_APPROVAL");
+      assert.equal(pending.pendingContract.worktree.baseRef, "c".repeat(40));
+      const beforeDecision = await databaseInspector.query(
+        "SELECT count(*)::int AS count FROM agent_work_os_daemon_commands_v1 WHERE payload->>'action' = 'shipping.start' AND payload->'payload'->>'runId' = $1",
+        [protectedRunId]
+      );
+      assert.equal(beforeDecision.rows[0].count, 0, "no production command before second-person approval");
+      const approvalPath = `/api/shipping/runs/${protectedRunId}/approve`;
+      const decisionBody = { organizationId: alphaId, expectedContractDigest: pending.contractDigest };
+      assert.equal((await api(owner.cookies, owner.body.csrfToken, approvalPath, {
+        method: "POST", body: decisionBody
+      })).status, 403, "submitter cannot self-approve a production run");
+      assert.equal((await api(otherTenant.cookies, otherTenant.body.csrfToken, approvalPath, {
+        method: "POST", body: decisionBody
+      })).status, 404, "cross-organization owner cannot authorize production");
+      assert.equal((await api(releaseReviewer.cookies, null, approvalPath, {
+        method: "POST", body: decisionBody
+      })).status, 403, "missing CSRF prevents approval");
+      assert.equal((await api(releaseReviewer.cookies, releaseReviewer.body.csrfToken, approvalPath, {
+        method: "POST", body: { ...decisionBody, expectedContractDigest: "sha256:" + "f".repeat(64) }
+      })).status, 409, "stale/different contract cannot be approved");
+
+      const approvedResponse = await api(releaseReviewer.cookies, releaseReviewer.body.csrfToken,
+        approvalPath, { method: "POST", body: decisionBody });
+      assert.equal(approvedResponse.status, 200);
+      const approved = await approvedResponse.json();
+      assert.equal(approved.state, "QUEUED");
+      assert.equal(approved.approval.decidedBy, releaseReviewer.body.user.id);
+      assert.equal(approved.pendingContract, undefined);
+      assert.ok(!JSON.stringify(approved).includes("approvalPermit"),
+        "signed executor permit must never be returned to browser");
+      const approvedCommand = await machineSocket.readMessage();
+      assert.equal(approvedCommand.action, "shipping.start");
+      assert.equal(approvedCommand.payload.runId, protectedRunId);
+      const verifiedPermit = verifyProductionApproval(approvedCommand.payload.approvalPermit, {
+        signingKey: "ab".repeat(32), runId: protectedRunId, organizationId: alphaId,
+        machineId, contractDigest: pending.contractDigest, sourceSha: "c".repeat(40), hostingTarget: "onprem"
+      });
+      assert.equal(verifiedPermit.approvedBy, releaseReviewer.body.user.id);
+      assert.equal(verifiedPermit.requestedBy, owner.body.user.id);
+      const approvedRows = await databaseInspector.query(
+        "SELECT count(*)::int AS count FROM agent_work_os_daemon_commands_v1 WHERE payload->>'action' = 'shipping.start' AND payload->'payload'->>'runId' = $1",
+        [protectedRunId]
+      );
+      assert.equal(approvedRows.rows[0].count, 1, "approval and exactly one command commit atomically");
+      const duplicateApprovals = await Promise.all([0,1].map(() => api(
+        releaseReviewer.cookies, releaseReviewer.body.csrfToken, approvalPath, {
+          method: "POST", body: decisionBody
+        }
+      )));
+      assert.ok(duplicateApprovals.every((result) => result.status === 409));
+
+      const rejectedRunId = "approval-reject-" + crypto.randomUUID();
+      const rejectPending = await api(owner.cookies, owner.body.csrfToken, "/api/shipping/runs", {
+        method: "POST", body: { organizationId: alphaId, machineId, runId: rejectedRunId, contract: productionContract }
+      });
+      assert.equal(rejectPending.status, 202);
+      const rejectedBody = await rejectPending.json();
+      const rejectedResponse = await api(releaseReviewer.cookies, releaseReviewer.body.csrfToken,
+        `/api/shipping/runs/${rejectedRunId}/reject`, {
+          method: "POST", body: { organizationId: alphaId, expectedContractDigest: rejectedBody.contractDigest }
+        });
+      assert.equal(rejectedResponse.status, 200);
+      assert.equal((await rejectedResponse.json()).state, "BLOCKED");
+      const deniedOutbox = await databaseInspector.query(
+        "SELECT count(*)::int AS count FROM agent_work_os_daemon_commands_v1 WHERE payload->'payload'->>'runId' = $1",
+        [rejectedRunId]
+      );
+      assert.equal(deniedOutbox.rows[0].count, 0);
 
       const shippingContract = shippingContractForOutboxRollback;
       alphaShippingRunId = `tenant-${crypto.randomUUID()}`;
