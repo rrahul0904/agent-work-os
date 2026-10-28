@@ -24,6 +24,10 @@
     "ship:validate": "node scripts/ship.mjs validate",
     "release:preflight": "node scripts/unified-release-preflight.mjs",
     "release:dossier": "node scripts/launch-dossier.mjs",
-    "bootstrap:first-owner": "node scripts/bootstrap-first-owner.mjs"
+    "bootstrap:first-owner": "node scripts/bootstrap-first-owner.mjs",
+    "test:private-browser": "node scripts/private-uat-browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.58.2"
   }
 }
