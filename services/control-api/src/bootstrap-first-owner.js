@@ -20,7 +20,7 @@ export async function bootstrapFirstOwner({pool, identities, email, password, or
         (Number(rows[0]?.memberships)||0)!==0) {
       throw new Error("FIRST_OWNER_BOOTSTRAP_NOT_EMPTY");
     }
-    const account=await identities.register({email,password,organizationName});
+    const account=await identities.register({email,password,organizationName}, client);
     await client.query("COMMIT");
     return {created:true,organizationId:account.organization.id,userId:account.user.id};
   } catch(error) {
