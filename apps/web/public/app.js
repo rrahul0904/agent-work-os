@@ -3,7 +3,7 @@ const state = {
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
   connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
   authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
-  registrationEnabled: false,
+  registrationEnabled: false, accountUserId: null,
   organizations: [], organizationId: null, socket: null, reconnectTimer: null
 };
 const app = document.querySelector('#app');
@@ -27,6 +27,7 @@ function authHeaders(extra={}, method='GET') {
 }
 function activateAccount(account) {
   state.accountEmail=account.user?.email||null;
+  state.accountUserId=account.user?.id||null;
   state.csrfToken=account.csrfToken;
   state.organizations=Array.isArray(account.memberships)?account.memberships:[];
   if(!state.organizations.some(org=>org.organizationId===state.organizationId))
@@ -208,7 +209,7 @@ async function logout(renderNow=true){
   clearTimeout(state.reconnectTimer);
   const oldSocket=state.socket;state.socket=null;oldSocket?.close();
   token='';localStorage.removeItem('agentWorkOsToken');
-  state.csrfToken=null;state.accountEmail=null;state.organizations=[];state.organizationId=null;
+  state.csrfToken=null;state.accountEmail=null;state.accountUserId=null;state.organizations=[];state.organizationId=null;
   state.machines=[];state.sessions=[];state.shippingRuns=[];state.product=null;
   state.connected=false;state.lastCursor=null;state.seenEventTags.clear();
   if(renderNow)renderLogin();
@@ -285,6 +286,12 @@ function runsHtml() {
 function runDetail(run) { const events=run.events||[]; return `<div class="panel-head"><div><p class="eyebrow">${esc(run.runId)}</p><h2>${esc(run.projectId)} · ${esc(run.releaseVersion||'')}</h2></div>${statusBadge(run.state)}</div>
   <div class="run-facts"><div><span>Tested SHA</span><strong>${shortSha(run.testedSha)}</strong></div><div><span>Deployed SHA</span><strong>${shortSha(run.deployedSha)}</strong></div><div><span>Machine</span><strong>${esc(run.machineId||'—')}</strong></div><div><span>Events</span><strong>${events.length}</strong></div></div>
   ${run.blocker?`<div class="blocker-banner"><strong>${esc(run.blocker.code)}</strong><span>${esc(run.blocker.message||'Run is blocked')}</span></div>`:''}${run.fatalError?`<div class="blocker-banner"><strong>FAILED</strong><span>${esc(run.fatalError)}</span></div>`:''}
+  ${run.state==='AWAITING_APPROVAL'?'<div class="blocker-banner"><strong>SECOND-PERSON APPROVAL REQUIRED</strong><p>Production execution is paused. An independent organization Owner/Admin must review the exact contract and pinned source revision before any daemon command is dispatched.</p><p>Contract digest: <code>'+esc(run.contractDigest)+'</code></p><p>Source: <code>'+esc(run.pendingContract?.worktree?.baseRef||'')+'</code></p><p>Requested by: '+esc(run.createdBy||'unknown')+'</p>'+(
+    state.authMode==='account' && state.accountUserId!==run.createdBy &&
+    ['owner','admin'].includes(state.organizations.find(o=>o.organizationId===state.organizationId)?.role)
+    ?'<div class="drawer-actions"><button class="primary compact" id="release-approve">Approve run</button><button class="secondary compact" id="release-reject">Reject run</button></div>'
+    :'<p class="muted">Review is restricted to another Owner/Admin in this organization.</p>'
+  )+'</div>':''}
   <div class="timeline">${events.length?events.slice().reverse().map(e=>`<article><i class="${statusClass(e.state)}"></i><div><strong>${esc(e.type)}</strong><span>${esc(e.state)}</span><small>${when(e.at)}</small>${e.message?`<p>${esc(e.message)}</p>`:''}</div></article>`).join(''):'<div class="empty">Waiting for the local executor to report the first gate.</div>'}</div>`; }
 function runRows(runs) { return runs.length?`<div class="table-list">${runs.map(r=>`<button data-page="runs" data-run="${esc(r.runId)}"><div><strong>${esc(r.projectId)}</strong><small>${esc(r.runId)}</small></div>${statusBadge(r.state)}<span>${when(r.updatedAt)}</span></button>`).join('')}</div>`:'<div class="empty">No shipping runs yet.</div>'; }
 
@@ -354,13 +361,29 @@ function wire() {
   document.querySelector('#launch')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#launch-inline')?.addEventListener('click',()=>{state.launchOpen=true;render();});
   document.querySelector('#refresh')?.addEventListener('click',()=>refreshProduct());
+  const pendingRun=state.shippingRuns.find(run=>run.runId===state.selectedRun);
+  for(const decision of ['approve','reject']){
+    document.querySelector('#release-'+decision)?.addEventListener('click',async event=>{
+      if(!pendingRun||pendingRun.state!=='AWAITING_APPROVAL')return;
+      const button=event.currentTarget;button.disabled=true;
+      try{
+        const run=await api('/api/shipping/runs/'+encodeURIComponent(pendingRun.runId)+'/'+decision,{
+          method:'POST',headers:{'content-type':'application/json'},
+          body:JSON.stringify({organizationId:state.organizationId,expectedContractDigest:pendingRun.contractDigest})
+        });
+        state.shippingRuns=upsert(state.shippingRuns,run,true);
+        await refreshProduct(false);
+        setNotice(decision==='approve'?'Second-person approval recorded; execution queued.':'Production request rejected.','success');
+      }catch(error){button.disabled=false;setNotice(error.message,'error');}
+    });
+  }
   document.querySelectorAll('[data-run]').forEach(el=>el.addEventListener('click',()=>{state.selectedRun=el.dataset.run;state.page='runs';render();}));
   document.querySelectorAll('[data-session]').forEach(el=>el.addEventListener('click',()=>{state.selectedSession=el.dataset.session;render();}));
   document.querySelector('#close-drawer')?.addEventListener('click',()=>{state.launchOpen=false;render();});
   document.querySelector('#drawer-backdrop')?.addEventListener('click',e=>{if(e.target.id==='drawer-backdrop'){state.launchOpen=false;render();}});
   const shippingForm=document.querySelector('#shipping-form');
   document.querySelector('#validate-contract')?.addEventListener('click',async()=>{try{const contract=JSON.parse(new FormData(shippingForm).get('contract'));await api('/api/shipping/contracts/validate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contract})});setNotice('Shipping Contract is valid.','success');}catch(error){setNotice(error.message,'error');}});
-  if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract,...(state.authMode==='account'?{organizationId:state.organizationId}:{})})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
+  if(shippingForm) shippingForm.onsubmit=async e=>{e.preventDefault();try{const f=new FormData(shippingForm);const contract=JSON.parse(f.get('contract'));state.contractText=JSON.stringify(contract,null,2);const run=await api('/api/shipping/runs',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({machineId:f.get('machineId'),contract,...(state.authMode==='account'?{organizationId:state.organizationId}:{})})});state.shippingRuns=upsert(state.shippingRuns,run,true);state.selectedRun=run.runId;state.page='runs';state.launchOpen=false;await refreshProduct(false);setNotice(run.state==='AWAITING_APPROVAL'?'Production request stored; waiting for a second human reviewer.':`Shipping run ${run.runId} queued.`,'success');render();}catch(error){setNotice(error.message,'error');}};
   const newSession=document.querySelector('#new-session');
   // Agent capabilities belong to the selected machine, not the first online machine.
   if(newSession){
