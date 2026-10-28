@@ -122,6 +122,59 @@ test("production deploy is denied before shell or worktree without explicit oper
   assert.equal(run.releaseReceipt, undefined);
 });
 
+test("even an operator-enabled daemon refuses missing or tampered production permits without running tools", async () => {
+  let worktrees = 0;
+  const supervisor = new ShippingSupervisor({
+    runner: new FakeRunner([]),
+    worktrees: { async create() { worktrees++; throw new Error("unreachable"); } },
+    allowProductionDeployment: true, productionHostingTarget: "onprem", approvalSigningKey: TEST_KEY
+  });
+  const input = contract();
+  const missing = await supervisor.run(input, { runId: "permit-missing", organizationId: ORG, machineId: MACHINE });
+  assert.equal(missing.state, "BLOCKED");
+  assert.equal(missing.blocker.code, "BLOCKED_IRREVERSIBLE_ACTION");
+  assert.equal(worktrees, 0);
+  const opts = approvedOptions(input, "permit-tampered");
+  opts.approvalPermit = opts.approvalPermit.slice(0,-1) +
+    (opts.approvalPermit.at(-1) === "0" ? "1" : "0");
+  const invalid = await supervisor.run(input, opts);
+  assert.equal(invalid.state, "BLOCKED");
+  assert.equal(invalid.blocker.code, "BLOCKED_IRREVERSIBLE_ACTION");
+  assert.equal(worktrees, 0);
+});
+
+test("human-approved base SHA mismatch blocks before build and deploy", async () => {
+  let builderCalls=0;
+  const supervisor = new ShippingSupervisor({
+    runner: { async run() { builderCalls++; throw new Error("should not run"); } },
+    worktrees: { async create() { return {
+      repoPath:"/fixture", worktreePath:"/fixture", baseSha:"f".repeat(40)
+    }; } },
+    allowProductionDeployment: true, productionHostingTarget:"onprem", approvalSigningKey: TEST_KEY
+  });
+  const input = contract();
+  const result = await runApproved(supervisor, input, "wrong-source-sha");
+  assert.equal(result.state,"BLOCKED");
+  assert.equal(result.blocker.code,"BLOCKED_SOURCE_UNKNOWN");
+  assert.equal(builderCalls,0);
+});
+
+test("changed tested SHA after approved build never reaches production deploy", async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(),"ship-changing-source-"));
+  const runner = new FakeRunner([
+    {ok:true}, {ok:true}, {ok:true,stdout:"f".repeat(40)+"\\n"},
+    {ok:true},{ok:true}
+  ]);
+  const supervisor = new ShippingSupervisor({
+    runner, worktrees:new FakeWorktrees(path.join(root,"wt")),
+    allowProductionDeployment:true, productionHostingTarget:"onprem", approvalSigningKey:TEST_KEY
+  });
+  const result = await runApproved(supervisor,contract(),"tested-changed-sha");
+  assert.equal(result.state,"BLOCKED");
+  assert.equal(result.blocker.code,"BLOCKED_IRREVERSIBLE_ACTION");
+  assert.equal(runner.calls.some(x=>x.command==="prod-deploy"),false);
+});
+
 test("operator opt-in still denies production when preview or exact-SHA verification is absent", async () => {
   let invoked = false;
   const supervisor = new ShippingSupervisor({
