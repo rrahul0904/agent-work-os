@@ -166,6 +166,56 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.equal(ownerOrgsResponse.status, 200);
     const alphaId = owner.body.organization.id;
     assert.equal(ownerOrgs.organizations[0].organizationId, alphaId);
+    // Wave 2: actual browser-facing tenant project lifecycle backed by SQL.
+    const createProjectPath="/api/projects";
+    const createProjectBody={organizationId:alphaId,name:"Data Warehouse Modernization",
+      description:"Implement a tenant-scoped pipeline",repository:"example/customer-repo"};
+    assert.equal((await api(owner.cookies,null,createProjectPath,{
+      method:"POST",body:createProjectBody
+    })).status,403,"project creation requires CSRF");
+    const projectCreation=await api(owner.cookies,owner.body.csrfToken,createProjectPath,{
+      method:"POST",body:createProjectBody
+    });
+    assert.equal(projectCreation.status,201);
+    const tenantProject=(await projectCreation.json()).project;
+    assert.equal(tenantProject.organizationId,alphaId);
+    assert.equal(tenantProject.status,"draft");
+    assert.equal(tenantProject.version,1);
+    assert.equal((await api(otherTenant.cookies,null,
+      "/api/projects?organizationId="+alphaId)).status,404);
+    const foreignProjectList=await api(otherTenant.cookies,null,
+      "/api/projects?organizationId="+otherTenant.body.organization.id);
+    assert.equal(foreignProjectList.status,200);
+    assert.deepEqual((await foreignProjectList.json()).projects,[],
+      "an unrelated tenant sees no project metadata");
+    const versionedProjectUpdate=await api(owner.cookies,owner.body.csrfToken,
+      "/api/projects/"+tenantProject.id,{method:"PATCH",body:{
+        organizationId:alphaId,expectedVersion:1,status:"active"
+      }});
+    assert.equal(versionedProjectUpdate.status,200);
+    assert.equal((await versionedProjectUpdate.json()).project.version,2);
+    assert.equal((await api(owner.cookies,owner.body.csrfToken,
+      "/api/projects/"+tenantProject.id,{method:"PATCH",body:{
+        organizationId:alphaId,expectedVersion:1,status:"archived"
+      }})).status,409,"stale concurrent update must lose");
+    assert.equal((await api(otherTenant.cookies,otherTenant.body.csrfToken,
+      "/api/projects/"+tenantProject.id,{method:"PATCH",body:{
+        organizationId:otherTenant.body.organization.id,expectedVersion:2,status:"archived"
+      }})).status,404,"foreign organization cannot edit project");
+    assert.equal((await api(owner.cookies,owner.body.csrfToken,createProjectPath,{
+      method:"POST",body:{organizationId:alphaId,name:"XX",repository:"https://bad.host/repo"}
+    })).status,400,"invalid name and arbitrary URL are denied");
+    const projectArchive=await api(owner.cookies,owner.body.csrfToken,
+      "/api/projects/"+tenantProject.id,{method:"PATCH",body:{
+        organizationId:alphaId,expectedVersion:2,status:"archived"
+      }});
+    assert.equal(projectArchive.status,200);
+    const activeProjects=await api(owner.cookies,null,"/api/projects?organizationId="+alphaId);
+    assert.ok(!(await activeProjects.text()).includes(tenantProject.id));
+    const allProjects=await api(owner.cookies,null,
+      "/api/projects?organizationId="+alphaId+"&includeArchived=true");
+    assert.ok((await allProjects.text()).includes(tenantProject.id));
+
 
     const noCsrf = await api(owner.cookies, null, "/api/work-items", {
       method: "POST", body: { id: createCanonicalId("work"), commandId: createCanonicalId("command"), organizationId: alphaId, title: "Denied without CSRF" }
