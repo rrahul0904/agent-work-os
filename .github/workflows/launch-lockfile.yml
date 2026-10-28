@@ -1,0 +1,38 @@
+name: Lockfile generation — isolated launch branch only
+on:
+  push:
+    branches: [launch/4wave-wave4-release-evidence-20261028]
+permissions:
+  contents: write
+concurrency:
+  group: awos-launch-lockfile
+  cancel-in-progress: false
+jobs:
+  lock:
+    if: github.repository == 'rrahul0904/agent-work-os'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regenerate deterministic dependency lock
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Check root dependency contract
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json'));
+          const l = JSON.parse(fs.readFileSync('package-lock.json'));
+          if (l.packages[''].dependencies.pg !== p.dependencies.pg) throw new Error('lockfile-pg-drift');
+          NODE
+      - name: Commit lockfile to branch for review
+        run: |
+          if git diff --quiet -- package-lock.json && git ls-files --error-unmatch package-lock.json >/dev/null 2>&1; then exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(release): pin reviewed npm dependency tree"
+          git push origin "HEAD:refs/heads/launch/4wave-wave4-release-evidence-20261028"
