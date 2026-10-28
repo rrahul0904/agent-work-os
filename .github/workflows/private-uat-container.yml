@@ -33,6 +33,12 @@ jobs:
           docker compose -f infra/uat/compose.yml exec -T             -e AGENT_WORK_OS_BOOTSTRAP_EMAIL="$AGENT_WORK_OS_BOOTSTRAP_EMAIL"             -e AGENT_WORK_OS_BOOTSTRAP_ORGANIZATION="Disposable UAT Team"             -e AGENT_WORK_OS_BOOTSTRAP_APPROVAL="YES_CREATE_FIRST_OWNER"             -e AGENT_WORK_OS_BOOTSTRAP_PASSWORD="$AGENT_WORK_OS_BOOTSTRAP_PASSWORD"             control-api node scripts/bootstrap-first-owner.mjs
       - name: Real API invite-only customer and role UAT
         run: node scripts/private-uat-smoke.mjs seed
+      - name: Install exact locked browser test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Provision pinned Chromium browser for TLS test
+        run: npx playwright install --with-deps chromium
+      - name: Real HTTPS browser UAT — account, project, invitations and RBAC
+        run: npm run test:private-browser
       - name: Restart application container and verify persistence
         run: |
           docker compose -f infra/uat/compose.yml restart control-api
