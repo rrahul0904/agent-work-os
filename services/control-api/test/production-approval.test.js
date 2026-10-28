@@ -38,6 +38,8 @@ test("reject malformed, tampered, unsigned or self-approved production permits",
   assert.throws(()=>issueProductionApproval({...p,sourceSha:"HEAD"}),/claims_invalid/);
   assert.throws(()=>issueProductionApproval({...p,hostingTarget:"vercel"}),/claims_invalid/);
   const signed=issueProductionApproval(p).permit;
-  assert.throws(()=>verifyProductionApproval(signed.slice(0,-1)+"0",{...p,now:p.now+1}),/signature_invalid/);
+  const alteredSignature=signed.slice(0,-1)+(signed.at(-1)==="0"?"1":"0");
+  assert.notEqual(alteredSignature,signed);
+  assert.throws(()=>verifyProductionApproval(alteredSignature,{...p,now:p.now+1}),/signature_invalid/);
   assert.throws(()=>verifyProductionApproval("",{...p,now:p.now+1}),/production_approval_invalid/);
 });
