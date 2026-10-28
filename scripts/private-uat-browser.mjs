@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-const url = "https://127.0.0.1:8443";
+const url = "https://localhost:8443";
 const ownerEmail = process.env.AGENT_WORK_OS_BOOTSTRAP_EMAIL;
 const ownerPassword = process.env.AGENT_WORK_OS_BOOTSTRAP_PASSWORD;
 if(!ownerEmail || !ownerPassword) throw Error("PRIVATE_BROWSER_TEST_CREDENTIALS_REQUIRED");
