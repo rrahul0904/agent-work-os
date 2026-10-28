@@ -19,18 +19,18 @@ export function canReceiveClientEvent(principal, event) {
   // only the first organization allows mixed-tenant payloads to cross the
   // WebSocket/replay boundary. Reject disagreement even when the recipient
   // belongs to both organizations: one event must have exactly one tenant.
-  const organizationIds = [
-    event?.workItem?.organizationId,
-    event?.capabilityVerification?.organizationId,
-    event?.run?.organizationId,
-    event?.session?.organizationId,
-    event?.machine?.organizationId
-  ].filter((id) => id !== undefined && id !== null);
-  if (organizationIds.length === 0) return false;
-  const organizationId = organizationIds[0];
+  const records = [
+    event?.workItem,
+    event?.capabilityVerification,
+    event?.run,
+    event?.session,
+    event?.machine
+  ].filter((record) => record !== undefined && record !== null);
+  if (records.length === 0) return false;
+  const organizationId = records[0]?.organizationId;
   if (typeof organizationId !== "string" || !organizationId ||
       !principal.organizationIds.includes(organizationId) ||
-      organizationIds.some((id) => id !== organizationId)) return false;
+      records.some((record) => record?.organizationId !== organizationId)) return false;
   if (event.session && !isSessionOwnedBy(principal, event.session)) return false;
   return true;
 }
