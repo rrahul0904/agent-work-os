@@ -54,7 +54,7 @@ function contract(repoPath = "/fake") {
   };
 }
 
-test("happy path reaches SHIPPED only after exact SHA and UAT evidence", async () => {
+test("successful deployment attempt reaches independent certification queue, never self-SHIPPED", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ship-supervisor-"));
   const runner = new FakeRunner([
     { ok: true }, { ok: true }, { ok: true, stdout: `${SHA}\n` },
@@ -63,15 +63,16 @@ test("happy path reaches SHIPPED only after exact SHA and UAT evidence", async (
   const store = new ShippingStore(path.join(root, "state"));
   const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", approvalSigningKey: TEST_KEY, runner, worktrees: new FakeWorktrees(path.join(root, "wt")), store });
   const run = await runApproved(supervisor, contract(), "happy");
-  assert.equal(run.state, "SHIPPED", JSON.stringify(run));
+  assert.equal(run.state, "AWAITING_EXTERNAL_CERTIFICATION", JSON.stringify(run));
   assert.equal(run.testedSha, SHA);
   assert.equal(run.deployedSha, SHA);
-  assert.equal(run.releaseReceipt.goldenPath[0].status, "PASS");
+  assert.equal(run.releaseReceipt, undefined, "successful deploy commands cannot self-certify a release");
+  assert.equal(run.receiptFile, undefined);
   assert.ok(run.events.find((event) => event.type === "preview.uat"));
   assert.ok(run.events.find((event) => event.type === "production.uat"));
 });
 
-test("shipping evidence stays outside a worktree so cleanup succeeds after SHIPPED", async () => {
+test("shipping evidence stays outside a worktree so cleanup succeeds after verification", async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "ship-cleanup-"));
   const repo = path.join(root, "repo");
   const stateRoot = path.join(root, "shipping-state");
@@ -198,7 +199,7 @@ test("failed verification triggers repair and re-verification", async () => {
   ]);
   const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", approvalSigningKey: TEST_KEY, runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
   const run = await runApproved(supervisor, contract(), "repair");
-  assert.equal(run.state, "SHIPPED");
+  assert.equal(run.state, "AWAITING_EXTERNAL_CERTIFICATION");
   assert.equal(runner.calls.filter((call) => call.command === "repair").length, 1);
   assert.equal(runner.calls.filter((call) => call.command === "test").length, 2);
 });
@@ -240,7 +241,7 @@ test("preview UAT failure repairs, re-verifies, and retries the release pipeline
   ]);
   const supervisor = new ShippingSupervisor({ allowProductionDeployment: true, productionHostingTarget: "onprem", approvalSigningKey: TEST_KEY, runner, worktrees: new FakeWorktrees(path.join(root, "wt")) });
   const run = await runApproved(supervisor, contract(), "preview-repair");
-  assert.equal(run.state, "SHIPPED");
+  assert.equal(run.state, "AWAITING_EXTERNAL_CERTIFICATION");
   assert.equal(runner.calls.filter((call) => call.command === "repair").length, 1);
   assert.equal(runner.calls.filter((call) => call.command === "preview-deploy").length, 2);
 });

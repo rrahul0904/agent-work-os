@@ -1,0 +1,10 @@
+# Disposable HTTPS-only browser UAT. Never expose publicly.
+localhost:8443 {
+    tls internal
+    reverse_proxy control-api:8787
+    header {
+        X-Content-Type-Options nosniff
+        Referrer-Policy no-referrer
+        X-Frame-Options DENY
+    }
+}

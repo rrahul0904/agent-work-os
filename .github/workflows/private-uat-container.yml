@@ -1,0 +1,77 @@
+name: Disposable private UAT — actual Docker/PostgreSQL onboarding (not release)
+on:
+  push:
+    branches: [launch/4wave-wave4-release-evidence-20261028]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: awos-private-uat-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  private_uat:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Generate unique disposable test passwords
+        run: |
+          DB_PASSWORD="$(openssl rand -hex 24)"
+          OWNER_PASSWORD="$(openssl rand -hex 24)"
+          echo "::add-mask::$DB_PASSWORD"
+          echo "::add-mask::$OWNER_PASSWORD"
+          echo "AWOS_DATABASE_PASSWORD=$DB_PASSWORD" >> "$GITHUB_ENV"
+          echo "AGENT_WORK_OS_BOOTSTRAP_PASSWORD=$OWNER_PASSWORD" >> "$GITHUB_ENV"
+          echo "AGENT_WORK_OS_BOOTSTRAP_EMAIL=owner-ci@invalid.test" >> "$GITHUB_ENV"
+      - name: Build and start localhost-only test services
+        run: docker compose -f infra/uat/compose.yml up --build --wait -d
+      - name: Verify private HTTPS TLS proxy and API readiness
+        run: |
+          if ! curl --fail --silent --show-error --insecure --retry 12 --retry-delay 1 --retry-connrefused https://localhost:8443/readyz > /tmp/awos-https-ready.json; then
+            docker compose -f infra/uat/compose.yml logs --no-color browser-tls | tail -60
+            exit 1
+          fi
+          node -e "const x=require('/tmp/awos-https-ready.json'); if(!x.ok)process.exit(1)"
+      - name: Provision one private first-owner account
+        run: |
+          docker compose -f infra/uat/compose.yml exec -T             -e AGENT_WORK_OS_BOOTSTRAP_EMAIL="$AGENT_WORK_OS_BOOTSTRAP_EMAIL"             -e AGENT_WORK_OS_BOOTSTRAP_ORGANIZATION="Disposable UAT Team"             -e AGENT_WORK_OS_BOOTSTRAP_APPROVAL="YES_CREATE_FIRST_OWNER"             -e AGENT_WORK_OS_BOOTSTRAP_PASSWORD="$AGENT_WORK_OS_BOOTSTRAP_PASSWORD"             control-api node scripts/bootstrap-first-owner.mjs
+      - name: Real API invite-only customer and role UAT
+        run: node scripts/private-uat-smoke.mjs seed
+      - name: Install exact locked browser test dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Provision pinned Chromium browser for TLS test
+        run: npx playwright install --with-deps chromium
+      - name: Real HTTPS browser UAT — account, project, invitations and RBAC
+        run: npm run test:private-browser
+      - name: Disposable PostgreSQL backup and isolated restore drill
+        run: |
+          docker compose -f infra/uat/compose.yml exec -T postgres sh -euc '
+            umask 077
+            export PGPASSWORD="$POSTGRES_PASSWORD"
+            trap "rm -f /tmp/awos-uat-test.dump" EXIT
+            pg_dump -h localhost -U awos_uat -d awos_uat -Fc --file /tmp/awos-uat-test.dump
+            createdb -h localhost -U awos_uat -T template0 awos_uat_restore
+            pg_restore -h localhost -U awos_uat -d awos_uat_restore --no-owner --no-acl --exit-on-error /tmp/awos-uat-test.dump
+            test "$(psql -h localhost -U awos_uat -d awos_uat_restore -At -c "SELECT COUNT(*) FROM agent_work_os_tenant_projects_v1")" -ge 2
+            test "$(psql -h localhost -U awos_uat -d awos_uat_restore -At -c "SELECT COUNT(*) FROM agent_work_os_users_v1")" -ge 2
+            test "$(psql -h localhost -U awos_uat -d awos_uat_restore -At -c "SELECT COUNT(*) FROM agent_work_os_memberships_v1")" -ge 2
+            dropdb -h localhost -U awos_uat awos_uat_restore
+          '
+          echo "PRIVATE_UAT_BACKUP_RESTORE_PASS: logical PostgreSQL snapshot restored into a separate disposable database"
+      - name: Restart application container and verify persistence
+        run: |
+          docker compose -f infra/uat/compose.yml restart control-api
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8787/readyz >/dev/null; then break; fi
+            sleep 2
+          done
+          node scripts/private-uat-smoke.mjs verify
+      - name: Tear down disposable databases and container
+        if: always()
+        run: docker compose -f infra/uat/compose.yml down --volumes --remove-orphans
+      - name: Safety boundary
+        if: always()
+        run: echo "PRIVATE UAT only. No real cloud, model provider, production HTTPS, owner GO, or release certification."

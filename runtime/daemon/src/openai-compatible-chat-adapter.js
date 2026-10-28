@@ -99,6 +99,7 @@ export class OpenAICompatibleChatAdapter {
         maxConcurrent: Number(env.AGENT_WORK_OS_COMPAT_CHAT_MAX_CONCURRENT || 1)
       });
       this.privateRemoteApproved = env.AGENT_WORK_OS_COMPAT_CHAT_ALLOW_PRIVATE_REMOTE === "true";
+      this.upstreamOrigin = this.endpoint.origin;
       this.upstreamRegion = env.AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_REGION || "";
       this.upstreamRetention = env.AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_RETENTION || "";
       if (!/^[A-Za-z0-9._:/-]{2,120}$/.test(this.upstreamRegion) ||
@@ -116,6 +117,7 @@ export class OpenAICompatibleChatAdapter {
   capability() {
     if (!this.enabled || this.configError) return null;
     return { name: this.name, version: "model-chat/v1", model: this.model, lane: this.endpoint.kind, mode: "chat_only_no_tools",
+      upstreamOrigin:this.upstreamOrigin,
       upstreamRegion:this.upstreamRegion, upstreamRetention:this.upstreamRetention,
       upstreamTrust:"operator_declared_not_independently_verified" };
   }

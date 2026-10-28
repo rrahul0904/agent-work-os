@@ -166,6 +166,80 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.equal(ownerOrgsResponse.status, 200);
     const alphaId = owner.body.organization.id;
     assert.equal(ownerOrgs.organizations[0].organizationId, alphaId);
+    // Token-only invite registration works for a *new* user without opening
+    // public organization registration; it is single-use and role-scoped.
+    const inviteEmail=`invite-only-${emailTag}@example.test`;
+    const invitedUserInvitationResponse=await api(owner.cookies,owner.body.csrfToken,
+      `/api/organizations/${alphaId}/invitations`,{
+        method:"POST",body:{email:inviteEmail,role:"viewer"}
+      });
+    assert.equal(invitedUserInvitationResponse.status,201);
+    const inviteToken=(await invitedUserInvitationResponse.json()).invitation.token;
+    const inviteSignup="/api/auth/register-invited";
+    const wrongEmailSignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
+      body:JSON.stringify({email:"different-"+inviteEmail,password:"correct horse battery staple",
+        invitationToken:inviteToken})});
+    assert.equal(wrongEmailSignup.status,404,"invitation must match exact email");
+    const invitedSignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
+      body:JSON.stringify({email:inviteEmail,password:"correct horse battery staple",
+        invitationToken:inviteToken})});
+    assert.equal(invitedSignup.status,201);
+    const invitedBody=await invitedSignup.json(),invitedCookie=getCookies(invitedSignup);
+    assert.equal(invitedBody.memberships[0].organizationId,alphaId);
+    assert.equal(invitedBody.memberships[0].role,"viewer");
+    assert.equal((await api(invitedCookie,invitedBody.csrfToken,"/api/projects",{
+      method:"POST",body:{organizationId:alphaId,name:"Forbidden from viewer"}
+    })).status,403);
+    const replaySignup=await fetch(origin+inviteSignup,{method:"POST",headers:authHeaders,
+      body:JSON.stringify({email:inviteEmail,password:"correct horse battery staple",
+        invitationToken:inviteToken})});
+    assert.equal(replaySignup.status,404,"invitation token must be consumed exactly once");
+    // A second production-like API replica with public signup *disabled*
+    // still permits only an invited new user, not arbitrary registrations.
+    const privatePort=await getAvailablePort();
+    const privateOrigin=`http://127.0.0.1:${privatePort}`;
+    const inviteOnly=spawn(process.execPath,["services/control-api/src/index.js"],{
+      cwd:root,
+      env:{...serverEnv,PORT:String(privatePort),
+        AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED:"false",
+        AGENT_WORK_OS_STATE_PATH:path.join(temp,"invite-only-state.json")},
+      stdio:["ignore","pipe","pipe"]
+    });
+    inviteOnly.stdout.on("data",data=>logs.push(String(data)));
+    inviteOnly.stderr.on("data",data=>logs.push(String(data)));
+    try{
+      await waitFor(async()=>{try{return (await fetch(privateOrigin+"/readyz")).ok;}catch{return false;}},15000,"invite-only API");
+      const config=await (await fetch(privateOrigin+"/api/client-config")).json();
+      assert.equal(config.registrationEnabled,false);
+      assert.equal((await fetch(privateOrigin+"/api/auth/register",{
+        method:"POST",headers:authHeaders,body:JSON.stringify({
+          email:`forbidden-${emailTag}@example.test`,password:"correct horse battery staple",
+          organizationName:"Unauthorized Org"})
+      })).status,403,"production private org sign-up remains disabled");
+      const privateEmail=`private-invite-${emailTag}@example.test`;
+      const newInvite=await api(owner.cookies,owner.body.csrfToken,
+        `/api/organizations/${alphaId}/invitations`,{
+          method:"POST",body:{email:privateEmail,role:"member"}
+        });
+      assert.equal(newInvite.status,201);
+      const privateToken=(await newInvite.json()).invitation.token;
+      const privateSignup=await fetch(privateOrigin+"/api/auth/register-invited",{
+        method:"POST",headers:authHeaders,body:JSON.stringify({
+          email:privateEmail,password:"correct horse battery staple",invitationToken:privateToken
+        })
+      });
+      assert.equal(privateSignup.status,201,"private deployment supports invited first-time signup");
+      assert.equal((await privateSignup.json()).memberships[0].role,"member");
+    }finally{
+      inviteOnly.kill("SIGTERM");
+      await Promise.race([
+        new Promise(resolve=>inviteOnly.once("exit",resolve)),
+        new Promise(resolve=>setTimeout(resolve,1500))
+      ]);
+      if(inviteOnly.exitCode===null)inviteOnly.kill("SIGKILL");
+    }
+
+
     // Wave 2: actual browser-facing tenant project lifecycle backed by SQL.
     const createProjectPath="/api/projects";
     const createProjectBody={organizationId:alphaId,name:"Data Warehouse Modernization",
@@ -280,6 +354,18 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
         const body = await response.json();
         return response.ok && body.machines.some((machine) => machine.id === machineId && machine.organizationId === alphaId);
       }, 3_000, "organization-bound machine authentication");
+      // A repository-review mission internally calls both model lanes. Its
+      // end-user must have both tenant grants, not just mission approval.
+      const deniedModel = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
+        method:"POST",body:{organizationId:alphaId,machineId,cwd:"/tmp",
+          agent:"model-chat",prompt:"private request without model approval"}
+      });
+      assert.equal(deniedModel.status,403,"revoked model grant blocks direct inference");
+      const deniedReview = await api(owner.cookies, owner.body.csrfToken, "/api/sessions", {
+        method:"POST",body:{organizationId:alphaId,machineId,cwd:"/tmp",
+          agent:"repository-review",prompt:"investigate the private repository"}
+      });
+      assert.equal(deniedReview.status,403,"repository-review cannot bypass missing reviewer model grant");
       await stopReplica();
       await startReplica();
       const machineAfterReplicaRestart = await api(owner.cookies, null, `/api/machines?organizationId=${encodeURIComponent(alphaId)}`);
@@ -554,6 +640,18 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       });
       assert.equal(verifiedPermit.approvedBy, releaseReviewer.body.user.id);
       assert.equal(verifiedPermit.requestedBy, owner.body.user.id);
+      // Even after two-person authorization, daemon self-report is NOT
+      // independent live release certification.
+      machineSocket.sendMessage({type:"daemon.shipping.run",machineId,run:{
+        ...approved,state:"SHIPPED",releaseReceipt:{status:"fabricated",receiptDigest:"fake"},
+        updatedAt:"2099-01-01T00:00:00.000Z"
+      }});
+      await new Promise(resolve=>setTimeout(resolve,150));
+      const uncertified=await api(owner.cookies,null,
+        "/api/shipping/runs/"+protectedRunId+"?organizationId="+encodeURIComponent(alphaId));
+      assert.equal((await uncertified.json()).state,"QUEUED",
+        "daemon cannot escalate reviewed production attempt to SHIPPED");
+
       const approvedRows = await databaseInspector.query(
         "SELECT count(*)::int AS count FROM agent_work_os_daemon_commands_v1 WHERE payload->>'action' = 'shipping.start' AND payload->'payload'->>'runId' = $1",
         [protectedRunId]
@@ -935,7 +1033,12 @@ async function openMachineSocket(port, machineCredential, machineId) {
   });
   socket.send(encodeMessage({
     type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, machineCredential,
-    machine: { id: machineId, name: "Test executor", capabilities: [{ name: "echo" }], shipping: { enabled: true } }
+    machine: { id: machineId, name: "Test executor", capabilities: [
+      { name: "echo" },
+      { name:"model-chat",model:"local-ci-model",lane:"local_machine",upstreamRegion:"local",upstreamRetention:"zero" },
+      { name:"token-intelligence",model:"ti-local",lane:"local_machine",upstreamDestination:"local_machine",upstreamRegion:"local",upstreamRetention:"zero" },
+      { name:"repository-review",modelIds:["local-ci-model","ti-local"] }
+    ], shipping: { enabled: true } }
   }));
   return {
     readMessage(timeoutMs = 2_000) {

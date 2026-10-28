@@ -31,7 +31,7 @@ export class IdentityRepository {
     await this.pool.query(await readFile(MACHINE_MIGRATION_URL, "utf8"));
   }
 
-  async register({ email, password, organizationName }) {
+  async register({ email, password, organizationName }, transactionClient = null) {
     const normalizedEmail = normalizeEmail(email);
     validatePassword(password);
     const name = validateOrganizationName(organizationName);
@@ -45,7 +45,7 @@ export class IdentityRepository {
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
 
     try {
-      await this.#transaction(async (client) => {
+      const persist = async (client) => {
         await client.query(
           `INSERT INTO agent_work_os_users_v1 (id, email, password_salt, password_hash)
            VALUES ($1, $2, $3, $4)`,
@@ -60,7 +60,12 @@ export class IdentityRepository {
           [organizationId, userId]
         );
         await insertSession(client, { sessionId, userId, rawSessionToken, expiresAt });
-      });
+      };
+      // The first-owner CLI already holds a PostgreSQL advisory lock and an
+      // open transaction. Persist on THAT same connection so rollback undoes
+      // everything; a separate pool connection would commit prematurely.
+      if (transactionClient) await persist(transactionClient);
+      else await this.#transaction(persist);
     } catch (error) {
       if (error.code === "23505") throw new IdentityError("identity_email_in_use", 409);
       throw error;
@@ -72,6 +77,65 @@ export class IdentityRepository {
       session: { id: sessionId, token: rawSessionToken, csrfToken, expiresAt },
       memberships: [{ organizationId, organizationName: name, role: "owner" }]
     };
+  }
+
+  /**
+   * Invitation-only enrollment when public registration is disabled.
+   * The invitation is consumed and the new membership/session inserted
+   * atomically under a row lock; replay or expiry never creates an account.
+   */
+  async registerInvited({ email, password, invitationToken }) {
+    const normalizedEmail = normalizeEmail(email);
+    validatePassword(password);
+    if (typeof invitationToken !== "string" || !/^[0-9a-f]{64}$/.test(invitationToken)) {
+      throw new IdentityError("invitation_invalid_or_expired", 404);
+    }
+    const salt = crypto.randomBytes(16);
+    const passwordHash = await hashPassword(password, salt);
+    const userId = createCanonicalId("user");
+    const sessionId = createCanonicalId("session");
+    const rawSessionToken = crypto.randomBytes(32).toString("hex");
+    const csrfToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    try {
+      return await this.#transaction(async (client) => {
+        const row = await client.query(
+          `SELECT invitation.*, org.name AS organization_name
+           FROM agent_work_os_invitations_v1 invitation
+           JOIN agent_work_os_organizations_v1 org ON org.id=invitation.organization_id
+           WHERE invitation.token_hash=$1 FOR UPDATE OF invitation`,
+          [digestToken(invitationToken)]
+        );
+        const invitation = row.rows[0];
+        if (!invitation || invitation.accepted_at ||
+            new Date(invitation.expires_at).valueOf() <= Date.now() ||
+            invitation.email !== normalizedEmail) {
+          throw new IdentityError("invitation_invalid_or_expired", 404);
+        }
+        await client.query(
+          `INSERT INTO agent_work_os_users_v1 (id,email,password_salt,password_hash)
+           VALUES($1,$2,$3,$4)`,[userId,normalizedEmail,salt,passwordHash]
+        );
+        await client.query(
+          `INSERT INTO agent_work_os_memberships_v1(organization_id,user_id,role)
+           VALUES($1,$2,$3)`,[invitation.organization_id,userId,invitation.role]
+        );
+        await client.query(
+          `UPDATE agent_work_os_invitations_v1 SET accepted_at=CURRENT_TIMESTAMP
+           WHERE token_hash=$1`,[digestToken(invitationToken)]
+        );
+        await insertSession(client,{sessionId,userId,rawSessionToken,expiresAt});
+        return {
+          user:{id:userId,email:normalizedEmail},
+          session:{id:sessionId,token:rawSessionToken,csrfToken,expiresAt},
+          memberships:[{organizationId:invitation.organization_id,
+            organizationName:invitation.organization_name,role:invitation.role}]
+        };
+      });
+    } catch(error) {
+      if (error.code === "23505") throw new IdentityError("existing_account_sign_in_to_accept",409);
+      throw error;
+    }
   }
 
   async login({ email, password }) {

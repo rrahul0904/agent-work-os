@@ -16,6 +16,7 @@ import { RepositoryReviewMissionAdapter } from "./repository-review-mission-adap
 import { CapabilityVerificationAdapter } from "./capability-verification-adapter.js";
 import { loadMachineId } from "./identity.js";
 import { createCommandReceiptCache } from "./command-receipts.js";
+import { authorizeWorkspace, canExecuteShipping } from "./workspace-scope.js";
 
 const serverUrl = process.env.AGENT_WORK_OS_SERVER_URL ?? "ws://127.0.0.1:8787/ws";
 const machineCredential = process.env.AGENT_WORK_OS_MACHINE_TOKEN ?? "";
@@ -63,7 +64,7 @@ function connect() {
     reconnectAttempt = 0;
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = undefined; }
     const capabilities = [...adapters.values()].map((a) => a.capability()).filter(Boolean);
-    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, ...(machineCredential ? { machineCredential } : {}), machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: true } } }));
+    ws.send(encodeMessage({ type: "daemon.hello", protocolVersion: PROTOCOL_VERSION, ...(machineCredential ? { machineCredential } : {}), machine: { id: machineId, name: machineName, platform: os.platform(), arch: os.arch(), capabilities, shipping: { enabled: canExecuteShipping() } } }));
     heartbeat = setInterval(() => ws.readyState === WebSocket.OPEN && ws.send(encodeMessage({ type: "daemon.heartbeat", machineId, at: new Date().toISOString() })), heartbeatMs);
   });
   let commandMessageChain = Promise.resolve();
@@ -93,16 +94,25 @@ function connect() {
       if (command.action === "shipping.start") {
         const p = command.payload;
         if (!p?.contract || !p?.runId) throw new Error("shipping.start requires contract and runId");
+        if (!canExecuteShipping()) throw new Error("SHIPPING_EXECUTION_OPERATOR_APPROVAL_REQUIRED");
+        await authorizeWorkspace(p.contract.project.repoPath);
+        await authorizeWorkspace(p.contract.worktree.root);
         if (shippingRuns.has(p.runId)) throw new Error(`Shipping run ${p.runId} is already active`);
         shippingRuns.add(p.runId); ack(true);
         void runShipping(p.runId, p.contract, p.approvalPermit, p.organizationId).finally(() => shippingRuns.delete(p.runId));
         return;
       }
       if (command.action === "session.start") {
-        const p = command.payload; const adapter = adapters.get(p?.agent); if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`); ack(true);
+        const p = command.payload; const adapter = adapters.get(p?.agent);
+        if (!p || !adapter) throw new Error(`Agent ${p?.agent ?? "unknown"} is unavailable`);
+        if (!["model-chat","token-intelligence"].includes(p.agent)) await authorizeWorkspace(p.cwd);
+        ack(true);
         void adapter.run({ sessionId: command.sessionId, cwd: p.cwd, prompt: p.prompt, model: p.model }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }
-      const state = await fetchSession(command.sessionId); const adapter = adapters.get(state.agent); if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
+      const state = await fetchSession(command.sessionId);
+      const adapter = adapters.get(state.agent);
+      if (!adapter) throw new Error(`Agent ${state.agent} is unavailable`);
+      if (!["model-chat","token-intelligence"].includes(state.agent)) await authorizeWorkspace(state.cwd);
       if (command.action === "session.message") {
         ack(true); void adapter.run({ sessionId: command.sessionId, cwd: state.cwd, prompt: command.payload?.prompt, model: state.model, nativeSessionId: nativeSessions.get(command.sessionId) || state.nativeSessionId }, emit).then((r) => r.nativeSessionId && nativeSessions.set(command.sessionId, r.nativeSessionId)).catch((e) => fail(emit, e)); return;
       }

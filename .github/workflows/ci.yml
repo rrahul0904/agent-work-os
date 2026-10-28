@@ -23,10 +23,26 @@ jobs:
       AGENT_WORK_OS_TEST_DATABASE_URL: postgres://agent_work_os:agent_work_os_test@localhost:5432/agent_work_os_test
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Full-history secrets (redacted)
+        run: >-
+          docker run --rm -v "${{ github.workspace }}:/repo"
+          zricethezav/gitleaks:v8.24.3 detect
+          --source=/repo --redact --exit-code=2 --log-opts="--all"
+          --report-format=json --report-path=/repo/.ci-gitleaks-report.json
+      - name: Report safe rule/commit triage metadata (not secret values)
+        if: failure()
+        run: node scripts/security-print-redacted-triage.mjs .ci-gitleaks-report.json
+      - name: Remove redacted scanner report from workspace
+        if: always()
+        run: rm -f .ci-gitleaks-report.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - run: npm ci --no-audit --no-fund
+      - name: Production dependency vulnerabilities
+        run: npm audit --omit=dev --audit-level=high
       - name: Check browser workspace JavaScript syntax
         run: node --check apps/web/public/app.js
       - run: npm test

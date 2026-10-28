@@ -250,7 +250,7 @@ export async function createControlPlane() {
         const ready = !eventFanout || eventFanout.ready;
         return json(res, ready ? 200 : 503, { ok: ready, database: store.pool ? "ready" : "local", eventFanout: eventFanout ? (ready ? "ready" : "connecting") : "local" });
       }
-      const isPublicAuthRoute = req.method === "POST" && ["/api/auth/register", "/api/auth/login"].includes(url.pathname);
+      const isPublicAuthRoute = req.method === "POST" && ["/api/auth/register", "/api/auth/register-invited", "/api/auth/login"].includes(url.pathname);
       let principal = null;
       if (url.pathname.startsWith("/api/") && !isPublicAuthRoute) {
         principal = identities ? await authenticateSession(req, identities) : null;
@@ -273,6 +273,21 @@ export async function createControlPlane() {
         const account = await identities.register({ email: body.email, password: body.password, organizationName: body.organizationName });
         setAuthCookies(res, account.session);
         return json(res, 201, { user: account.user, organization: account.organization, memberships: account.memberships, csrfToken: account.session.csrfToken });
+      }
+      if (req.method === "POST" && url.pathname === "/api/auth/register-invited") {
+        if (!identities) return json(res, 503, { error: "identity_requires_postgres" });
+        const body = await readJson(req);
+        await identities.consumeAuthAttempt(`invited-register-ip:${clientAddress(req)}`,
+          { limit: 12, windowMs: 15 * 60 * 1000 });
+        const emailKey=typeof body.email==="string"?body.email.trim().toLowerCase():"invalid-email";
+        await identities.consumeAuthAttempt(`invited-register-email:${emailKey}`,
+          { limit: 8, windowMs: 15 * 60 * 1000 });
+        const account=await identities.registerInvited({
+          email:body.email,password:body.password,invitationToken:body.invitationToken
+        });
+        setAuthCookies(res,account.session);
+        return json(res,201,{user:account.user,memberships:account.memberships,
+          csrfToken:account.session.csrfToken});
       }
       if (req.method === "POST" && url.pathname === "/api/auth/login") {
         if (!identities) return json(res, 503, { error: "identity_requires_postgres" });
@@ -805,13 +820,16 @@ export async function createControlPlane() {
         const machine = await store.getMachine(body.machineId);
         if (!machine || machine.organizationId !== body.organizationId || machine.status !== "online") return json(res, 409, { error: "machine_not_available_in_organization" });
         if (!machine.capabilities.some((capability) => capability.name === body.agent)) return json(res, 400, { error: "agent_not_available" });
-        if (["model-chat","token-intelligence"].includes(body.agent)) {
-          const capability=machine.capabilities.find(cap=>cap.name===body.agent);
-          if (!capability?.model || (body.model && body.model!==capability.model))
-            return json(res,403,{error:"model_not_allowed_for_machine"});
-          const modelPolicy=await tenantModelPolicies.get(body.organizationId,body.agent,capability.model);
-          if (!isModelUseApproved(modelPolicy,capability))
-            return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+        if (["model-chat","token-intelligence","repository-review"].includes(body.agent)) {
+          const lanes=body.agent==="repository-review"?["model-chat","token-intelligence"]:[body.agent];
+          for (const agent of lanes) {
+            const capability=machine.capabilities.find(cap=>cap.name===agent);
+            if (!capability?.model || (agent===body.agent && body.model && body.model!==capability.model))
+              return json(res,403,{error:"model_not_allowed_for_machine"});
+            const modelPolicy=await tenantModelPolicies.get(body.organizationId,agent,capability.model);
+            if (!isModelUseApproved(modelPolicy,capability))
+              return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+          }
         }
         const now = new Date().toISOString();
         const session = {
@@ -851,13 +869,16 @@ export async function createControlPlane() {
         if (membership.role === "viewer") return json(res, 403, { error: "organization_permission_denied" });
         const machine = await store.getMachine(session.machineId);
         if (machine?.organizationId !== session.organizationId) return json(res, 409, { error: "session_machine_organization_mismatch" });
-        if(["model-chat","token-intelligence"].includes(session.agent)){
-          const capability=machine.capabilities?.find(cap=>cap.name===session.agent);
-          const modelPolicy=capability?.model?
-            await tenantModelPolicies.get(session.organizationId,session.agent,capability.model):null;
-          if(!isModelUseApproved(modelPolicy,capability) ||
-              (session.model&&session.model!==capability.model))
-            return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+        if(["model-chat","token-intelligence","repository-review"].includes(session.agent)){
+          const lanes=session.agent==="repository-review"?["model-chat","token-intelligence"]:[session.agent];
+          for(const agent of lanes){
+            const capability=machine.capabilities?.find(cap=>cap.name===agent);
+            const modelPolicy=capability?.model?
+              await tenantModelPolicies.get(session.organizationId,agent,capability.model):null;
+            if(!isModelUseApproved(modelPolicy,capability) ||
+                (agent===session.agent&&session.model&&session.model!==capability.model))
+              return json(res,403,{error:"model_destination_or_privacy_policy_denied"});
+          }
         }
         const body = await readJson(req); const message = body.text?.trim();
         if (!message) return json(res, 400, { error: "text is required" });
@@ -1042,7 +1063,7 @@ async function authenticateSession(req, identities) {
   return identities.authenticate(readCookie(req, sessionCookieName));
 }
 function isPublicAuthRoute(pathname) {
-  return ["/api/auth/register", "/api/auth/login"].includes(pathname);
+  return ["/api/auth/register", "/api/auth/register-invited", "/api/auth/login"].includes(pathname);
 }
 function isUserScopedRoute(pathname) {
   return pathname === "/api/auth/me" || pathname === "/api/auth/logout" || pathname === "/api/auth/accept-invitation"

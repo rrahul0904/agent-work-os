@@ -31,10 +31,13 @@ test("local gateway URL does not prove upstream model is local or privacy-approv
   const noApproval={...baseEnv(),AGENT_WORK_OS_TI_PRIVATE_UPSTREAM_APPROVED:"false"};
   assert.equal(new TokenIntelligenceChatAdapter({env:noApproval}).capability(),null);
   const remoteBehindLocal={...baseEnv(),AGENT_WORK_OS_TI_UPSTREAM_DESTINATION:"approved_remote",
-    AGENT_WORK_OS_TI_UPSTREAM_REGION:"us-east-1",AGENT_WORK_OS_TI_UPSTREAM_RETENTION:"bounded"};
+    AGENT_WORK_OS_TI_UPSTREAM_REGION:"us-east-1",AGENT_WORK_OS_TI_UPSTREAM_RETENTION:"bounded",
+    AGENT_WORK_OS_TI_UPSTREAM_ORIGIN:"https://approved-inference.example"};
   const adapter=new TokenIntelligenceChatAdapter({env:remoteBehindLocal});
   assert.equal(adapter.capability().lane,"local_machine");
   assert.equal(adapter.capability().upstreamDestination,"approved_remote");
+  assert.equal(adapter.capability().upstreamOrigin,"https://approved-inference.example");
+  assert.equal(new TokenIntelligenceChatAdapter({env:{...remoteBehindLocal,AGENT_WORK_OS_TI_UPSTREAM_ORIGIN:"https://evil.example/secret"}}).capability(),null);
   assert.equal(adapter.capability().upstreamTrust,"operator_declared_not_independently_verified");
 });
 test("endpoint prevents URL credentials, redirects and remote private transfer without consent", () => {

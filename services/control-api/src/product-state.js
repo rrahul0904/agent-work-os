@@ -1,7 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 
-const TERMINAL_RUN_STATES = new Set(["SHIPPED", "VERIFIED_ONLY", "FAILED", "BLOCKED", "CANCELLED", "INTERRUPTED"]);
+const TERMINAL_RUN_STATES = new Set(["SHIPPED", "VERIFIED_ONLY", "AWAITING_EXTERNAL_CERTIFICATION", "FAILED", "BLOCKED", "CANCELLED", "INTERRUPTED"]);
 const STATUS_WEIGHT = Object.freeze({
   SHIPPED: -1000,
   BLOCKED: -40,

@@ -1,0 +1,56 @@
+# Private developer UAT only. NOT an authorized public or production deployment.
+# Supply strong unique AWOS_DATABASE_PASSWORD via an untracked local .env.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: awos_uat
+      POSTGRES_DB: awos_uat
+      POSTGRES_PASSWORD: ${AWOS_DATABASE_PASSWORD:?set a strong disposable UAT password}
+    volumes:
+      - awos_uat_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U awos_uat -d awos_uat"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+  browser-tls:
+    image: caddy:2.10-alpine
+    depends_on:
+      control-api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+  control-api:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      NODE_ENV: production
+      AGENT_WORK_OS_HOST: 0.0.0.0
+      AGENT_WORK_OS_TRUST_PROXY: "true" # private Caddy TLS termination only
+      DATABASE_URL: postgres://awos_uat:${AWOS_DATABASE_PASSWORD:?required}@postgres:5432/awos_uat
+      AGENT_WORK_OS_PUBLIC_REGISTRATION_ENABLED: "false"
+      AGENT_WORK_OS_ALLOW_PRODUCTION_DEPLOYMENT: "false"
+      AGENT_WORK_OS_PRODUCTION_HOSTING_TARGET: ""
+      AGENT_WORK_OS_STATE_PATH: /var/lib/awos/state.json
+    volumes:
+      - awos_uat_state:/var/lib/awos
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/readyz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+    restart: unless-stopped
+volumes:
+  awos_uat_pg:
+  awos_uat_state:
