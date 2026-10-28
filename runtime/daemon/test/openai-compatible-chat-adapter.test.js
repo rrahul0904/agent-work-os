@@ -9,6 +9,8 @@ const localEnv = (overrides = {}) => ({
   AGENT_WORK_OS_COMPAT_CHAT_BASE_URL: "http://127.0.0.1:9123/api/model/v1",
   AGENT_WORK_OS_COMPAT_CHAT_MODEL: "qwen-test",
   AGENT_WORK_OS_COMPAT_CHAT_API_KEY: "sensitive-key-only-in-daemon",
+  AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_REGION: "local",
+  AGENT_WORK_OS_COMPAT_CHAT_UPSTREAM_RETENTION: "zero",
   ...overrides
 });
 
