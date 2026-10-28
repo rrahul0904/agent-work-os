@@ -3,6 +3,7 @@ const state = {
   selectedRun: null, selectedSession: null, contractText: '', launchOpen: false,
   connected: false, loading: false, notice: null, lastCursor: null, seenEventTags: new Set(),
   authMode: 'loading', authView: 'login', authError: null, csrfToken: null, accountEmail: null,
+  registrationEnabled: false,
   organizations: [], organizationId: null, socket: null, reconnectTimer: null
 };
 const app = document.querySelector('#app');
@@ -36,7 +37,9 @@ async function initialize() {
   try {
     const response=await fetch('/api/client-config',{credentials:'same-origin',cache:'no-store'});
     if(!response.ok)throw new Error('Authentication mode could not be verified.');
-    const mode=(await response.json()).authentication;
+    const config=await response.json();
+    const mode=config.authentication;
+    state.registrationEnabled=config.registrationEnabled===true;
     if(!['account','local_token'].includes(mode))throw new Error('Unsupported authentication configuration.');
     state.authMode=mode;
     if(mode==='account'){
@@ -154,11 +157,11 @@ function renderLogin(){
           '" required minlength="'+(creating?'12':'1')+'"></label>'+
         (creating?'<label>Organization<input name="organizationName" maxlength="120" required placeholder="Company or team"></label>':'')+
         '<button class="primary" type="submit">'+(creating?'Create workspace':'Sign in')+'</button>'+
-      '</form><button class="ghost small" id="toggle-auth" type="button">'+
-        (creating?'Already have an account? Sign in':'Create a workspace')+'</button>'+
+      '</form>'+(state.registrationEnabled?'<button class="ghost small" id="toggle-auth" type="button">'+
+        (creating?'Already have an account? Sign in':'Create a workspace')+'</button>':'')+
       '<div class="login-proof"><span>Tenant isolated</span><span>HttpOnly sessions</span><span>CSRF protected</span></div>'+
       '</div></div>';
-    document.querySelector('#toggle-auth').onclick=()=>{
+    if(document.querySelector('#toggle-auth'))document.querySelector('#toggle-auth').onclick=()=>{
       state.authView=creating?'login':'register';state.authError=null;renderLogin();
     };
     const form=document.querySelector('#account-login');
