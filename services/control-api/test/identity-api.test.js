@@ -135,6 +135,12 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
     assert.equal(owner.response.status, 201, JSON.stringify(owner.body));
     const otherTenant = await register(`other-${emailTag}@example.test`, "Other Org");
     assert.equal(otherTenant.response.status, 201, JSON.stringify(otherTenant.body));
+    const clientConfig = await fetch(origin + "/api/client-config");
+    assert.equal(clientConfig.status, 200);
+    const authMode = await clientConfig.json();
+    assert.deepEqual(authMode, { authentication: "account", production: true });
+    assert.ok(!JSON.stringify(authMode).includes(ownerEmail), "public client config cannot reveal user details");
+
     const ownerSetCookies = owner.response.headers.getSetCookie().join("\n");
     assert.match(ownerSetCookies, /awos_session=[0-9a-f]{64}; Path=\/; HttpOnly; SameSite=Strict; Max-Age=\d+; Secure/);
     assert.match(ownerSetCookies, /awos_csrf=[0-9a-f]{64}; Path=\/; SameSite=Strict; Max-Age=\d+; Secure/);
@@ -259,6 +265,40 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       assert.equal(createdSession.organizationId, alphaId);
       assert.equal(createdSession.createdBy, owner.body.user.id);
       alphaSessionId = createdSession.id;
+      // Customer state/product APIs must be strictly organization-scoped.
+      const noOrg = await api(owner.cookies, null, "/api/state");
+      assert.equal(noOrg.status, 400);
+      const ownerState = await api(owner.cookies, null, "/api/state?organizationId=" + alphaId);
+      assert.equal(ownerState.status, 200);
+      const ownerSnapshot = await ownerState.json();
+      assert.ok(ownerSnapshot.sessions.some((session) => session.id === createdSession.id));
+      assert.ok(ownerSnapshot.machines.every((machine) => machine.organizationId === alphaId));
+      assert.ok(ownerSnapshot.sessions.every((session) => session.organizationId === alphaId));
+      const otherOrgId = otherTenant.body.organization.id;
+      assert.equal((await api(otherTenant.cookies, null, "/api/state?organizationId=" + alphaId)).status, 404);
+      const otherState = await api(otherTenant.cookies, null, "/api/state?organizationId=" + otherOrgId);
+      assert.equal(otherState.status, 200);
+      assert.ok(!(await otherState.text()).includes(createdSession.id));
+      const ownerProduct = await api(owner.cookies, null, "/api/product?organizationId=" + alphaId);
+      assert.equal(ownerProduct.status, 200);
+      const ownerProductBody = await ownerProduct.json();
+      assert.ok(ownerProductBody.runs.every((run) => run.organizationId === alphaId));
+      assert.ok(ownerProductBody.receipts.every((receipt) => receipt.path === null));
+      assert.deepEqual(ownerProductBody.portfolio, [], "global operator portfolio cannot appear in customer data");
+      assert.equal((await api(owner.cookies, null, "/api/product")).status, 400);
+      assert.equal((await api(otherTenant.cookies, null, "/api/product?organizationId=" + alphaId)).status, 404);
+      const otherProduct = await api(otherTenant.cookies, null, "/api/product?organizationId=" + otherOrgId);
+      assert.equal(otherProduct.status, 200);
+      assert.ok(!(await otherProduct.text()).includes(createdSession.id));
+      assert.equal((await api(owner.cookies, null, "/api/portfolio")).status, 403);
+      assert.equal((await api(owner.cookies, null, "/api/receipts")).status, 403);
+      assert.equal((await api(owner.cookies, null, "/api/shipping/contracts/validate", {
+        method: "POST", body: { contract: {} }
+      })).status, 403, "account mutation must reject absent CSRF token");
+      assert.equal((await api(owner.cookies, owner.body.csrfToken, "/api/shipping/contracts/validate", {
+        method: "POST", body: { contract: {} }
+      })).status, 400, "signed-in users can validate but invalid contracts are refused");
+
       const machineCommand = await machineSocket.readMessage();
       assert.equal(machineCommand.action, "session.start");
       const globalSnapshotBeforeSessionUpdates = await databaseInspector.query(
