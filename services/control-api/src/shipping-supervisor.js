@@ -6,20 +6,24 @@ import { assertKnownBlocker, assertShippingContract, digestShippingContract } fr
 import { appendShippingEvent, buildReleaseReceipt, createShippingRun } from "./shipping-receipts.js";
 import { GitWorktreeManager, ShellRunner } from "./shipping-adapters.js";
 import { ShippingStore } from "./shipping-store.js";
+import { verifyProductionApproval } from "./production-approval.js";
 
 export class ShippingSupervisor {
   constructor({ runner, worktrees, store, now = () => new Date().toISOString(),
     allowProductionDeployment = process.env.AGENT_WORK_OS_ALLOW_PRODUCTION_DEPLOYMENT === "true",
-    productionHostingTarget = process.env.AGENT_WORK_OS_PRODUCTION_HOSTING_TARGET || "" } = {}) {
+    productionHostingTarget = process.env.AGENT_WORK_OS_PRODUCTION_HOSTING_TARGET || "",
+    approvalSigningKey = process.env.AGENT_WORK_OS_PRODUCTION_APPROVAL_KEY || "" } = {}) {
     this.runner = runner ?? new ShellRunner();
     this.worktrees = worktrees ?? new GitWorktreeManager({ runner: this.runner });
     this.store = store ?? null;
     this.now = now;
     this.allowProductionDeployment = allowProductionDeployment === true;
     this.productionHostingTarget = productionHostingTarget;
+    this.approvalSigningKey = approvalSigningKey;
   }
 
-  async run(contractInput, { runId = `ship-${crypto.randomUUID()}` } = {}) {
+  async run(contractInput, { runId = `ship-${crypto.randomUUID()}`,
+    approvalPermit = null, organizationId = null, machineId = null } = {}) {
     const contract = assertShippingContract(contractInput);
     const contractDigest = digestShippingContract(contract);
     let run = createShippingRun({
@@ -42,6 +46,24 @@ export class ShippingSupervisor {
         "production_requires_preview_uat_and_exact_test_deploy_sha");
     }
 
+    let productionApproval = null;
+    if (contract.production.required) {
+      if (!/^[a-f0-9]{40}$/.test(contract.worktree.baseRef)) {
+        return await this.block(run, "BLOCKED_IRREVERSIBLE_ACTION",
+          "production_requires_approved_full_source_sha");
+      }
+      try {
+        productionApproval = verifyProductionApproval(approvalPermit, {
+          signingKey: this.approvalSigningKey, runId, contractDigest,
+          machineId, organizationId, sourceSha: contract.worktree.baseRef,
+          hostingTarget: this.productionHostingTarget
+        });
+      } catch (error) {
+        return await this.block(run, "BLOCKED_IRREVERSIBLE_ACTION",
+          "production_requires_signed_second_person_approval");
+      }
+    }
+
     let worktree;
     try {
       worktree = await this.worktrees.create({
@@ -54,6 +76,9 @@ export class ShippingSupervisor {
       return await this.block(run, "BLOCKED_SOURCE_UNKNOWN", `worktree:${error.message}`);
     }
 
+    if (productionApproval && worktree.baseSha !== productionApproval.sourceSha) {
+      return await this.block(run, "BLOCKED_SOURCE_UNKNOWN", "approved_source_sha_no_longer_matches_worktree");
+    }
     run.worktreePath = worktree.worktreePath;
     run = await this.event(run, { type: "worktree.ready", state: "WORKTREE_READY", evidence: { baseSha: worktree.baseSha, worktreePath: worktree.worktreePath } });
 
@@ -90,6 +115,18 @@ export class ShippingSupervisor {
       }
 
       if (!releaseFailure && contract.production.required) {
+        // The reviewer's permit binds the *exact tested commit*. A build that
+        // creates a new commit requires a new approval; it may never silently
+        // deploy a different revision than the one the reviewer approved.
+        if (run.testedSha !== productionApproval.sourceSha) {
+          return await this.block(run, "BLOCKED_IRREVERSIBLE_ACTION", "tested_sha_differs_from_approved_source");
+        }
+        try {
+          verifyProductionApproval(approvalPermit, {
+            signingKey: this.approvalSigningKey, runId, contractDigest, organizationId, machineId,
+            sourceSha: productionApproval.sourceSha, hostingTarget: this.productionHostingTarget
+          });
+        } catch { return await this.block(run, "BLOCKED_IRREVERSIBLE_ACTION", "production_approval_expired_before_deployment"); }
         const productionDeploy = await this.runCommand(contract.production.deployCommand, worktree.worktreePath, { ...baseEnv, SHIPPING_STAGE: "production-deploy" });
         run = await this.event(run, { type: "production.deploy", state: productionDeploy.ok ? "PRODUCTION_DEPLOYED" : "REPAIRING", evidence: commandEvidence(productionDeploy) });
         if (!productionDeploy.ok) releaseFailure = productionDeploy;
