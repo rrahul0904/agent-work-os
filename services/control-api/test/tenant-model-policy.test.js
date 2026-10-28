@@ -15,11 +15,14 @@ test("tenant model grants fail closed on missing/revoked/changed model, region a
 });
 test("a local gateway cannot be confused with its remote model destination",()=>{
   const gateway={name:"token-intelligence",model:"approved-model",lane:"local_machine",
-    upstreamDestination:"approved_remote",upstreamRegion:"us-west-2",upstreamRetention:"bounded"};
+    upstreamDestination:"approved_remote",upstreamRegion:"us-west-2",upstreamRetention:"bounded",
+    upstreamOrigin:"https://approved-inference.example"};
   const grant={agent:"token-intelligence",model:"approved-model",destination:"approved_remote",
-    region:"us-west-2",retention:"bounded",allowPrivate:true,status:"approved"};
+    region:"us-west-2",retention:"bounded",allowPrivate:true,status:"approved",
+    approvedOrigin:"https://approved-inference.example"};
   assert.equal(isModelUseApproved(grant,gateway),true);
   assert.equal(isModelUseApproved({...grant,destination:"local_machine"},gateway),false);
   assert.equal(isModelUseApproved(grant,{...gateway,upstreamDestination:"local_machine"}),false);
   assert.equal(isModelUseApproved(grant,{...gateway,upstreamRegion:"unknown"}),false);
+  assert.equal(isModelUseApproved(grant,{...gateway,upstreamOrigin:"https://different.example"}),false);
 });
