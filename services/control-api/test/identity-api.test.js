@@ -425,6 +425,16 @@ test("production identity, machine credentials, scoped sessions, WorkItem tenanc
       const pending = await pendingResponse.json();
       assert.equal(pending.state, "AWAITING_APPROVAL");
       assert.equal(pending.pendingContract.worktree.baseRef, "c".repeat(40));
+      machineSocket.sendMessage({ type: "daemon.shipping.run", machineId, run: {
+        ...pending, state: "SHIPPED", releaseReceipt: { status: "forged" },
+        updatedAt: "2099-01-01T00:00:00.000Z"
+      } });
+      await new Promise(resolve => setTimeout(resolve, 150));
+      const stillPending = await api(owner.cookies, null,
+        `/api/shipping/runs/${protectedRunId}?organizationId=${encodeURIComponent(alphaId)}`);
+      assert.equal((await stillPending.json()).state, "AWAITING_APPROVAL",
+        "an authenticated daemon cannot forge approval or SHIPPED while human review is pending");
+
       const beforeDecision = await databaseInspector.query(
         "SELECT count(*)::int AS count FROM agent_work_os_daemon_commands_v1 WHERE payload->>'action' = 'shipping.start' AND payload->'payload'->>'runId' = $1",
         [protectedRunId]
