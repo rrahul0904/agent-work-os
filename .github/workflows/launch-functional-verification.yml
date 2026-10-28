@@ -1,0 +1,49 @@
+name: Launch diagnostic functional acceptance — NOT A SECURITY RELEASE GATE
+on:
+  pull_request:
+    paths:
+      - 'services/**'
+      - 'packages/**'
+      - 'runtime/**'
+      - 'scripts/**'
+      - 'apps/**'
+      - 'package.json'
+      - '.github/workflows/launch-functional-verification.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: agent_work_os
+          POSTGRES_PASSWORD: agent_work_os_test
+          POSTGRES_DB: agent_work_os_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U agent_work_os -d agent_work_os_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      AGENT_WORK_OS_TEST_DATABASE_URL: postgres://agent_work_os:agent_work_os_test@localhost:5432/agent_work_os_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - name: Browser workspace syntax
+        run: node --check apps/web/public/app.js
+      - name: Unit and PostgreSQL integration
+        run: npm test
+      - name: Multi-agent and release-process fixture acceptance
+        run: npm run acceptance
+      - name: Reiterate independent release hold
+        if: always()
+        run: echo "Diagnostic only. Full-history Gitleaks, npm audit, external security and live UAT are separate mandatory NO-GO gates."
