@@ -25,7 +25,7 @@ export async function authorizeWorkspace(raw, {
     throw deny("WORKSPACE_ABSOLUTE_PATH_REQUIRED");
   }
   const candidate = path.resolve(raw);
-  if (mode !== "production" && !roots) return candidate;
+  if (mode !== "production" && (!roots || (Array.isArray(roots) && roots.length === 0))) return candidate;
   const permitted = typeof roots === "string" ? roots.split(path.delimiter).filter(Boolean)
     : Array.isArray(roots) ? roots : [];
   if (!permitted.length) throw deny("WORKSPACE_OPERATOR_ROOTS_REQUIRED");
