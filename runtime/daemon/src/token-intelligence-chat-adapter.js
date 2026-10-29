@@ -168,16 +168,21 @@ export class TokenIntelligenceChatAdapter {
         !/^iev_[A-Za-z0-9_-]{8,}$/.test(String(payload.receipt_id || ""))) {
         throw new Error("TI_GATEWAY_RECEIPT_INVALID");
       }
+      // A successful gateway response must carry measured token usage. Without
+      // this receipt we cannot reconcile the model turn against the usage ledger.
+      const usage = payload.usage;
+      if (!usage || !Number.isSafeInteger(usage.prompt_tokens) || usage.prompt_tokens < 1 ||
+          !Number.isSafeInteger(usage.completion_tokens) || usage.completion_tokens < 1) {
+        throw new Error("TI_GATEWAY_USAGE_INVALID");
+      }
       if (controller.signal.aborted) throw new Error("TI_GATEWAY_INTERRUPTED_OR_TIMEOUT");
       this.history.set(request.sessionId, [...messages, { role: "assistant", content: answer.message.content }]);
       emit({ kind: "text", text: answer.message.content, at: new Date().toISOString() });
-      if (payload.usage && Number.isSafeInteger(payload.usage.prompt_tokens) &&
-        Number.isSafeInteger(payload.usage.completion_tokens)) {
-        emit({ kind: "usage", usage: {
-          inputTokens: payload.usage.prompt_tokens, outputTokens: payload.usage.completion_tokens,
-          source: "provider_reported", billingState: "not_billed",
-        }, at: new Date().toISOString() });
-      }
+      emit({ kind: "usage", usage: {
+        inputTokens: usage.prompt_tokens, outputTokens: usage.completion_tokens,
+        source: "provider_reported", billingState: "not_billed",
+        gatewayReceiptId: payload.receipt_id,
+      }, at: new Date().toISOString() });
       emit({ kind: "status", status: "completed", at: new Date().toISOString() });
       return { nativeSessionId };
     } catch (error) {
