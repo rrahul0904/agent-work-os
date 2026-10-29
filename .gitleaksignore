@@ -1,0 +1,7 @@
+# Owner-attested historical false-positive candidates, 2026-10-29.
+# Each entry is a complete commit:path:rule:line fingerprint; NO file/commit/rule exclusion.
+# Evidence: docs/launch-historical-secret-review-20261029.md
+# AWOS-01 intentionally synthetic secret-scan test inside temporary fixture.
+a4f97ff8e5b62aa7fcb1eaa9257b330cc2544350:commercialization/n8n/tools/test_release_factory.py:generic-api-key:72
+# AWOS-02 Chrome extension manifest's documented public key, not a private secret.
+70f5ab43d79aa17b072df311fae2a13b5417b360:third_party/shubhamsaboo-awesome-llm-apps/advanced_llm_apps/ripple/extension/manifest.json:generic-api-key:6

@@ -112,6 +112,31 @@ test("all gateway failures or billing/receipt mismatch fail closed without stori
   assert.equal(emitted.some((e) => e.kind === "status" && e.status === "completed"), false);
 });
 
+test("gateway refuses successful replies without positive measured usage and does not store turn", async () => {
+  const badUsage = [
+    undefined,
+    { prompt_tokens: -1, completion_tokens: 2 },
+    { prompt_tokens: 1, completion_tokens: -1 },
+    { prompt_tokens: 1, completion_tokens: "2" },
+    { prompt_tokens: 0, completion_tokens: 0 },
+  ];
+  for (const usage of badUsage) {
+    const original = await receipt().json();
+    const adapter = new TokenIntelligenceChatAdapter({
+      env: baseEnv(),
+      fetchImpl: async () => Response.json({ ...original, usage }),
+    });
+    const events = [];
+    await assert.rejects(
+      adapter.run({ sessionId: "test-unmetered", prompt: "Verify accounting" }, (e) => events.push(e)),
+      /TI_GATEWAY_USAGE_INVALID/,
+    );
+    assert.equal(adapter.history.has("test-unmetered"), false);
+    assert.equal(events.some((event) => event.kind === "text" || event.kind === "usage" ||
+      (event.kind === "status" && event.status === "completed")), false);
+  }
+});
+
 test("model, context resumption, and local rate limit are enforced before sending", async () => {
   let calls = 0;
   const adapter = new TokenIntelligenceChatAdapter({
