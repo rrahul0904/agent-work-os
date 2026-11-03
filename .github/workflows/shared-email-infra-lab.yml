@@ -1,0 +1,25 @@
+name: Shared email infrastructure lab
+on:
+  push:
+    paths:
+      - 'labs/shared-email-infrastructure/**'
+      - '.github/workflows/shared-email-infra-lab.yml'
+  pull_request:
+    paths:
+      - 'labs/shared-email-infrastructure/**'
+      - '.github/workflows/shared-email-infra-lab.yml'
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate candidate inventory (no external calls)
+        run: node labs/shared-email-infrastructure/src/preflight.mjs labs/shared-email-infrastructure/registry.candidates.json
+      - name: Non-sending acceptance tests
+        run: node --test labs/shared-email-infrastructure/test/preflight.test.mjs

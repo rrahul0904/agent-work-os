@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "notes": "Non-exhaustive proposal only: no domains verified, no provisioning, no live integrations. All states are candidate.",
+  "projects": [
+    {
+      "id": "agent-work-os",
+      "state": "candidate",
+      "isolation": "dedicated",
+      "domain": null,
+      "aliases": [
+        "support",
+        "security"
+      ],
+      "transactionalRequired": true
+    },
+    {
+      "id": "certification-factory",
+      "state": "candidate",
+      "isolation": "dedicated",
+      "domain": null,
+      "aliases": [
+        "support",
+        "billing"
+      ],
+      "transactionalRequired": true
+    },
+    {
+      "id": "applyai",
+      "state": "candidate",
+      "isolation": "dedicated",
+      "domain": null,
+      "aliases": [
+        "support",
+        "privacy"
+      ],
+      "transactionalRequired": true
+    },
+    {
+      "id": "codeatlas-ai",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": true
+    },
+    {
+      "id": "token-intelligence",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": false
+    },
+    {
+      "id": "snowflake-brain",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": false
+    },
+    {
+      "id": "ai-test-data-creator",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": false
+    },
+    {
+      "id": "earth-reference-rebuild",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": false
+    },
+    {
+      "id": "udemy-project-downloader",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": false
+    },
+    {
+      "id": "interview-learning-platform",
+      "state": "candidate",
+      "isolation": "dedicated",
+      "domain": null,
+      "aliases": [
+        "support",
+        "billing"
+      ],
+      "transactionalRequired": true
+    },
+    {
+      "id": "ai-job-hunter",
+      "state": "candidate",
+      "isolation": "dedicated",
+      "domain": null,
+      "aliases": [
+        "support",
+        "privacy"
+      ],
+      "transactionalRequired": true
+    },
+    {
+      "id": "reverse-engineering-workbench",
+      "state": "candidate",
+      "isolation": "shared",
+      "domain": null,
+      "aliases": [
+        "support"
+      ],
+      "transactionalRequired": false
+    }
+  ]
+}
