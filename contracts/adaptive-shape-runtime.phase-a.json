@@ -1,0 +1,128 @@
+{
+  "version": "shipping-contract/v1",
+  "project": {
+    "id": "adaptive-shape-runtime-phase-a",
+    "repoPath": "."
+  },
+  "release": {
+    "version": "phase-a"
+  },
+  "worktree": {
+    "baseRef": "HEAD",
+    "cleanupOnSuccess": false
+  },
+  "builder": {
+    "command": {
+      "name": "adaptive-shape-runtime-builder",
+      "command": "codex exec --full-auto 'Implement only Phase A from docs/reverse-engineering/shapeshifting-adaptive-runtime.md. Independently author a dependency-light adaptive-shape-runtime/v1 domain module plus deterministic Node tests. Phase A is presentation/read-model adaptation only: classify intent; validate a declarative shape; validate and apply bounded allowlisted shape patches to a copy; bind exact base-shape and policy/vocabulary digests; produce a deterministic preview; commit immutable version lineage only after an explicit confirmation artifact; keep data access none-or-narrower; preserve unknowns; fail closed on stale inputs, unreadable fields, unknown paths, executable/code/query/url/webhook/credential payloads, effectful/mixed intents, invalid scope authority, schema/invariant failures and tampered history. Do not add UI, model/provider calls, network access, database/provider writes, effectful automation, arbitrary code execution, Git mutation, deployment, or donor source/schema/test/asset reuse. Run the narrowest focused tests before returning.'"
+    },
+    "repairCommand": {
+      "name": "adaptive-shape-runtime-repair",
+      "command": "codex exec --full-auto 'Read $SHIPPING_CONTEXT_FILE and $SHIPPING_FAILURE_FILE plus docs/reverse-engineering/shapeshifting-adaptive-runtime.md. Repair only the failing Phase A Adaptive Shape Runtime gate. Preserve presentation-only scope, deterministic guard authority, exact digest/freshness binding, none-or-narrower data access, immutable version lineage, unknown-preserving fail-closed behavior and the separation from effectful actions. Do not broaden scope, use network/providers, add UI/model integration, copy donor implementation, push, merge or deploy. Run the narrowest relevant tests.'"
+    },
+    "maxRepairAttempts": 2
+  },
+  "verification": [
+    {
+      "name": "adaptive-shape-runtime-focused",
+      "command": "node --test services/control-api/test/adaptive-shape-runtime.test.js"
+    },
+    {
+      "name": "repository-unit",
+      "command": "npm test"
+    },
+    {
+      "name": "repository-acceptance",
+      "command": "npm run acceptance"
+    }
+  ],
+  "preview": {
+    "required": false
+  },
+  "production": {
+    "required": false
+  },
+  "exactSha": {
+    "required": false,
+    "testedShaCommand": {
+      "name": "tested-sha",
+      "command": "git rev-parse HEAD"
+    }
+  },
+  "goldenPath": [
+    {
+      "id": "ASR-A-001",
+      "description": "A presentation intent over an exact base shape and policy/vocabulary revision produces a deterministic validated patch, candidate shape and preview digest."
+    },
+    {
+      "id": "ASR-A-002",
+      "description": "The same canonical intent, base shape, policy, vocabulary and patch semantics produce stable digests independent of object-key ordering."
+    },
+    {
+      "id": "ASR-A-003",
+      "description": "A valid personal presentation patch can change only allowlisted layout/order/visible-readable-fields/filter/sort/group/named-card/named-chart/display-preference paths."
+    },
+    {
+      "id": "ASR-A-004",
+      "description": "Preview records exact changed paths and a data-access delta that is none or narrower; it cannot widen authorization or source-data visibility."
+    },
+    {
+      "id": "ASR-A-005",
+      "description": "Preview alone cannot persist; an exact confirmation bound to the current preview/base/policy revisions is required to create an immutable new shape version."
+    },
+    {
+      "id": "ASR-A-006",
+      "description": "A stale base-shape, policy or vocabulary revision invalidates the old preview/confirmation instead of silently rebasing or applying it."
+    },
+    {
+      "id": "ASR-A-007",
+      "description": "Effectful, mixed or unresolved ambiguous intent is refused in Phase A and never reported as successfully adapted."
+    },
+    {
+      "id": "ASR-A-008",
+      "description": "Executable code, SQL/query text intended for execution, URLs/webhooks/network destinations, credentials, new formulas/metrics, permissions and domain-semantic mutations are rejected from the shape/patch contract."
+    },
+    {
+      "id": "ASR-A-009",
+      "description": "Unknown path/value/field/authority/invariant state fails closed or remains typed unknown rather than being guessed."
+    },
+    {
+      "id": "ASR-A-010",
+      "description": "A newly referenced unreadable field or metric is rejected even if it would be hidden later by the renderer."
+    },
+    {
+      "id": "ASR-A-011",
+      "description": "Duplicate confirmation/retry for the same operation identity is idempotent, while conflicting reuse of an operation identity is rejected."
+    },
+    {
+      "id": "ASR-A-012",
+      "description": "Restart/reload reconstructs the same immutable shape-version lineage and detects tampered/corrupt history instead of fabricating current state."
+    },
+    {
+      "id": "ASR-A-013",
+      "description": "Rollback creates an explicit version/result and never claims to undo external effects; Phase A has no external-effect execution path."
+    }
+  ],
+  "excludedFromRelease": [
+    "TriptoAfsin/shape-shifter source, tests, skill text, schema, branding, prose, fixtures, demo assets or UI trade dress reuse",
+    "standalone Shapeshifting Software clone or app-builder product",
+    "runtime source-code generation or rewriting",
+    "arbitrary SQL, shell, JavaScript, URLs, webhooks or model-defined executable code inside shapes",
+    "authentication, authorization, permission, domain-schema or security-boundary mutation",
+    "effectful automation such as sending messages, creating external records, spending money or invoking provider writes",
+    "team/org runtime mutation or two-person approval implementation",
+    "model-backed brain/provider integration",
+    "new authoritative task/workflow database",
+    "network access",
+    "provider/cloud writes",
+    "Git mutation",
+    "browser UAT",
+    "preview deployment",
+    "production deployment",
+    "Shapeshifting Software parity"
+  ],
+  "policy": {
+    "commandTimeoutMs": 600000,
+    "retainFailureLogs": true
+  }
+}
